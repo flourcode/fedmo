@@ -526,7 +526,7 @@ button { cursor: pointer; }
   font-size: 15px;
   line-height: 1.55;
 }
-.mo-modal-actions { margin: 18px 0 14px; }
+.mo-modal-actions { margin: 18px 0 14px; display: flex; flex-direction: column; gap: 10px; }
 .mo-modal-btn {
   width: 100%;
   height: 44px;
@@ -541,6 +541,13 @@ button { cursor: pointer; }
   cursor: pointer;
 }
 .mo-modal-btn:active { background: #3A385A; transform: scale(0.99); }
+.mo-modal-btn-ghost {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  font-weight: 500;
+}
+.mo-modal-btn-ghost:active { background: var(--primary-20); transform: scale(0.99); }
 .mo-modal-foot {
   font-size: 12px;
   color: var(--text-muted);
@@ -823,8 +830,9 @@ button { cursor: pointer; }
     <p>Every number Mo cites comes from USASpending.gov — tap any contract to verify it yourself.</p>
     <div class="mo-modal-actions">
       <button class="mo-modal-btn" onclick="App.closeAbout(); App.resetThread();">Start a new thread</button>
+      <button class="mo-modal-btn mo-modal-btn-ghost" onclick="App.closeAbout(); App.resetEverything();">Reset everything</button>
     </div>
-    <div class="mo-modal-foot">Built on USASpending.gov · fedmo.com</div>
+    <div class="mo-modal-foot">"Reset everything" clears your lens and territory too. Use it when you want a fully fresh start.</div>
   </div>
 </div>
 
@@ -2650,6 +2658,15 @@ const App = {
     document.getElementById('jumpLatest').classList.remove('visible');
     window.scrollTo({ top: 0, behavior: 'smooth' });
     this._track('reset_thread');
+  },
+
+  // Full reset: clear conversation AND identity chips. For users who want a
+  // truly blank slate (demoing to a colleague, testing as a different seller).
+  resetEverything() {
+    this.clearLens();
+    this.clearTerritory();
+    this.resetThread();
+    this._track('reset_everything');
   },
 
   // About modal — opens from the hamburger menu.
