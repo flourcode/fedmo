@@ -2033,6 +2033,11 @@ const App = {
     this._askMoHistory.push({ role: 'user', content: question });
 
     try {
+      // Fire Mo's prose stream AND the chip suggestion in PARALLEL so the chip
+      // call is done (or nearly done) by the time Mo finishes streaming.
+      // The user reads Mo's prose while chips generate in the background.
+      const chipPromise = this._fetchGeminiChips(question);
+
       const res = await fetch(AI_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -2055,16 +2060,23 @@ const App = {
       }
       await Html.streamInto(
         proseEl, res,
-        (fullText) => {
+        async (fullText) => {
           if (fullText) {
             this._askMoHistory.push({ role: 'model', content: fullText });
-            // Also push a summary into recent turns for the router's context.
-            // Summary keeps beginning + end so Mo's closing question survives.
+            // Summarize Mo's reply into recent turns for the router — keeps
+            // beginning and end so closing questions survive.
             this._recentTurns.push({ role: 'mo', text: this._summarizeMoProse(fullText) });
             if (this._recentTurns.length > 6) this._recentTurns = this._recentTurns.slice(-6);
 
-            // Render follow-up chips so the user doesn't have to type or scroll
-            this._renderAskMoChips(streamId, this._pickAskMoChips(question, fullText));
+            // Await the chip promise that fired in parallel. By now (stream
+            // took 2-6s) it should already be resolved. Prefer Gemini's chips;
+            // fall back to rule-based if Gemini returned nothing usable.
+            let chips = null;
+            try { chips = await chipPromise; } catch (e) { chips = null; }
+            if (!chips || chips.length === 0) {
+              chips = this._pickAskMoChips(question, fullText);
+            }
+            this._renderAskMoChips(streamId, chips);
 
             // Hallucination check: warn in console if Mo cited dollar amounts
             // or contract IDs that aren't in the payload we sent
@@ -2076,6 +2088,37 @@ const App = {
     } catch (err) {
       console.error('runAskMo error:', err);
       if (proseEl) proseEl.innerHTML = `<span style="color:var(--text-faint);">${Html.escapeHtml(err.message || 'Mo had trouble with that one.')}</span>`;
+    }
+  },
+
+  // Fire the chip suggestion request to the Lambda. Resolves to an array of
+  // chips (may be empty). Fail-soft — returns null on any error so the caller
+  // falls back to rule-based chips.
+  async _fetchGeminiChips(question) {
+    try {
+      const cardSummary = this._buildCardSummary();
+      const res = await fetch(AI_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          request_type: 'mo_suggest_chips',
+          card_summary: cardSummary,
+          last_user_message: question,
+          // last_mo_response isn't known until the stream completes, so we
+          // generate chips from the question + card summary alone. That's
+          // usually enough signal for federal-sales-style follow-ups, and it
+          // means chips are ready by the time Mo finishes streaming.
+          last_mo_response: null,
+          lens: this.state.lens || null,
+          territory: this.state.territory || null,
+        }),
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      return Array.isArray(data.chips) ? data.chips : null;
+    } catch (e) {
+      console.debug('[chips] fetch failed, falling back to rules:', e.message);
+      return null;
     }
   },
 
