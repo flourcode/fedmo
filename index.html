@@ -408,6 +408,22 @@ button { cursor: pointer; }
 }
 .greeting-examples .mo-followup { height: 36px; padding: 0 16px; font-size: 14px; }
 
+.mo-show-more {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: transparent;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.mo-show-more:active { background: var(--surface-hover); }
+
 .turn-loading {
   display: flex;
   align-items: center;
@@ -724,16 +740,14 @@ button { cursor: pointer; }
 // ════════════════════════════════════════════════════════════
 // REAL ENGINE — pure data layer over the fedmo-hello Lambda.
 // One Lambda, one Function URL. Everything dispatched by `request_type`:
-//   usaspending_proxy → USASpending passthrough (buffered JSON)
-//   mo_route          → intent classifier (buffered JSON)
-//   mo_search_expand  → seller keyword expansion (buffered JSON)
-//   mo_chat, mo_brief → Mo's prose (streamed SSE)
+//   usaspending_proxy  → USASpending passthrough (buffered JSON)
+//   mo_route           → intent classifier (buffered JSON)
+//   mo_search_expand   → seller keyword expansion (buffered JSON)
+//   mo_suggest_chips   → followup chip generation (buffered JSON)
+//   mo_chat, mo_brief  → Mo's prose (streamed SSE)
 // ════════════════════════════════════════════════════════════
 
-const AI_ENDPOINT  = 'https://llonymyskdiakyxhlxlex7ul640hbcke.lambda-url.us-east-1.on.aws/';
-const API_ENDPOINT = AI_ENDPOINT;      // Same endpoint; kept as a name so the
-                                        // code still reads clearly at call sites.
-const PROXY_ENDPOINT = AI_ENDPOINT;    // Legacy alias for older code paths.
+const AI_ENDPOINT = 'https://llonymyskdiakyxhlxlex7ul640hbcke.lambda-url.us-east-1.on.aws/';
 
 // ── Regex constants ─────────────────────────────────────────
 const _RE_AMPERSAND = /\s+&\s+/g;
@@ -1105,7 +1119,7 @@ const API = {
   ],
 
   async _post(endpoint, body) {
-    const res = await fetch(PROXY_ENDPOINT, {
+    const res = await fetch(AI_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ request_type: 'usaspending_proxy', endpoint, payload: body }),
@@ -1358,8 +1372,10 @@ function buildCardSpec(m, query, sellerLens, territory) {
     };
   });
 
-  // ── Expiring soon — top 3, with full agency, contract ID, link
-  const expiring = (m.expiring || []).slice(0, 3).map(c => {
+  // ── Expiring soon — up to 8, with the first 3 visible by default and the
+  // rest hidden behind a "Show N more" toggle. Matches what Mo sees in her
+  // payload so users can verify every contract Mo cites.
+  const expiringAll = (m.expiring || []).slice(0, 8).map(c => {
     const days = Math.ceil((c._endTs - Date.now()) / 86400000);
     const agencyShort = Utils.cleanAgency(c['Awarding Agency'] || '');
     const office = c['Awarding Sub Agency'] && c['Awarding Sub Agency'] !== c['Awarding Agency']
@@ -1377,6 +1393,8 @@ function buildCardSpec(m, query, sellerLens, territory) {
         : null,
     };
   });
+  const expiring = expiringAll.slice(0, 3);
+  const expiringMore = expiringAll.slice(3);
 
   // ── Vehicle line — what GWAC/IDIQs are moving the money ───
   const vehicleSorted = Object.entries(m.vehicles || {}).sort((a,b) => b[1].spend - a[1].spend);
@@ -1406,6 +1424,7 @@ function buildCardSpec(m, query, sellerLens, territory) {
     treemap,
     primes,
     expiring,
+    expiringMore,
     vehicleLine,
     followups: followups.slice(0, 4),
     sourceCount: contractCount,
@@ -1492,8 +1511,6 @@ const Html = {
 
 async function routeIntent(text, context) {
   // context: { lens, territory, last_query, recent_turns, card_summary }
-  // mo_route is a Gemini call — goes to the Function URL (AI_ENDPOINT),
-  // not the API Gateway proxy. USASpending proxy is the ONLY thing at API_ENDPOINT.
   const res = await fetch(AI_ENDPOINT, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1993,7 +2010,7 @@ const App = {
 
   // ── Ask Mo: stream prose against the existing card's data ───
   // Ask-Mo conversation history per card. Reset on new search.
-  // Lambda's govhoo_chat REQUIRES history to be a non-empty array.
+  // Lambda's mo_chat REQUIRES history to be a non-empty array.
   _askMoHistory: [],
 
   async runAskMo(question, loadingId) {
@@ -2122,8 +2139,8 @@ const App = {
     }
   },
 
-  // Build the payload in the shape production's _buildArtiPayload uses.
-  // This is what the Lambda's buildChatBody / govhoo_chat handler expects.
+  // Build the payload for mo_chat — the Lambda expects market_data in a shape
+  // with top_agencies, top_vendors, expiring_soon, stats, etc.
   _buildAskMoPayload(m) {
     const spec = this.state.lastCardSpec;
     const topAgencies = Object.entries(m.agencies).sort((a,b) => b[1] - a[1]).slice(0, 8)
@@ -2253,10 +2270,10 @@ const App = {
 
     if (spec.expiring && spec.expiring.length > 0) {
       html += `<div class="mo-comp-head"><div class="mo-comp-title">Expiring soon</div><div class="mo-comp-meta">next 90 days</div></div><div class="mo-list">`;
-      spec.expiring.forEach(e => {
+      const renderExpRow = (e) => {
         const idShort = e.contractId ? e.contractId.slice(0, 24) + (e.contractId.length > 24 ? '…' : '') : '';
         const meta = [idShort, e.vehicle].filter(Boolean).join(' · ');
-        html += `<div class="mo-exp-row">
+        return `<div class="mo-exp-row">
           <div class="mo-exp-top">
             <span class="mo-exp-vendor">${Html.escapeHtml(e.vendor)}</span>
             <span class="mo-exp-amt">${Html.escapeHtml(e.amount)}</span>
@@ -2270,7 +2287,22 @@ const App = {
             ${e.link ? `<a class="mo-view-link" href="${e.link}" target="_blank" rel="noopener">View<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></a>` : ''}
           </div>` : ''}
         </div>`;
-      });
+      };
+      spec.expiring.forEach(e => { html += renderExpRow(e); });
+
+      // Hidden extra rows + toggle button. Mo sees these in the payload; we
+      // expose them in the card so the user can verify every contract Mo cites.
+      if (spec.expiringMore && spec.expiringMore.length > 0) {
+        html += `<div class="mo-exp-more" style="display:none;">`;
+        spec.expiringMore.forEach(e => { html += renderExpRow(e); });
+        html += `</div>`;
+        html += `<button class="mo-show-more" onclick="
+          const more = this.previousElementSibling;
+          const hidden = more.style.display === 'none';
+          more.style.display = hidden ? 'block' : 'none';
+          this.textContent = hidden ? 'Show less' : 'Show ${spec.expiringMore.length} more';
+        ">Show ${spec.expiringMore.length} more</button>`;
+      }
       html += `</div>`;
     }
 
