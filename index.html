@@ -2047,8 +2047,11 @@ const App = {
     // Build payload in production's shape (matches what the Lambda expects)
     const payload = this._buildAskMoPayload(m);
 
+    const sectorLabel = this.state.territory && SECTORS[this.state.territory]
+      ? SECTORS[this.state.territory].label
+      : null;
     const objective = this.state.lens
-      ? `I sell ${this.state.lens}.` + (this.state.territory ? ` Market scoped to ${SECTORS[this.state.territory].label} agencies.` : '')
+      ? `I sell ${this.state.lens}.` + (sectorLabel ? ` Market scoped to ${sectorLabel} agencies.` : '')
       : null;
 
     // Build the turn shell with a streaming target.
@@ -2426,7 +2429,7 @@ const App = {
           </button>
         </div>
         <div class="mo-empty">
-          <div class="mo-empty-msg">Well, this is awkward. Nothing came back for <strong>${Html.escapeHtml(query)}</strong>${this.state.territory ? ` in ${SECTORS[this.state.territory].label}` : ''}. Try a different angle.</div>
+          <div class="mo-empty-msg">Well, this is awkward. Nothing came back for <strong>${Html.escapeHtml(query)}</strong>${(this.state.territory && SECTORS[this.state.territory]) ? ` in ${SECTORS[this.state.territory].label}` : ''}. Try a different angle.</div>
         </div>
         <div class="mo-followups" style="border-top:none;padding-top:0;margin-top:14px;">${chips}</div>
       </div>
@@ -2487,9 +2490,16 @@ const App = {
     try { localStorage.removeItem('fedmo_seller_product'); } catch(e) {}
   },
   setTerritory(t) {
+    // Only accept valid sector keys. Rejecting bogus values (like a vendor
+    // name the router mistakenly sent as territory) prevents downstream
+    // crashes like SECTORS[t].label exploding.
+    if (!t || !SECTORS[t]) {
+      console.warn('[setTerritory] ignoring unknown territory:', t);
+      return;
+    }
     this.state.territory = t;
     document.getElementById('terrChip').style.display = 'inline-flex';
-    document.getElementById('terrChipValue').textContent = SECTORS[t]?.label || t;
+    document.getElementById('terrChipValue').textContent = SECTORS[t].label;
   },
   clearTerritory() {
     this.state.territory = null;
