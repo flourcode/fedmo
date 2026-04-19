@@ -723,17 +723,17 @@ button { cursor: pointer; }
 <script>
 // ════════════════════════════════════════════════════════════
 // REAL ENGINE — pure data layer over the fedmo-hello Lambda.
-// Two endpoints, one Lambda:
-//   API_ENDPOINT (API Gateway /proxy) — USASpending passthrough, buffered
-//   AI_ENDPOINT  (Function URL)       — all Gemini calls, streaming-capable
+// One Lambda, one Function URL. Everything dispatched by `request_type`:
+//   usaspending_proxy → USASpending passthrough (buffered JSON)
+//   mo_route          → intent classifier (buffered JSON)
+//   mo_search_expand  → seller keyword expansion (buffered JSON)
+//   mo_chat, mo_brief → Mo's prose (streamed SSE)
 // ════════════════════════════════════════════════════════════
 
-const API_ENDPOINT = 'https://x3aahd7b1l.execute-api.us-east-1.amazonaws.com/default/proxy';
 const AI_ENDPOINT  = 'https://llonymyskdiakyxhlxlex7ul640hbcke.lambda-url.us-east-1.on.aws/';
-
-// Legacy alias so older code paths still resolve during the migration.
-// Both point at API_ENDPOINT because the USASpending proxy lives there.
-const PROXY_ENDPOINT = API_ENDPOINT;
+const API_ENDPOINT = AI_ENDPOINT;      // Same endpoint; kept as a name so the
+                                        // code still reads clearly at call sites.
+const PROXY_ENDPOINT = AI_ENDPOINT;    // Legacy alias for older code paths.
 
 // ── Regex constants ─────────────────────────────────────────
 const _RE_AMPERSAND = /\s+&\s+/g;
@@ -1728,7 +1728,12 @@ const App = {
     const label = intent.label || (intent.keywords || []).join(', ') || 'this market';
 
     const rawResults = await API.searchFromIntent(intent, territory);
-    const active = Utils.filterActiveContracts(rawResults);
+    let active = Utils.filterActiveContracts(rawResults);
+
+    // Post-filter: honor any filter flags the router put on the search intent.
+    // Gemini sometimes emits expiring_only, min_amount, etc. at the top level
+    // of a search intent. Accept them here so the user gets what they asked for.
+    active = this._applyInlineFilters(active, intent);
 
     if (active.length === 0) {
       this._track('empty_state', { query: label.slice(0, 40), has_territory: !!territory });
@@ -1757,6 +1762,38 @@ const App = {
     this._recentTurns.push({ role: 'mo', text: `Showed card: ${label} · ${spec.verdict.text}` });
 
     this.replaceLoading(loadingId, this.buildMoTurn(spec));
+  },
+
+  // Apply simple post-fetch filters that the router may put on a search intent.
+  // Not a full refine — these are lightweight filters (expiring window, amount
+  // bounds, vendor allow/block, set-aside only) that don't change the USASpending
+  // query itself.
+  _applyInlineFilters(contracts, intent) {
+    let filtered = contracts;
+    const now = Date.now();
+
+    if (intent.expiring_only) {
+      const exp90 = now + 90 * 86400000;
+      filtered = filtered.filter(c => c._endTs > now && c._endTs <= exp90);
+    }
+    if (typeof intent.min_amount === 'number') {
+      filtered = filtered.filter(c => (parseFloat(c['Award Amount']) || 0) >= intent.min_amount);
+    }
+    if (typeof intent.max_amount === 'number') {
+      filtered = filtered.filter(c => (parseFloat(c['Award Amount']) || 0) <= intent.max_amount);
+    }
+    if (intent.set_aside_only) {
+      filtered = filtered.filter(c => !!c['Type of Set Aside']);
+    }
+    if (Array.isArray(intent.only_vendors) && intent.only_vendors.length > 0) {
+      const allow = new Set(intent.only_vendors.map(v => Utils.normalizeVendorName(v.toUpperCase())));
+      filtered = filtered.filter(c => allow.has(c['Recipient Name']));
+    }
+    if (Array.isArray(intent.exclude_vendors) && intent.exclude_vendors.length > 0) {
+      const block = new Set(intent.exclude_vendors.map(v => Utils.normalizeVendorName(v.toUpperCase())));
+      filtered = filtered.filter(c => !block.has(c['Recipient Name']));
+    }
+    return filtered;
   },
 
   // ── runRefine: modify the active card and re-run, or filter in-browser
