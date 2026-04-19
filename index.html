@@ -169,6 +169,12 @@ button { cursor: pointer; }
   margin-bottom: 20px;
   line-height: 1.5;
 }
+.greeting-sub-2 {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin: 28px 0 12px;
+  line-height: 1.5;
+}
 .greeting-examples { display: flex; flex-wrap: wrap; gap: 8px; }
 
 .turn-user {
@@ -831,6 +837,11 @@ button { cursor: pointer; }
       <button class="mo-followup" data-ask="I sell cybersecurity to DoD">I sell cybersecurity to DoD</button>
       <button class="mo-followup" data-ask="What's expiring in HHS cyber?">What's expiring in HHS cyber?</button>
       <button class="mo-followup" data-ask="Show me DISA cloud">Show me DISA cloud</button>
+    </div>
+    <div class="greeting-sub-2">Or working through something on a deal?</div>
+    <div class="greeting-examples">
+      <button class="mo-followup" data-ask="I can't get a meeting with the program office">I can't get a meeting</button>
+      <button class="mo-followup" data-ask="There's a new CIO who loves my competitor">New CIO loves my competitor</button>
     </div>
   </div>
 </div>
@@ -1775,17 +1786,13 @@ const App = {
     this._updateLoadingMessage(loadingId, this._loadingMessageFor(intent));
 
     try {
-      // Safety net: ask/refine need an active card to make sense. If the
-      // router sent one of those at cold start (no card yet), rewrite as a
-      // search instead of dead-ending the user. This happens when a
-      // question-shaped cold-start input like "Who owns DISA cloud?" gets
-      // classified as ask — we want to search instead.
+      // Safety net: refine needs an active card. If the router sent refine at
+      // cold start, rewrite as a search. (ASK at cold start is coaching mode
+      // — we let it flow through to Mo.)
       const hasCard = !!this.state.lastCardSpec;
       let effectiveIntent = intent;
-      if ((intent.intent === 'ask' || intent.intent === 'refine') && !hasCard) {
-        console.debug('[dispatch] rewriting', intent.intent, '→ search (no active card)');
-        // Strip common question words so the USASpending keyword search has
-        // a shot at returning something. "Who owns DISA cloud?" → "DISA cloud"
+      if (intent.intent === 'refine' && !hasCard) {
+        console.debug('[dispatch] rewriting refine → search (no active card)');
         const stripped = question
           .replace(/^(who|what|when|where|why|how|which|is|are|does|do|show me|tell me|find|search for|look up)\s+(owns?|has|runs?|manages?|is|are|does|do|the|a|an)?\s*/i, '')
           .replace(/[?.!]+$/, '')
@@ -2152,13 +2159,12 @@ const App = {
   async runAskMo(question, loadingId) {
     const m = this.state.lastMarketMetrics;
     const spec = this.state.lastCardSpec;
-    if (!m || !spec) {
-      this.replaceLoading(loadingId, this.buildErrorTurn('Run a search first so Mo has something to look at.'));
-      return;
-    }
+    const hasCard = !!(m && spec);
 
-    // Build payload in production's shape (matches what the Lambda expects)
-    const payload = this._buildAskMoPayload(m);
+    // Coaching mode: no card, just a selling-situation question. Build a
+    // minimal payload with lens + territory context (if set) and let Mo
+    // answer from her coaching patterns in the system prompt. No market_data.
+    const payload = hasCard ? this._buildAskMoPayload(m) : null;
 
     const sectorLabel = this.state.territory && SECTORS[this.state.territory]
       ? SECTORS[this.state.territory].label
@@ -2177,14 +2183,22 @@ const App = {
     const lastTurn = document.querySelectorAll('.turn-mo');
     if (lastTurn.length) requestAnimationFrame(() => this.scrollToTurn(lastTurn[lastTurn.length - 1]));
 
-    // Lambda requires history to be a non-empty array. If this is the first
-    // ask-Mo turn against this card, seed it with a synthetic prior turn
-    // anchored to the verdict so Mo has continuity.
+    // Lambda requires history to be a non-empty array. Seed it with a
+    // synthetic prior turn so Mo has continuity. The seed depends on mode.
     if (this._askMoHistory.length === 0) {
-      this._askMoHistory.push(
-        { role: 'user', content: `Give me an actionable plan in the "${this.state.lastQuery}" market.` },
-        { role: 'model', content: `${spec.verdict.text} ${spec.verdict.action}` }
-      );
+      if (hasCard) {
+        // Data mode — anchor to the current card's verdict
+        this._askMoHistory.push(
+          { role: 'user', content: `Give me an actionable plan in the "${this.state.lastQuery}" market.` },
+          { role: 'model', content: `${spec.verdict.text} ${spec.verdict.action}` }
+        );
+      } else {
+        // Coaching mode — generic opener so history is non-empty
+        this._askMoHistory.push(
+          { role: 'user', content: 'I want to talk through a situation on a federal deal.' },
+          { role: 'model', content: "Sure thing. Tell me what's going on." }
+        );
+      }
     }
     this._askMoHistory.push({ role: 'user', content: question });
 
