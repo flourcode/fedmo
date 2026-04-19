@@ -1672,6 +1672,20 @@ const App = {
     return `${spec.query || 'market'} · ${spec.stats?.[0]?.value || ''} · top: ${top} · ${(spec.expiring||[]).length} expiring`.slice(0, 200);
   },
 
+  // Summarize Mo's prose for the router's context. We keep the beginning AND
+  // the end, because Mo's closing sentence often contains a follow-up question
+  // that changes how the router should interpret the user's next message.
+  //   "Want me to draft one for Navy instead?" at the end = the user's next
+  //   "Ok Navy" is an ANSWER to Mo, not a new search request.
+  _summarizeMoProse(fullText) {
+    if (!fullText) return '';
+    const text = String(fullText).trim();
+    if (text.length <= 400) return text;
+    const head = text.slice(0, 150);
+    const tail = text.slice(-250);
+    return `${head} … ${tail}`;
+  },
+
   _loadingMessageFor(intent) {
     switch (intent.intent) {
       case 'search':
@@ -1964,7 +1978,7 @@ const App = {
           if (fullText) {
             this._askMoHistory.push({ role: 'model', content: fullText });
             // Also push a 200-char summary into recent turns for the router's context
-            this._recentTurns.push({ role: 'mo', text: fullText.slice(0, 200) });
+            this._recentTurns.push({ role: 'mo', text: this._summarizeMoProse(fullText) });
             if (this._recentTurns.length > 6) this._recentTurns = this._recentTurns.slice(-6);
           }
         },
