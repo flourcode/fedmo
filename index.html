@@ -722,13 +722,18 @@ button { cursor: pointer; }
 
 <script>
 // ════════════════════════════════════════════════════════════
-// REAL ENGINE — ported from production index.html.
-// Pure data layer: knows nothing about the UI. Given a query,
-// produces a `marketMetrics` object and a `cardSpec`.
+// REAL ENGINE — pure data layer over the fedmo-hello Lambda.
+// Two endpoints, one Lambda:
+//   API_ENDPOINT (API Gateway /proxy) — USASpending passthrough, buffered
+//   AI_ENDPOINT  (Function URL)       — all Gemini calls, streaming-capable
 // ════════════════════════════════════════════════════════════
 
-const PROXY_ENDPOINT = 'https://x3aahd7b1l.execute-api.us-east-1.amazonaws.com/default/proxy';
-const AI_ENDPOINT    = 'https://llonymyskdiakyxhlxlex7ul640hbcke.lambda-url.us-east-1.on.aws/';
+const API_ENDPOINT = 'https://x3aahd7b1l.execute-api.us-east-1.amazonaws.com/default/proxy';
+const AI_ENDPOINT  = 'https://llonymyskdiakyxhlxlex7ul640hbcke.lambda-url.us-east-1.on.aws/';
+
+// Legacy alias so older code paths still resolve during the migration.
+// Both point at API_ENDPOINT because the USASpending proxy lives there.
+const PROXY_ENDPOINT = API_ENDPOINT;
 
 // ── Regex constants ─────────────────────────────────────────
 const _RE_AMPERSAND = /\s+&\s+/g;
@@ -1487,7 +1492,9 @@ const Html = {
 
 async function routeIntent(text, context) {
   // context: { lens, territory, last_query, recent_turns, card_summary }
-  const res = await fetch(PROXY_ENDPOINT, {
+  // mo_route is a Gemini call — goes to the Function URL (AI_ENDPOINT),
+  // not the API Gateway proxy. USASpending proxy is the ONLY thing at API_ENDPOINT.
+  const res = await fetch(AI_ENDPOINT, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -1895,7 +1902,7 @@ const App = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          request_type: 'govhoo_chat', persona: 'mo',
+          request_type: 'mo_chat', persona: 'mo',
           market_data: payload,
           objective,
           history: this._askMoHistory.slice(-6),
