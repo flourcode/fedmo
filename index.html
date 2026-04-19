@@ -715,9 +715,9 @@ button { cursor: pointer; }
     <div class="greeting-hi">Hey, I'm Mo.</div>
     <div class="greeting-sub">Tell me what you sell or ask about a market. I'll show you where the money is and how to get in.</div>
     <div class="greeting-examples">
-      <button class="mo-followup" data-ask="I sell Sonatype to DoD">I sell Sonatype to DoD</button>
+      <button class="mo-followup" data-ask="I sell cybersecurity to DoD">I sell cybersecurity to DoD</button>
       <button class="mo-followup" data-ask="What's expiring in HHS cyber?">What's expiring in HHS cyber?</button>
-      <button class="mo-followup" data-ask="Who owns DISA cloud?">Who owns DISA cloud?</button>
+      <button class="mo-followup" data-ask="Show me DISA cloud">Show me DISA cloud</button>
     </div>
   </div>
 </div>
@@ -1662,14 +1662,37 @@ const App = {
     this._updateLoadingMessage(loadingId, this._loadingMessageFor(intent));
 
     try {
-      switch (intent.intent) {
-        case 'search':       await this.runSearch(intent, loadingId); break;
-        case 'refine':       await this.runRefine(intent, loadingId); break;
-        case 'ask':          await this.runAskMo(intent.question || question, loadingId); break;
-        case 'seller_pitch': await this.runSellerPitch(intent, loadingId); break;
-        case 'compare':      await this.runCompare(intent, loadingId); break;
+      // Safety net: ask/refine need an active card to make sense. If the
+      // router sent one of those at cold start (no card yet), rewrite as a
+      // search instead of dead-ending the user. This happens when a
+      // question-shaped cold-start input like "Who owns DISA cloud?" gets
+      // classified as ask — we want to search instead.
+      const hasCard = !!this.state.lastCardSpec;
+      let effectiveIntent = intent;
+      if ((intent.intent === 'ask' || intent.intent === 'refine') && !hasCard) {
+        console.debug('[dispatch] rewriting', intent.intent, '→ search (no active card)');
+        // Strip common question words so the USASpending keyword search has
+        // a shot at returning something. "Who owns DISA cloud?" → "DISA cloud"
+        const stripped = question
+          .replace(/^(who|what|when|where|why|how|which|is|are|does|do|show me|tell me|find|search for|look up)\s+(owns?|has|runs?|manages?|is|are|does|do|the|a|an)?\s*/i, '')
+          .replace(/[?.!]+$/, '')
+          .trim();
+        const keywordText = stripped || question;
+        effectiveIntent = {
+          intent: 'search',
+          label: keywordText,
+          keywords: [keywordText],
+        };
+      }
+
+      switch (effectiveIntent.intent) {
+        case 'search':       await this.runSearch(effectiveIntent, loadingId); break;
+        case 'refine':       await this.runRefine(effectiveIntent, loadingId); break;
+        case 'ask':          await this.runAskMo(effectiveIntent.question || question, loadingId); break;
+        case 'seller_pitch': await this.runSellerPitch(effectiveIntent, loadingId); break;
+        case 'compare':      await this.runCompare(effectiveIntent, loadingId); break;
         case 'reset':        this.replaceLoading(loadingId, document.createDocumentFragment()); this.resetThread(); break;
-        case 'clarify':      this.replaceLoading(loadingId, this.buildClarifyTurn(intent.question || 'What are you trying to find?')); break;
+        case 'clarify':      this.replaceLoading(loadingId, this.buildClarifyTurn(effectiveIntent.question || 'What are you trying to find?')); break;
         default:
           this.replaceLoading(loadingId, this.buildErrorTurn('Mo gave an unexpected answer. Try rephrasing.'));
       }
