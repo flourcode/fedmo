@@ -29,7 +29,7 @@
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Google+Sans+Flex:wght@100..900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,200..800;1,200..800&display=swap" rel="stylesheet">
 <!-- Google Analytics -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-T343V4RFHV"></script>
 <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-T343V4RFHV');</script>
@@ -66,7 +66,7 @@
   --shadow-soft: 0 1px 2px rgba(70,68,110,0.04);
   --shadow-lift: 0 4px 16px rgba(70,68,110,0.10);
 
-  --font: 'Google Sans Flex', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font: 'Atkinson Hyperlegible Next', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -103,20 +103,6 @@ button { cursor: pointer; }
   align-items: center;
   gap: 8px;
 }
-.mo-face-btn {
-  background: transparent;
-  border: none;
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  flex-shrink: 0;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
-.mo-face-btn:active { opacity: 0.7; }
-.mo-face-sm { width: 32px; height: 32px; flex-shrink: 0; display: block; }
 .mo-chip {
   display: inline-flex;
   align-items: center;
@@ -410,22 +396,28 @@ button { cursor: pointer; }
   border-top: 1px solid var(--border-soft);
 }
 .mo-followup {
-  height: 34px;
-  padding: 0 14px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
+  height: 36px;
+  padding: 0 16px;
+  background: var(--primary-20);
+  border: 1.5px solid var(--primary-40);
   border-radius: var(--radius-pill);
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 500;
   color: var(--primary-100);
   white-space: nowrap;
   transition: all 120ms;
 }
+.mo-followup:hover {
+  background: #D8D7EB;
+  border-color: var(--primary-100);
+}
 .mo-followup:active {
-  background: var(--primary-20);
-  border-color: var(--primary-40);
+  background: var(--primary-40);
+  border-color: var(--primary-100);
+  color: #FFFFFF;
   transform: scale(0.97);
 }
-.greeting-examples .mo-followup { height: 36px; padding: 0 16px; font-size: 14px; }
+.greeting-examples .mo-followup { height: 40px; padding: 0 18px; font-size: 15px; }
 
 .mo-show-more {
   display: block;
@@ -466,6 +458,88 @@ button { cursor: pointer; }
 @keyframes dot {
   0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
   30% { opacity: 1; transform: translateY(-2px); }
+}
+
+/* About modal — opens from the hamburger in the header */
+.mo-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 10, 20, 0.4);
+  z-index: 100;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms;
+}
+.mo-modal-backdrop.open { opacity: 1; pointer-events: auto; }
+.mo-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -48%) scale(0.98);
+  width: calc(100% - 32px);
+  max-width: 460px;
+  max-height: calc(100vh - 64px);
+  overflow-y: auto;
+  background: var(--bg-card);
+  border-radius: 20px;
+  box-shadow: 0 16px 48px rgba(10,10,20,0.2);
+  z-index: 101;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms, transform 180ms;
+}
+.mo-modal.open {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(-50%, -50%) scale(1);
+}
+.mo-modal-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 20px 20px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.mo-modal-face { width: 44px; height: 44px; flex-shrink: 0; }
+.mo-modal-title { font-size: 22px; font-weight: 700; color: var(--text-title); line-height: 1.1; }
+.mo-modal-sub   { font-size: 14px; color: var(--text-muted); margin-top: 2px; }
+.mo-modal-close {
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 8px;
+}
+.mo-modal-close:active { background: var(--primary-20); }
+.mo-modal-body { padding: 18px 20px 22px; }
+.mo-modal-body p {
+  margin: 0 0 14px;
+  color: var(--text-body);
+  font-size: 15px;
+  line-height: 1.55;
+}
+.mo-modal-actions { margin: 18px 0 14px; }
+.mo-modal-btn {
+  width: 100%;
+  height: 44px;
+  padding: 0 18px;
+  background: var(--primary-100);
+  color: #FFFFFF;
+  border: none;
+  border-radius: 12px;
+  font-family: var(--font);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mo-modal-btn:active { background: #3A385A; transform: scale(0.99); }
+.mo-modal-foot {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: center;
+  margin-top: 10px;
 }
 
 /* Jump to latest — appears when user scrolls up away from the bottom card */
@@ -710,9 +784,6 @@ button { cursor: pointer; }
 
 <header class="mo-header">
   <div class="mo-header-inner">
-    <button class="mo-face-btn" onclick="App.resetThread()" aria-label="New thread">
-      <svg class="mo-face-sm" viewBox="0 0 40 40"><use href="#icon-face-open"/></svg>
-    </button>
     <button class="mo-chip" id="lensChip" style="display:none;" aria-label="Selling lens">
       <span id="lensChipValue"></span>
       <span class="mo-chip-x" onclick="event.stopPropagation(); App.clearLens()">×</span>
@@ -722,11 +793,34 @@ button { cursor: pointer; }
       <span class="mo-chip-x" onclick="event.stopPropagation(); App.clearTerritory()">×</span>
     </button>
     <div class="mo-header-spacer"></div>
-    <button class="mo-header-action" aria-label="Threads">
+    <button class="mo-header-action" onclick="App.openAbout()" aria-label="About Fedmo">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
     </button>
   </div>
 </header>
+
+<!-- About modal — opens from the hamburger -->
+<div class="mo-modal-backdrop" id="aboutBackdrop" onclick="App.closeAbout()"></div>
+<div class="mo-modal" id="aboutModal" role="dialog" aria-labelledby="aboutTitle" aria-hidden="true">
+  <div class="mo-modal-header">
+    <svg class="mo-modal-face" viewBox="0 0 40 40"><use href="#icon-face-open"/></svg>
+    <div>
+      <div class="mo-modal-title" id="aboutTitle">Fedmo</div>
+      <div class="mo-modal-sub">Federal Markets. Simplified.</div>
+    </div>
+    <button class="mo-modal-close" onclick="App.closeAbout()" aria-label="Close">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="mo-modal-body">
+    <p>Mo is your federal sales analyst. Tell Mo what you sell or ask about a market, and Mo shows you where the money is, who the incumbent is, and where the openings are.</p>
+    <p>Every number Mo cites comes from USASpending.gov — tap any contract to verify it yourself.</p>
+    <div class="mo-modal-actions">
+      <button class="mo-modal-btn" onclick="App.closeAbout(); App.resetThread();">Start a new thread</button>
+    </div>
+    <div class="mo-modal-foot">Built on USASpending.gov · fedmo.com</div>
+  </div>
+</div>
 
 <div class="thread" id="thread">
   <div class="greeting" id="greeting">
@@ -2526,8 +2620,9 @@ const App = {
   },
   togglePin(btn) { btn.classList.toggle('pinned'); },
 
-  // Tap the face → fresh thread. Wipes card cache so next text is a search.
-  // Lens and territory chips persist (they're identity, not session state).
+  // Reset the thread to the greeting. Lens and territory chips persist
+  // (they're identity, not session state). Wipes card cache so next text
+  // is a search. Invoked from the About modal's "Start a new thread" button.
   resetThread() {
     const thread = document.getElementById('thread');
     // Remove all turns but keep the greeting node
@@ -2541,6 +2636,19 @@ const App = {
     document.getElementById('jumpLatest').classList.remove('visible');
     window.scrollTo({ top: 0, behavior: 'smooth' });
     this._track('reset_thread');
+  },
+
+  // About modal — opens from the hamburger menu.
+  openAbout() {
+    document.getElementById('aboutBackdrop').classList.add('open');
+    document.getElementById('aboutModal').classList.add('open');
+    document.getElementById('aboutModal').setAttribute('aria-hidden', 'false');
+    this._track('open_about');
+  },
+  closeAbout() {
+    document.getElementById('aboutBackdrop').classList.remove('open');
+    document.getElementById('aboutModal').classList.remove('open');
+    document.getElementById('aboutModal').setAttribute('aria-hidden', 'true');
   },
 };
 
@@ -2564,6 +2672,13 @@ function renderTreemap(items) {
 }
 
 App.init();
+
+// Escape key closes the About modal if open.
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && document.getElementById('aboutModal').classList.contains('open')) {
+    App.closeAbout();
+  }
+});
 </script>
 
 </body>
