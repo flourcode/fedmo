@@ -1916,10 +1916,13 @@ const App = {
       ? `I sell ${this.state.lens}.` + (this.state.territory ? ` Market scoped to ${SECTORS[this.state.territory].label} agencies.` : '')
       : null;
 
-    // Build the turn shell with a streaming target
-    const turnHtml = this.buildAskMoShell();
+    // Build the turn shell with a streaming target.
+    // Each turn gets a unique ID so multiple ask-Mo turns in the same thread
+    // don't collide when getElementById() would otherwise return the oldest.
+    const streamId = 'mo-stream-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+    const turnHtml = this.buildAskMoShell(streamId);
     this.replaceLoading(loadingId, turnHtml);
-    const proseEl = document.getElementById('moStreamTarget');
+    const proseEl = document.getElementById(streamId);
     const lastTurn = document.querySelectorAll('.turn-mo');
     if (lastTurn.length) requestAnimationFrame(() => this.scrollToTurn(lastTurn[lastTurn.length - 1]));
 
@@ -2028,7 +2031,7 @@ const App = {
 
   appendLoadingTurn(message = 'Reading the data') {
     const thread = document.getElementById('thread');
-    const id = 'loading-' + Date.now();
+    const id = 'loading-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
     const div = document.createElement('div');
     div.className = 'turn-loading';
     div.id = id;
@@ -2143,7 +2146,7 @@ const App = {
     return wrap;
   },
 
-  buildAskMoShell() {
+  buildAskMoShell(streamId) {
     const wrap = document.createElement('div');
     wrap.className = 'turn-mo';
     wrap.innerHTML = `
@@ -2157,7 +2160,7 @@ const App = {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>
-        <div class="mo-tell-more-prose" id="moStreamTarget"><span style="color:var(--text-faint);">Mo's thinking…</span></div>
+        <div class="mo-tell-more-prose" id="${streamId}"><span style="color:var(--text-faint);">Mo's thinking…</span></div>
       </div>
     `;
     return wrap;
