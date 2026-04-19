@@ -1686,6 +1686,87 @@ const App = {
     return `${head} … ${tail}`;
   },
 
+  // Hallucination audit. Extract dollar amounts and contract IDs from Mo's
+  // response and verify each one appears in the payload we sent to the Lambda.
+  // Anything unverified is logged as a warning. This is instrumentation, not
+  // a gate — we don't block the response, we surface the risk so we can tune.
+  //
+  // Thresholds are deliberately generous. A dollar amount like "$614 million"
+  // might appear as 614600000 in the payload — we check if ANY close match
+  // exists (within 5% rounding) before flagging.
+  _auditMoResponse(payload, moText) {
+    if (!payload || !moText) return;
+
+    // Flatten payload to a lowercase searchable string
+    const payloadStr = JSON.stringify(payload).toLowerCase();
+
+    // Collect all numeric values in the payload for dollar-amount matching
+    const payloadNums = [];
+    const walk = (obj) => {
+      if (obj === null || obj === undefined) return;
+      if (typeof obj === 'number') { payloadNums.push(obj); return; }
+      if (typeof obj === 'string') {
+        const n = parseFloat(obj);
+        if (!isNaN(n)) payloadNums.push(n);
+        return;
+      }
+      if (Array.isArray(obj)) { obj.forEach(walk); return; }
+      if (typeof obj === 'object') { Object.values(obj).forEach(walk); }
+    };
+    walk(payload);
+
+    const warnings = [];
+
+    // 1) Contract IDs: USASpending contract IDs are 10-20 char alphanumeric,
+    //    typically starting with a letter. Pattern match is conservative.
+    const contractIdRe = /\b[A-Z][A-Z0-9]{6,19}\b/g;
+    const citedIds = new Set();
+    let m;
+    while ((m = contractIdRe.exec(moText)) !== null) {
+      // Skip obvious non-IDs: common words, state codes, NAICS-like 6-digit numbers
+      if (/^(SBOM|EDR|JWCC|CMMC|NAICS|PSC|NAVWAR|DEVSECOPS|USASPENDING|DOD|DHS|HHS|GSA)$/i.test(m[0])) continue;
+      citedIds.add(m[0]);
+    }
+    for (const id of citedIds) {
+      if (!payloadStr.includes(id.toLowerCase())) {
+        warnings.push(`contract ID "${id}" not in payload`);
+      }
+    }
+
+    // 2) Dollar amounts: look for $N, $N.N, $N,NNN patterns with M/K/million/billion
+    const dollarRe = /\$\s*([\d,]+(?:\.\d+)?)\s*(million|billion|thousand|m|k|b)?/gi;
+    const citedDollars = [];
+    while ((m = dollarRe.exec(moText)) !== null) {
+      let val = parseFloat(m[1].replace(/,/g, ''));
+      if (isNaN(val)) continue;
+      const suffix = (m[2] || '').toLowerCase();
+      if (suffix === 'million' || suffix === 'm') val *= 1_000_000;
+      else if (suffix === 'billion' || suffix === 'b') val *= 1_000_000_000;
+      else if (suffix === 'thousand' || suffix === 'k') val *= 1_000;
+      // Ignore trivially-small numbers (year references, days, etc.)
+      if (val < 1000) continue;
+      citedDollars.push({ raw: m[0], value: val });
+    }
+    for (const d of citedDollars) {
+      // Check for a close match in the payload (within 5% rounding tolerance)
+      const hit = payloadNums.some(n => {
+        if (n === 0) return false;
+        const ratio = Math.abs(n - d.value) / Math.max(n, d.value);
+        return ratio < 0.05;
+      });
+      if (!hit) {
+        warnings.push(`dollar "${d.raw}" (≈${d.value.toLocaleString()}) has no close match in payload`);
+      }
+    }
+
+    if (warnings.length > 0) {
+      console.warn('[mo-audit] Possible hallucinations in Mo\'s response:\n  - ' + warnings.join('\n  - '));
+      this._track('mo_audit_warning', { count: warnings.length, sample: warnings[0] });
+    } else {
+      console.log('[mo-audit] ✓ all dollars and contract IDs verified against payload');
+    }
+  },
+
   _loadingMessageFor(intent) {
     switch (intent.intent) {
       case 'search':
@@ -1977,9 +2058,17 @@ const App = {
         (fullText) => {
           if (fullText) {
             this._askMoHistory.push({ role: 'model', content: fullText });
-            // Also push a 200-char summary into recent turns for the router's context
+            // Also push a summary into recent turns for the router's context.
+            // Summary keeps beginning + end so Mo's closing question survives.
             this._recentTurns.push({ role: 'mo', text: this._summarizeMoProse(fullText) });
             if (this._recentTurns.length > 6) this._recentTurns = this._recentTurns.slice(-6);
+
+            // Render follow-up chips so the user doesn't have to type or scroll
+            this._renderAskMoChips(streamId, this._pickAskMoChips(question, fullText));
+
+            // Hallucination check: warn in console if Mo cited dollar amounts
+            // or contract IDs that aren't in the payload we sent
+            this._auditMoResponse(payload, fullText);
           }
         },
         (msg) => { if (proseEl) proseEl.innerHTML = `<span style="color:var(--text-faint);">${Html.escapeHtml(msg)}</span>`; }
@@ -2175,9 +2264,49 @@ const App = {
           </button>
         </div>
         <div class="mo-tell-more-prose" id="${streamId}"><span style="color:var(--text-faint);">Mo's thinking…</span></div>
+        <div class="mo-followups" id="${streamId}-chips" style="display:none; margin-top:16px;"></div>
       </div>
     `;
     return wrap;
+  },
+
+  // Decide what follow-up chips to show under Mo's streamed response.
+  // Rule-based for now: intent + whether a card is active → fixed set.
+  // Each chip becomes a tap-to-ask. Keep max 4, keep short.
+  _pickAskMoChips(question, moResponse) {
+    const q = (question || '').toLowerCase();
+    const hasCard = !!this.state.lastCardSpec;
+    if (!hasCard) return [];
+
+    // Draft-outreach family
+    if (/draft|write|email|outreach|letter/.test(q)) {
+      return ['Make it shorter', 'More formal', 'Draft for a different agency', 'Who else should I contact?'];
+    }
+    // Teaming family
+    if (/team|partner|prime|channel|reseller|sub/.test(q)) {
+      return ['Draft outreach to a prime', 'Which one is easiest to approach?', 'Who\'s the incumbent?', 'Tell me more'];
+    }
+    // Incumbent/vendor family
+    if (/incumbent|who owns|who has|vendor|prime/.test(q)) {
+      return ['Where are they vulnerable?', 'Who could displace them?', 'Draft outreach', 'Tell me more'];
+    }
+    // Expiring family
+    if (/expir|recompet|ending|bridge/.test(q)) {
+      return ['Draft outreach on the biggest one', 'Who should I team with?', 'What vehicles cover this?', 'Tell me more'];
+    }
+    // Default / "tell me more" / "ok" / catch-all
+    return ['Who should I team with?', 'Draft outreach', 'What\'s expiring?', 'Where\'s the opening?'];
+  },
+
+  // Render chips inside the ask-Mo turn after the stream completes.
+  _renderAskMoChips(streamId, chips) {
+    if (!chips || chips.length === 0) return;
+    const slot = document.getElementById(streamId + '-chips');
+    if (!slot) return;
+    slot.innerHTML = chips.map(c =>
+      `<button class="mo-followup" data-ask="${Html.escapeHtml(c)}">${Html.escapeHtml(c)}</button>`
+    ).join('');
+    slot.style.display = '';
   },
 
   buildEmptyTurn(query) {
