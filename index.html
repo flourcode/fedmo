@@ -1,0 +1,2253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#FDFCFF" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0F0E13" media="(prefers-color-scheme: dark)">
+<title>Fedmo — Federal Market Intelligence</title>
+<meta name="description" content="Talk to Mo. Know any federal market before the meeting starts.">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-T343V4RFHV"></script>
+<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-T343V4RFHV');</script>
+<style>
+:root {
+  --primary-100: #46446E;
+  --primary-80:  #5E5B92;
+  --primary-60:  #7572B7;
+  --primary-40:  #ACAAD4;
+  --primary-20:  #E3E3F1;
+
+  --black: #2C2933;
+  --white: #FFFBF2;
+  --text-title: #393640;
+  --text-body:  #535059;
+  --text-muted: #7572B7;
+  --text-faint: #ACAAD4;
+
+  --bg-screen: #FDFCFF;
+  --bg-card:   #FFFFFF;
+  --bg-tint:   #F6F5FB;
+
+  --border:      #E3E3F1;
+  --border-soft: #EFEEF7;
+
+  --good:  #6B8E6B;
+  --warn:  #B58840;
+  --tough: #A85D70;
+
+  --radius:    14px;
+  --radius-sm: 10px;
+  --radius-pill: 999px;
+
+  --shadow-soft: 0 1px 2px rgba(70,68,110,0.04);
+  --shadow-lift: 0 4px 16px rgba(70,68,110,0.10);
+
+  --font: 'Rubik', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; padding: 0; }
+html { height: 100%; }
+body {
+  font-family: var(--font);
+  background: var(--bg-screen);
+  color: var(--text-body);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100%;
+  padding-bottom: calc(96px + env(safe-area-inset-bottom));
+}
+
+button, input { font-family: var(--font); }
+button { cursor: pointer; }
+
+/* ── HEADER ──────────────────────────────────────────────── */
+.mo-header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: var(--bg-screen);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 12px;
+  padding-top: calc(10px + env(safe-area-inset-top));
+}
+.mo-header-inner {
+  max-width: 720px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.mo-face-btn {
+  background: transparent;
+  border: none;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  flex-shrink: 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.mo-face-btn:active { opacity: 0.7; }
+.mo-face-sm { width: 32px; height: 32px; flex-shrink: 0; display: block; }
+.mo-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 8px 0 12px;
+  background: var(--primary-20);
+  border: none;
+  border-radius: var(--radius-pill);
+  font-size: 13px;
+  color: var(--primary-100);
+  white-space: nowrap;
+  font-weight: 500;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mo-chip:active { background: var(--primary-40); }
+.mo-chip-x {
+  color: var(--primary-60);
+  font-size: 16px;
+  line-height: 1;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+.mo-chip-x:active { background: var(--primary-40); color: var(--primary-100); }
+.mo-header-spacer { flex: 1; }
+.mo-header-action {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--primary-60);
+}
+.mo-header-action:active { background: var(--primary-20); }
+
+/* ── THREAD ──────────────────────────────────────────────── */
+.thread {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 16px 12px 24px;
+}
+
+.greeting { padding: 32px 4px 16px; }
+.greeting-face { width: 64px; height: 64px; margin-bottom: 16px; }
+.greeting-hi {
+  font-size: 22px;
+  font-weight: 500;
+  color: var(--text-title);
+  margin-bottom: 8px;
+  letter-spacing: -0.01em;
+}
+.greeting-sub {
+  font-size: 15px;
+  color: var(--text-body);
+  margin-bottom: 20px;
+  line-height: 1.5;
+}
+.greeting-examples { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.turn-user {
+  display: flex;
+  justify-content: flex-end;
+  margin: 20px 0 14px;
+  animation: turnIn 240ms ease;
+}
+.turn-user-bubble {
+  max-width: 84%;
+  padding: 12px 16px;
+  background: var(--primary-100);
+  color: var(--white);
+  border-radius: 18px 18px 4px 18px;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.turn-mo {
+  margin: 0 0 20px;
+  animation: turnIn 320ms ease;
+  /* Always leaves room below the sticky header on any scroll-into-view */
+  scroll-margin-top: 64px;
+}
+@keyframes turnIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.turn-mo-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  padding-left: 4px;
+}
+.turn-mo-header svg { width: 26px; height: 26px; flex-shrink: 0; }
+.turn-mo-meta { font-size: 12px; color: var(--text-faint); }
+
+.turn-mo-card {
+  position: relative;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+  box-shadow: var(--shadow-soft);
+}
+
+.mo-card-actions {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: flex;
+  gap: 2px;
+}
+.mo-card-action {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-faint);
+  border-radius: 50%;
+}
+.mo-card-action:active { background: var(--primary-20); color: var(--primary-100); }
+.mo-card-action.pinned { color: var(--primary-100); }
+
+.mo-verdict {
+  font-size: 17px;
+  font-weight: 500;
+  color: var(--text-title);
+  line-height: 1.4;
+  margin-bottom: 4px;
+  padding-right: 70px;
+  letter-spacing: -0.005em;
+}
+.mo-action {
+  font-size: 14px;
+  color: var(--text-body);
+  line-height: 1.45;
+  margin-bottom: 18px;
+}
+
+.mo-stat-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 14px;
+  background: var(--bg-tint);
+  border-radius: 12px;
+  margin-bottom: 18px;
+}
+.mo-stat { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.mo-stat-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-title);
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+.mo-stat-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.mo-comp-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 18px 0 10px;
+}
+.mo-comp-head:first-child { margin-top: 0; }
+.mo-comp-title { font-size: 13px; font-weight: 500; color: var(--text-title); }
+.mo-comp-meta  { font-size: 11px; color: var(--text-faint); }
+
+.mo-treemap {
+  width: 100%;
+  height: 140px;
+  border-radius: 10px;
+  overflow: hidden;
+  display: block;
+}
+.mo-treemap rect { transition: opacity 120ms; }
+.mo-treemap rect:active { opacity: 0.85; }
+.mo-treemap text { pointer-events: none; font-family: var(--font); }
+
+.mo-list { display: flex; flex-direction: column; }
+.mo-row {
+  display: flex;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-soft);
+  font-size: 14px;
+  gap: 10px;
+  min-height: 44px;
+}
+.mo-row:last-child { border-bottom: none; }
+.mo-row-name {
+  color: var(--text-title);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mo-row-bar {
+  flex: 0 0 60px;
+  height: 4px;
+  background: var(--primary-20);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.mo-row-bar-fill { height: 100%; background: var(--primary-60); border-radius: 2px; }
+.mo-row-amount {
+  color: var(--text-title);
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  flex-shrink: 0;
+  min-width: 56px;
+  text-align: right;
+}
+
+.mo-exp-row { padding: 12px 0; border-bottom: 1px solid var(--border-soft); }
+.mo-exp-row:last-child { border-bottom: none; }
+.mo-exp-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 4px;
+  gap: 12px;
+}
+.mo-exp-vendor {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-title);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+.mo-exp-amt {
+  font-size: 14px;
+  color: var(--text-title);
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+.mo-exp-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 12px;
+  color: var(--text-faint);
+  gap: 8px;
+}
+.mo-exp-agency {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+.mo-exp-days { flex-shrink: 0; font-weight: 500; color: var(--warn); }
+.mo-exp-days.urgent { color: var(--tough); }
+
+.mo-prose {
+  margin-top: 16px;
+  padding: 14px;
+  background: var(--bg-tint);
+  border-radius: 12px;
+  font-size: 14px;
+  color: var(--text-body);
+  line-height: 1.55;
+}
+
+.mo-followups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-soft);
+}
+.mo-followup {
+  height: 34px;
+  padding: 0 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  font-size: 13px;
+  color: var(--primary-100);
+  white-space: nowrap;
+  transition: all 120ms;
+}
+.mo-followup:active {
+  background: var(--primary-20);
+  border-color: var(--primary-40);
+  transform: scale(0.97);
+}
+.greeting-examples .mo-followup { height: 36px; padding: 0 16px; font-size: 14px; }
+
+.turn-loading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 8px 0 20px;
+  padding-left: 4px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.turn-loading svg { width: 22px; height: 22px; }
+.turn-loading-dots { display: inline-flex; gap: 4px; }
+.turn-loading-dots span {
+  width: 6px;
+  height: 6px;
+  background: var(--primary-40);
+  border-radius: 50%;
+  animation: dot 1.2s infinite ease-in-out;
+}
+.turn-loading-dots span:nth-child(2) { animation-delay: 0.15s; }
+.turn-loading-dots span:nth-child(3) { animation-delay: 0.30s; }
+@keyframes dot {
+  0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-2px); }
+}
+
+/* Jump to latest — appears when user scrolls up away from the bottom card */
+.mo-jump-latest {
+  position: fixed;
+  bottom: calc(96px + env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%) translateY(8px);
+  z-index: 55;
+  height: 36px;
+  padding: 0 14px 0 12px;
+  background: var(--primary-100);
+  color: var(--white);
+  border: none;
+  border-radius: var(--radius-pill);
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 4px 12px rgba(70,68,110,0.20);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 200ms, transform 200ms;
+}
+.mo-jump-latest.visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(-50%) translateY(0);
+}
+.mo-jump-latest:active { background: var(--primary-80); }
+.mo-jump-latest svg { width: 14px; height: 14px; }
+
+/* Bottom ask bar */
+.mo-ask-bar {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  z-index: 60;
+  background: linear-gradient(to bottom, rgba(253,252,255,0) 0%, var(--bg-screen) 30%);
+  padding: 16px 12px calc(12px + env(safe-area-inset-bottom));
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+.mo-ask-bar-inner {
+  max-width: 720px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: 6px 6px 6px 18px;
+  box-shadow: var(--shadow-lift);
+  pointer-events: auto;
+}
+.mo-ask-bar-inner:focus-within {
+  border-color: var(--primary-40);
+  box-shadow: 0 4px 16px rgba(70,68,110,0.16);
+}
+.mo-ask-input {
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+  border: none;
+  background: transparent;
+  font-size: 16px;
+  color: var(--text-title);
+  outline: none;
+}
+.mo-ask-input::placeholder { color: var(--text-faint); }
+.mo-ask-send {
+  width: 44px;
+  height: 44px;
+  background: var(--primary-100);
+  color: var(--white);
+  border: none;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 120ms;
+}
+.mo-ask-send:active { background: var(--primary-80); transform: scale(0.94); }
+.mo-ask-send svg { width: 18px; height: 18px; }
+
+/* ── Data-rich row additions ─────────────────────────────── */
+
+/* Two-line prime row: vendor on top with bar+amount, contract ID + View on bottom */
+.mo-row-2line {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+.mo-row-2line:last-child { border-bottom: none; }
+.mo-row-2line-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 24px;
+}
+.mo-row-2line-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 4px;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.mo-row-2line-meta {
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+.mo-view-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  background: var(--primary-20);
+  color: var(--primary-100);
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 500;
+  text-decoration: none;
+  flex-shrink: 0;
+}
+.mo-view-link:active { background: var(--primary-40); }
+.mo-view-link svg { width: 9px; height: 9px; }
+
+/* "Tell me more" expander — Mo's prose, on demand only */
+.mo-tell-more {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-soft);
+}
+.mo-tell-more-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 12px 0 8px;
+  background: transparent;
+  border: none;
+  color: var(--primary-100);
+  font-size: 13px;
+  font-weight: 500;
+  font-family: var(--font);
+  border-radius: var(--radius-pill);
+}
+.mo-tell-more-btn:active { background: var(--primary-20); }
+.mo-tell-more-btn svg { width: 18px; height: 18px; }
+.mo-tell-more-prose {
+  margin-top: 12px;
+  padding: 14px;
+  background: var(--bg-tint);
+  border-radius: 12px;
+  font-size: 14px;
+  color: var(--text-body);
+  line-height: 1.55;
+}
+.mo-tell-more-prose p { margin: 0 0 10px; }
+.mo-tell-more-prose p:last-child { margin-bottom: 0; }
+.mo-tell-more-prose strong { color: var(--text-title); font-weight: 600; }
+
+/* Empty state — Mo can't find anything */
+.mo-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+.mo-empty-msg {
+  font-size: 15px;
+  color: var(--text-body);
+  line-height: 1.5;
+}
+
+/* Vehicle / channel pill — small, in-prose tags */
+.mo-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 8px;
+  background: var(--primary-20);
+  color: var(--primary-100);
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 500;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+/* Source line at bottom of card */
+.mo-source {
+  margin-top: 14px;
+  font-size: 11px;
+  color: var(--text-faint);
+  text-align: right;
+}
+
+@media (min-width: 720px) {
+  .thread { padding: 20px 20px 24px; }
+  .turn-mo-card { padding: 22px; }
+  .mo-stat-value { font-size: 20px; }
+  .mo-treemap { height: 180px; }
+  body { padding-bottom: 100px; }
+  .mo-row-bar { flex: 0 0 100px; }
+}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <!-- Mo always has the same green head. Only the mouth changes. -->
+  <symbol id="icon-face-open" viewBox="0 0 40 40">
+    <circle cx="20" cy="20" r="20" fill="#8EAF8E"/>
+    <circle cx="14" cy="16" r="2.4" fill="#3D5C3D"/>
+    <circle cx="26" cy="16" r="2.4" fill="#3D5C3D"/>
+    <path d="M12 24 Q20 31 28 24" fill="none" stroke="#3D5C3D" stroke-width="2.8" stroke-linecap="round"/>
+  </symbol>
+  <symbol id="icon-face-watch" viewBox="0 0 40 40">
+    <circle cx="20" cy="20" r="20" fill="#8EAF8E"/>
+    <circle cx="14" cy="16" r="2.4" fill="#3D5C3D"/>
+    <circle cx="26" cy="16" r="2.4" fill="#3D5C3D"/>
+    <line x1="13" y1="26" x2="27" y2="26" stroke="#3D5C3D" stroke-width="2.8" stroke-linecap="round"/>
+  </symbol>
+  <symbol id="icon-face-locked" viewBox="0 0 40 40">
+    <circle cx="20" cy="20" r="20" fill="#8EAF8E"/>
+    <circle cx="14" cy="16" r="2.4" fill="#3D5C3D"/>
+    <circle cx="26" cy="16" r="2.4" fill="#3D5C3D"/>
+    <path d="M12 28 Q20 22 28 28" fill="none" stroke="#3D5C3D" stroke-width="2.8" stroke-linecap="round"/>
+  </symbol>
+</svg>
+
+<header class="mo-header">
+  <div class="mo-header-inner">
+    <button class="mo-face-btn" onclick="App.resetThread()" aria-label="New thread">
+      <svg class="mo-face-sm" viewBox="0 0 40 40"><use href="#icon-face-open"/></svg>
+    </button>
+    <button class="mo-chip" id="lensChip" style="display:none;" aria-label="Selling lens">
+      <span id="lensChipValue"></span>
+      <span class="mo-chip-x" onclick="event.stopPropagation(); App.clearLens()">×</span>
+    </button>
+    <button class="mo-chip" id="terrChip" style="display:none;" aria-label="Territory">
+      <span id="terrChipValue"></span>
+      <span class="mo-chip-x" onclick="event.stopPropagation(); App.clearTerritory()">×</span>
+    </button>
+    <div class="mo-header-spacer"></div>
+    <button class="mo-header-action" aria-label="Threads">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+  </div>
+</header>
+
+<div class="thread" id="thread">
+  <div class="greeting" id="greeting">
+    <svg class="greeting-face" viewBox="0 0 40 40"><use href="#icon-face-open"/></svg>
+    <div class="greeting-hi">Hey, I'm Mo.</div>
+    <div class="greeting-sub">Tell me what you sell or ask about a market. I'll show you where the money is and how to get in.</div>
+    <div class="greeting-examples">
+      <button class="mo-followup" data-ask="I sell Sonatype to DoD">I sell Sonatype to DoD</button>
+      <button class="mo-followup" data-ask="What's expiring in HHS cyber?">What's expiring in HHS cyber?</button>
+      <button class="mo-followup" data-ask="Who owns DISA cloud?">Who owns DISA cloud?</button>
+    </div>
+  </div>
+</div>
+
+<button class="mo-jump-latest" id="jumpLatest" onclick="App.jumpToLatest()" aria-label="Jump to latest">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+  Latest
+</button>
+
+<div class="mo-ask-bar">
+  <div class="mo-ask-bar-inner">
+    <input type="text" class="mo-ask-input" id="askInput" placeholder="Ask Mo anything…" autocomplete="off" enterkeyhint="send">
+    <button class="mo-ask-send" id="askSend" onclick="App.askFromInput()" aria-label="Send">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+    </button>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════
+// REAL ENGINE — ported from production index.html.
+// Pure data layer: knows nothing about the UI. Given a query,
+// produces a `marketMetrics` object and a `cardSpec`.
+// ════════════════════════════════════════════════════════════
+
+const PROXY_ENDPOINT = 'https://76unm1rlj0.execute-api.us-east-1.amazonaws.com/default/grumpy2';
+const AI_ENDPOINT    = 'https://x6cdyrfcy43r5rpw6i6aiwsegi0effvy.lambda-url.us-east-1.on.aws/';
+
+// ── Regex constants ─────────────────────────────────────────
+const _RE_AMPERSAND = /\s+&\s+/g;
+const _RE_PSC   = /^[A-Z]{1,2}\d{1,3}$|^\d{1,2}[A-Z]\d{0,2}$/i;
+const _RE_NAICS = /^\d{6}$/;
+const _RE_AND   = /\bAND\b/;
+const _RE_SUFFIX = /,?\s*(L\.?L\.?C\.?|INC\.?|CORP\.?|CORPORATION|INCORPORATED|COMPANY|CO\.?|LTD\.?|L\.?P\.?|P\.?C\.?|P\.?L\.?L\.?C\.?)\.?(?=\s*,|\s*$|\s+AND\b)/gi;
+
+const _memoVendor = {};
+const _memoAlias = {};
+
+// ── Utils ───────────────────────────────────────────────────
+const Utils = {
+  formatDateISO: date => date.toISOString().split('T')[0],
+
+  money: n => {
+    if (!n && n !== 0) return '-';
+    const absN = Math.abs(n);
+    const sign = n < 0 ? '-' : '';
+    if (absN >= 1e9) return sign + '$' + (absN/1e9).toFixed(1) + 'B';
+    if (absN >= 1e6) return sign + '$' + (absN/1e6).toFixed(1) + 'M';
+    if (absN >= 1e3) return sign + '$' + (absN/1e3).toFixed(0) + 'K';
+    return sign + '$' + Math.round(absN).toLocaleString();
+  },
+
+  titleCase: s => {
+    if (!s) return '';
+    const ACRONYMS = new Set([
+      'VA','DHS','DOD','DOJ','DOE','DOT','DOL','DOS','HHS','GSA','NASA','NSA','CIA','FBI',
+      'DISA','DARPA','SOCOM','JSOC','DLA','DFAS','AAFES','NIH','CDC','FDA','CMS','DEA',
+      'ATF','CBP','ICE','TSA','FEMA','USCIS','USCG','USMC','USAF','USA','USN',
+      'NSF','NRC','SEC','IRS','OPM','OMB','GAO','CBO','DIA','NGA','NRO','NIST','NOAA',
+      'EPA','FCC','FTC','FDIC','CISA','CYBERCOM','STRATCOM','INDOPACOM','CENTCOM','EUCOM',
+      'NORTHCOM','TRANSCOM','NAVSEA','NAVAIR','SPAWAR','AFSPC','AFMC','AMC','FORSCOM',
+      'LLC','INC','CORP','LTD','LP','LLP','PC','SBA','USDA','HUD','SSA',
+      'AI','IT','HR','BD','AE','PM','CO','PO','ID','US','UK',
+    ]);
+    const SMALL = new Set(['AND','OR','OF','THE','FOR','IN','ON','AT','TO','BY','AN','A','DBA']);
+    return s.toLowerCase().replace(/\b\w+/g, (w, i) => {
+      const up = w.toUpperCase();
+      if (ACRONYMS.has(up)) return up;
+      if (i > 0 && SMALL.has(up)) return w;
+      return w.charAt(0).toUpperCase() + w.slice(1);
+    });
+  },
+
+  cleanAgency(s) {
+    return (s || '').replace(/^(Department of (the )?|Office of (the )?)/i, '').trim();
+  },
+
+  getTrailing12Mo() {
+    const end = new Date(), start = new Date();
+    start.setFullYear(end.getFullYear() - 1);
+    return [{ start_date: this.formatDateISO(start), end_date: this.formatDateISO(end) }];
+  },
+
+  agencyAliases: {
+    "dod": "Department of Defense",
+    "doe": "Department of Energy",
+    "doj": "Department of Justice",
+    "dot": "Department of Transportation",
+    "dol": "Department of Labor",
+    "dos": "Department of State",
+    "state": "Department of State",
+    "treasury": "Department of the Treasury",
+    "treas": "Department of the Treasury",
+    "hhs": "Department of Health and Human Services",
+    "dhs": "Department of Homeland Security",
+    "hud": "Department of Housing and Urban Development",
+    "doi": "Department of the Interior",
+    "doed": "Department of Education",
+    "usda": "Department of Agriculture",
+    "doc": "Department of Commerce",
+    "commerce": "Department of Commerce",
+    "va": "Department of Veterans Affairs",
+    "gsa": "General Services Administration",
+    "ssa": "Social Security Administration",
+    "opm": "Office of Personnel Management",
+    "epa": "Environmental Protection Agency",
+    "nasa": "National Aeronautics and Space Administration",
+    "nsf": "National Science Foundation",
+    "nrc": "Nuclear Regulatory Commission",
+    "fcc": "Federal Communications Commission",
+    "ftc": "Federal Trade Commission",
+    "sec": "Securities and Exchange Commission",
+    "fdic": "Federal Deposit Insurance Corporation",
+    "sba": "Small Business Administration",
+    "usaid": "Agency for International Development",
+  },
+
+  subAgencyAliases: {
+    "army":        { tier:'subtier', name:'Department of the Army',          toptier_name:'Department of Defense' },
+    "navy":        { tier:'subtier', name:'Department of the Navy',          toptier_name:'Department of Defense' },
+    "usaf":        { tier:'subtier', name:'Department of the Air Force',     toptier_name:'Department of Defense' },
+    "air force":   { tier:'subtier', name:'Department of the Air Force',     toptier_name:'Department of Defense' },
+    "usmc":        { tier:'subtier', name:'Marine Corps',                    toptier_name:'Department of Defense' },
+    "marine corps":{ tier:'subtier', name:'Marine Corps',                    toptier_name:'Department of Defense' },
+    "ussf":        { tier:'subtier', name:'United States Space Force',       toptier_name:'Department of Defense' },
+    "space force": { tier:'subtier', name:'United States Space Force',       toptier_name:'Department of Defense' },
+    "socom":       { tier:'subtier', name:'U.S. Special Operations Command', toptier_name:'Department of Defense' },
+    "cybercom":    { tier:'subtier', name:'U.S. Cyber Command',              toptier_name:'Department of Defense' },
+    "stratcom":    { tier:'subtier', name:'U.S. Strategic Command',          toptier_name:'Department of Defense' },
+    "transcom":    { tier:'subtier', name:'U.S. Transportation Command',     toptier_name:'Department of Defense' },
+    "centcom":     { tier:'subtier', name:'U.S. Central Command',            toptier_name:'Department of Defense' },
+    "indopacom":   { tier:'subtier', name:'U.S. Indo-Pacific Command',       toptier_name:'Department of Defense' },
+    "northcom":    { tier:'subtier', name:'U.S. Northern Command',           toptier_name:'Department of Defense' },
+    "southcom":    { tier:'subtier', name:'U.S. Southern Command',           toptier_name:'Department of Defense' },
+    "africom":     { tier:'subtier', name:'U.S. Africa Command',             toptier_name:'Department of Defense' },
+    "disa":    { tier:'subtier', name:'Defense Information Systems Agency', toptier_name:'Department of Defense' },
+    "darpa":   { tier:'subtier', name:'Defense Advanced Research Projects Agency', toptier_name:'Department of Defense' },
+    "dla":     { tier:'subtier', name:'Defense Logistics Agency',           toptier_name:'Department of Defense' },
+    "dcsa":    { tier:'subtier', name:'Defense Counterintelligence and Security Agency', toptier_name:'Department of Defense' },
+    "mda":     { tier:'subtier', name:'Missile Defense Agency',             toptier_name:'Department of Defense' },
+    "fema":  { tier:'subtier', name:'Federal Emergency Management Agency',  toptier_name:'Department of Homeland Security' },
+    "tsa":   { tier:'subtier', name:'Transportation Security Administration', toptier_name:'Department of Homeland Security' },
+    "cbp":   { tier:'subtier', name:'U.S. Customs and Border Protection',   toptier_name:'Department of Homeland Security' },
+    "ice":   { tier:'subtier', name:'U.S. Immigration and Customs Enforcement', toptier_name:'Department of Homeland Security' },
+    "uscis": { tier:'subtier', name:'U.S. Citizenship and Immigration Services', toptier_name:'Department of Homeland Security' },
+    "cisa":  { tier:'subtier', name:'Cybersecurity and Infrastructure Security Agency', toptier_name:'Department of Homeland Security' },
+    "fbi": { tier:'subtier', name:'Federal Bureau of Investigation', toptier_name:'Department of Justice' },
+    "dea": { tier:'subtier', name:'Drug Enforcement Administration', toptier_name:'Department of Justice' },
+    "fda":  { tier:'subtier', name:'Food and Drug Administration', toptier_name:'Department of Health and Human Services' },
+    "cdc":  { tier:'subtier', name:'Centers for Disease Control and Prevention', toptier_name:'Department of Health and Human Services' },
+    "nih":  { tier:'subtier', name:'National Institutes of Health', toptier_name:'Department of Health and Human Services' },
+    "cms":  { tier:'subtier', name:'Centers for Medicare and Medicaid Services', toptier_name:'Department of Health and Human Services' },
+    "faa":  { tier:'subtier', name:'Federal Aviation Administration', toptier_name:'Department of Transportation' },
+    "noaa": { tier:'subtier', name:'National Oceanic and Atmospheric Administration', toptier_name:'Department of Commerce' },
+    "nist": { tier:'subtier', name:'National Institute of Standards and Technology', toptier_name:'Department of Commerce' },
+    "nsa":  { tier:'subtier', name:'National Security Agency', toptier_name:'Department of Defense' },
+    "irs":  { tier:'subtier', name:'Internal Revenue Service', toptier_name:'Department of the Treasury' },
+  },
+
+  queryAliases: {
+    "aws": "Amazon Web Services",
+    "amazon": "Amazon Web Services",
+    "gcp": "Google Cloud",
+    "msft": "Microsoft",
+    "ibm": "International Business Machines",
+    "hpe": "Hewlett Packard Enterprise",
+    "dell": "Dell Technologies",
+    "gdit": "General Dynamics Information Technology",
+    "lmco": "Lockheed Martin",
+    "ngc": "Northrop Grumman",
+    "bah": "Booz Allen Hamilton",
+    "saic": "Science Applications International",
+    "wwt": "World Wide Technology",
+    "panw": "Palo Alto Networks",
+    "splunk": "Splunk",
+    "splk": "Splunk",
+    "rtx": "Raytheon",
+    "crowdstrike": "CrowdStrike",
+    "cs": "CrowdStrike",
+    "okta": "Okta",
+    "snow": "Snowflake",
+    "now": "ServiceNow",
+    "servicenow": "ServiceNow",
+    "zta": "Zero Trust",
+    "zt": "Zero Trust",
+  },
+
+  dynamicAgencies: {},
+
+  resolveAgencyAlias(term) {
+    const lower = term.toLowerCase().trim();
+    if (_memoAlias[lower] !== undefined) return _memoAlias[lower];
+    if (this.dynamicAgencies[lower]) { _memoAlias[lower] = this.dynamicAgencies[lower]; return this.dynamicAgencies[lower]; }
+    if (this.subAgencyAliases[lower]) { _memoAlias[lower] = this.subAgencyAliases[lower]; return this.subAgencyAliases[lower]; }
+    if (this.agencyAliases[lower]) { const r = { tier: 'toptier', name: this.agencyAliases[lower] }; _memoAlias[lower] = r; return r; }
+    const stripPrefix = name => name.toLowerCase().replace(/^(department of (the )?|office of (the )?|u\.s\. )/, '').trim();
+    const subMatch = Object.entries(this.subAgencyAliases).find(([, v]) => {
+      const n = v.name.toLowerCase();
+      return n === lower || stripPrefix(v.name) === lower;
+    });
+    if (subMatch) { _memoAlias[lower] = subMatch[1]; return subMatch[1]; }
+    const topMatch = Object.entries(this.agencyAliases).find(([, fullName]) =>
+      fullName.toLowerCase() === lower || stripPrefix(fullName) === lower
+    );
+    if (topMatch) { const r = { tier: 'toptier', name: topMatch[1] }; _memoAlias[lower] = r; return r; }
+    _memoAlias[lower] = null; return null;
+  },
+
+  VENDOR_ALIASES: {
+    'LOCKHEED MARTIN': ['LMCO'],
+    'NORTHROP GRUMMAN': ['NGC'],
+    'GENERAL DYNAMICS INFORMATION TECHNOLOGY': ['GDIT'],
+    'L3HARRIS': ['L3 HARRIS', 'L-3 COMMUNICATIONS'],
+    'RTX': ['RAYTHEON', 'RAYTHEON TECHNOLOGIES'],
+    'AMAZON WEB SERVICES': ['AWS'],
+    'INTERNATIONAL BUSINESS MACHINES': ['IBM'],
+    'WORLD WIDE TECHNOLOGY': ['WWT'],
+    'CARAHSOFT TECHNOLOGY': ['Carahsoft'],
+    'HEWLETT PACKARD ENTERPRISE': ['HPE'],
+    'SCIENCE APPLICATIONS INTERNATIONAL': ['SAIC'],
+    'BOOZ ALLEN HAMILTON': ['BOOZ ALLEN'],
+    'CACI INTERNATIONAL': ['CACI'],
+    'MANTECH INTERNATIONAL': ['MANTECH'],
+    'BOEING': ['THE BOEING', 'BOEING COMPANY', 'THE BOEING COMPANY'],
+  },
+
+  VENDOR_PREFIXES: [
+    ['BOOZ ALLEN HAMILTON', 'BOOZ ALLEN HAMILTON'],
+    ['SCIENCE APPLICATIONS INTERNATIONAL', 'SAIC'],
+    ['LEIDOS', 'LEIDOS'],
+    ['GENERAL DYNAMICS INFORMATION TECHNOLOGY', 'GENERAL DYNAMICS IT'],
+    ['GENERAL DYNAMICS', 'GENERAL DYNAMICS'],
+    ['NORTHROP GRUMMAN', 'NORTHROP GRUMMAN'],
+    ['LOCKHEED MARTIN', 'LOCKHEED MARTIN'],
+    ['RAYTHEON', 'RAYTHEON'],
+    ['BAE SYSTEMS', 'BAE SYSTEMS'],
+    ['ACCENTURE FEDERAL SERVICES', 'ACCENTURE FEDERAL SERVICES'],
+    ['ACCENTURE', 'ACCENTURE'],
+    ['DELOITTE', 'DELOITTE'],
+    ['PERATON', 'PERATON'],
+    ['CACI', 'CACI'],
+    ['SAIC', 'SAIC'],
+    ['MANTECH', 'MANTECH'],
+    ['CARAHSOFT', 'CARAHSOFT'],
+    ['WORLD WIDE TECHNOLOGY', 'WORLD WIDE TECHNOLOGY'],
+    ['INTERNATIONAL BUSINESS MACHINES', 'IBM'],
+    ['AMAZON WEB SERVICES', 'AMAZON WEB SERVICES'],
+    ['PALO ALTO NETWORKS', 'PALO ALTO NETWORKS'],
+  ],
+
+  normalizeVendorName(vendorName) {
+    if (!vendorName) return 'Unknown Vendor';
+    if (_memoVendor[vendorName]) return _memoVendor[vendorName];
+    let name = vendorName.toUpperCase();
+    name = name.replace(_RE_AMPERSAND, ' AND ');
+    name = name.replace(_RE_SUFFIX, '').trim();
+    for (const [cleanName, variations] of Object.entries(Utils.VENDOR_ALIASES)) {
+      if (variations.includes(name)) { name = cleanName; break; }
+    }
+    for (const [prefix, canonical] of Utils.VENDOR_PREFIXES) {
+      if (name === prefix || name.startsWith(prefix + ' ') || name.startsWith(prefix + ',')) {
+        name = canonical; break;
+      }
+    }
+    _memoVendor[vendorName] = name;
+    return name;
+  },
+
+  filterActiveContracts(awards) {
+    const nowMs = Date.now();
+    return awards.filter(a => {
+      const endMs = a._endTs || (a['End Date'] ? new Date(a['End Date']).getTime() : NaN);
+      if (!endMs || isNaN(endMs)) return true;
+      return endMs > nowMs;
+    });
+  },
+
+  parseSearchTerms(keywords) {
+    const hasAndOperator = _RE_AND.test(keywords);
+    const cleaned = keywords.replace(/,\s*$/, '').trim();
+    const terms = cleaned.split(',').map(s => s.trim()).filter(s => s.length > 0);
+    const pscCodes = terms.filter(t => _RE_PSC.test(t)).map(t => t.toUpperCase());
+    const naicsCodes = terms.filter(t => _RE_NAICS.test(t));
+    const keywordTerms = terms.filter(t => !_RE_PSC.test(t) && !_RE_NAICS.test(t));
+    let andGroups = [];
+    if (hasAndOperator) {
+      keywordTerms.forEach(term => {
+        const fullAlias = Utils.resolveAgencyAlias(term);
+        if (fullAlias) { andGroups.push([term]); return; }
+        const parts = term.split(/\bAND\b/).map(s => s.trim()).filter(s => s.length > 0);
+        if (parts.length > 1) {
+          if (Utils.resolveAgencyAlias(parts.join(' AND '))) {
+            andGroups.push([parts.join(' AND ')]);
+            return;
+          }
+          const expanded = parts.map(p => {
+            const lower = p.toLowerCase().trim();
+            return Utils.agencyAliases[lower] || p;
+          });
+          andGroups.push(expanded);
+        }
+      });
+    }
+    return { pscCodes, naicsCodes, keywordTerms, allTerms: terms, andGroups };
+  },
+
+  // Vehicle detection — what GWAC/IDIQ does this contract live on?
+  VEHICLE_MAP: {
+    'NNG':       { short: 'SEWP V',     full: 'NASA SEWP V' },
+    'GS00Q':     { short: 'CIO-SP4',    full: 'NIH CIO-SP4' },
+    'HHSN':      { short: 'CIO-SP3',    full: 'NIH CIO-SP3' },
+    'GS35F':     { short: 'GSA MAS',    full: 'GSA Multiple Award Schedule' },
+    'GS00F':     { short: 'GSA MAS',    full: 'GSA Multiple Award Schedule' },
+    '47QT':      { short: 'GSA MAS',    full: 'GSA Multiple Award Schedule' },
+    '47QR':      { short: 'OASIS+',     full: 'GSA OASIS+' },
+    '47QF':      { short: 'OASIS+',     full: 'GSA OASIS+' },
+    'W91RUS':    { short: 'ITES-3S',    full: 'Army ITES-3S' },
+    'W52P1J':    { short: 'ITES',       full: 'Army ITES' },
+    'N0017':     { short: 'SeaPort-NxG', full: 'Navy SeaPort NxG' },
+    'FA8771':    { short: 'NETCENTS-2', full: 'Air Force NETCENTS-2' },
+    'HC1028':    { short: 'ENCORE III', full: 'DISA ENCORE III' },
+    'HC1047':    { short: 'JWCC',       full: 'Joint Warfighting Cloud Capability' },
+    'HSHQDC':    { short: 'EAGLE II',   full: 'DHS EAGLE II' },
+  },
+
+  detectVehicle(award) {
+    const parentId = String(award['parent_award_id'] || '').toUpperCase();
+    const awardId  = String(award['Award ID'] || '').toUpperCase();
+    const id = parentId || awardId;
+    if (!id) return null;
+    for (let len = 7; len >= 4; len--) {
+      const prefix = id.substring(0, len);
+      if (this.VEHICLE_MAP[prefix]) return this.VEHICLE_MAP[prefix].short;
+    }
+    if (String(award['idv_type'] || '') === 'B') return 'IDIQ T.O.';
+    return null;
+  },
+};
+
+// ── SECTORS / Territory ─────────────────────────────────────
+const SECTORS = {
+  dod: {
+    label: 'DoD',
+    agencies: ['Department of Defense','Corps of Engineers - Civil Works','Defense Nuclear Facilities Safety Board','Armed Forces Retirement Home','American Battle Monuments Commission'],
+  },
+  fedciv: {
+    label: 'FedCiv',
+    agencies: ['Department of Homeland Security','General Services Administration','Social Security Administration','Department of Agriculture','Office of Personnel Management','Department of Education','Department of Transportation','Department of Energy','Department of Housing and Urban Development','Department of Labor','Department of Justice','Department of the Interior','Department of State','Department of Commerce','National Aeronautics and Space Administration','Environmental Protection Agency','Federal Communications Commission','Agency for International Development','National Science Foundation','Nuclear Regulatory Commission','Railroad Retirement Board','National Archives and Records Administration','Peace Corps','Equal Employment Opportunity Commission','Executive Office of the President'],
+  },
+  fedhealth: {
+    label: 'FedHealth',
+    agencies: ['Department of Health and Human Services','Department of Veterans Affairs','United States Court of Appeals for Veterans Claims','Patient-Centered Outcomes Research Trust Fund'],
+  },
+  fedfin: {
+    label: 'FedFin',
+    agencies: ['Department of the Treasury','Pension Benefit Guaranty Corporation','Federal Deposit Insurance Corporation','Consumer Financial Protection Bureau','Small Business Administration','Government Accountability Office','Commodity Futures Trading Commission','Export-Import Bank of the United States','Farm Credit System Insurance Corporation','U.S. International Development Finance Corporation','International Trade Commission','Federal Trade Commission','National Credit Union Administration'],
+  },
+};
+
+function applySectorFilter(filters, territory) {
+  if (!territory) return filters;
+  const sector = SECTORS[territory];
+  if (!sector) return filters;
+  const sectorAgencies = sector.agencies.map(name => ({ type: 'awarding', tier: 'toptier', name }));
+  if (territory === 'fedhealth') {
+    ['Centers for Medicare and Medicaid Services','Centers for Disease Control and Prevention','Food and Drug Administration','National Institutes of Health'].forEach(name => {
+      sectorAgencies.push({ type: 'awarding', tier: 'subtier', name, toptier_name: 'Department of Health and Human Services' });
+    });
+  }
+  if (!filters.agencies || filters.agencies.length === 0) {
+    filters.agencies = sectorAgencies;
+  } else {
+    const sectorNames = new Set(sectorAgencies.map(a => a.name.toLowerCase()));
+    const intersected = filters.agencies.filter(a => sectorNames.has((a.name || '').toLowerCase()));
+    if (intersected.length > 0) {
+      filters.agencies = intersected;
+    } else {
+      const agencyKeywords = filters.agencies.map(a => a.name || '').filter(Boolean);
+      filters.agencies = sectorAgencies;
+      if (!filters.keywords) filters.keywords = [];
+      filters.keywords.push(...agencyKeywords);
+    }
+  }
+  return filters;
+}
+
+// ── API ─────────────────────────────────────────────────────
+const API = {
+  CONTRACT_TYPES: ['A', 'B', 'C', 'D'],
+  AWARD_FIELDS: [
+    'Award ID', 'Recipient Name', 'Awarding Agency', 'Awarding Sub Agency',
+    'Awarding Office', 'Award Amount', 'Description', 'generated_internal_id',
+    'Start Date', 'End Date', 'NAICS', 'PSC',
+    'Contract Award Type', 'Type of Set Aside',
+    'parent_award_id', 'pop_city_name', 'pop_state_code', 'idv_type'
+  ],
+
+  async _post(endpoint, body) {
+    const res = await fetch(PROXY_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ request_type: 'usaspending_proxy', endpoint, payload: body }),
+    });
+    if (!res.ok) throw new Error(`API ${res.status}`);
+    return res.json();
+  },
+
+  // ── searchFromIntent: structured search from the router ──────
+  // The router already gave us normalized keywords, NAICS, PSC, and an agency
+  // object with the canonical USASpending name. We build filters directly —
+  // no string parsing, no alias guessing. Much more reliable.
+  async searchFromIntent(intent, territory) {
+    const period = Utils.getTrailing12Mo()[0];
+    const filters = { time_period: [period], award_type_codes: this.CONTRACT_TYPES };
+
+    if (Array.isArray(intent.keywords) && intent.keywords.length > 0) {
+      filters.keywords = intent.keywords;
+    }
+    if (Array.isArray(intent.naics) && intent.naics.length > 0) {
+      filters.naics_codes = { require: intent.naics };
+    }
+    if (Array.isArray(intent.psc) && intent.psc.length > 0) {
+      filters.psc_codes = intent.psc.map(p => p.toUpperCase());
+    }
+    if (intent.agency && intent.agency.name) {
+      filters.agencies = [{
+        type: 'awarding',
+        tier: intent.agency.tier || 'toptier',
+        name: intent.agency.name,
+        toptier_name: intent.agency.toptier_name,
+      }];
+    }
+
+    const useTerritory = intent.territory || territory;
+    applySectorFilter(filters, useTerritory);
+
+    const cleanAndSort = data => data.map(award => {
+      if (award['Recipient Name']) award['Recipient Name'] = Utils.normalizeVendorName(award['Recipient Name']);
+      const topAgency = (award['Awarding Agency'] || '').toUpperCase();
+      if (topAgency.includes('DEFENSE') && award['Awarding Sub Agency']) award['Awarding Agency'] = award['Awarding Sub Agency'];
+      award._endTs   = award['End Date']   ? new Date(award['End Date']).getTime()   : 0;
+      award._startTs = award['Start Date'] ? new Date(award['Start Date']).getTime() : 0;
+      return award;
+    }).sort((a,b) => (b['Award Amount'] || 0) - (a['Award Amount'] || 0));
+
+    let rawData = (await this._post('/search/spending_by_award/', { filters, fields: this.AWARD_FIELDS, limit: 100, sort: 'Award Amount', order: 'desc' })).results || [];
+
+    // Keyword fallback: if agency-only search returned nothing, retry with the
+    // agency name as a keyword. USASpending sometimes uses different canonical
+    // names than what the autocomplete API returns.
+    if (rawData.length === 0 && intent.agency && !intent.keywords?.length && !intent.naics?.length && !intent.psc?.length) {
+      const fallbackFilters = { time_period: [period], award_type_codes: this.CONTRACT_TYPES, keywords: [intent.agency.name] };
+      applySectorFilter(fallbackFilters, useTerritory);
+      rawData = (await this._post('/search/spending_by_award/', { filters: fallbackFilters, fields: this.AWARD_FIELDS, limit: 100, sort: 'Award Amount', order: 'desc' })).results || [];
+    }
+
+    return cleanAndSort(rawData);
+  },
+};
+
+// ── analyzeMarket: build marketMetrics from raw contracts ────
+function analyzeMarket(data, currentQuery) {
+  const nowTs = Date.now();
+  const exp90Ts = nowTs + 90 * 86400000;
+  const rec90Ts = nowTs - 90 * 86400000;
+  const m = {
+    total: 0, agencies: {}, vendors: {}, expiring: [], recentAwards: [],
+    contractSizes: [], contractCount: 0, vehicles: {}, queryType: 'keyword',
+  };
+  data.forEach(c => {
+    const amt = parseFloat(c['Award Amount']) || 0;
+    const agency = c['Awarding Agency'] || 'Unknown';
+    const vendor = c['Recipient Name'] || 'Unknown';
+    m.total += amt;
+    m.contractCount++;
+    m.contractSizes.push(amt);
+    m.agencies[agency] = (m.agencies[agency] || 0) + amt;
+    if (!m.vendors[vendor]) m.vendors[vendor] = { spend: 0, count: 0, agencies: new Set(), contracts: [] };
+    m.vendors[vendor].spend += amt;
+    m.vendors[vendor].count++;
+    m.vendors[vendor].agencies.add(c['Awarding Agency'] || '');
+    m.vendors[vendor].contracts.push(c);
+    if (c._endTs > nowTs && c._endTs <= exp90Ts && amt > 50000) m.expiring.push(c);
+    if (c._startTs && c._startTs >= rec90Ts && amt > 50000) m.recentAwards.push(c);
+    const veh = Utils.detectVehicle(c);
+    if (veh) {
+      if (!m.vehicles[veh]) m.vehicles[veh] = { spend: 0, count: 0 };
+      m.vehicles[veh].spend += amt;
+      m.vehicles[veh].count++;
+    }
+  });
+  m.expiring.sort((a, b) => a._endTs - b._endTs);
+  m.recentAwards.sort((a, b) => b._startTs - a._startTs);
+
+  // Query type detection
+  const query = (currentQuery || '').toUpperCase();
+  const vendorSorted = Object.entries(m.vendors).sort((a,b) => b[1].spend - a[1].spend);
+  const queryClean = query.replace(_RE_SUFFIX, '').trim();
+  const vendorMatch = vendorSorted.find(([name]) => {
+    const n = name.toUpperCase().replace(_RE_SUFFIX, '').trim();
+    return n === queryClean || n.includes(queryClean) || queryClean.includes(n.substring(0, 10));
+  });
+  const KNOWN_VARS_SET = new Set(['CARAHSOFT','CARAHSOFT TECHNOLOGY','GOVPLACE','FCN','THUNDERCAT','OPTIV','CDW','CDWG','SHI','DLT','IRON BOW','RED RIVER','PRESIDIO','UNICOM','WORLD WIDE TECHNOLOGY','WWT','INSIGHT','DELL FEDERAL']);
+  const top8Vendors = vendorSorted.slice(0, 8).map(([name]) => name.toUpperCase());
+  const isChannelSearch = top8Vendors.filter(v => KNOWN_VARS_SET.has(v)).length >= 2;
+  if (vendorMatch && (vendorMatch[1].spend / m.total) >= 0.30 && !isChannelSearch) {
+    m.queryType = 'vendor';
+    m.targetVendor = vendorMatch[0];
+    m.targetVendorData = vendorMatch[1];
+  }
+  return m;
+}
+
+// ── buildCardSpec: turn marketMetrics into card data ────────
+// Pure function — knows nothing about the DOM. Returns the
+// structured spec the renderer consumes. Replaces the prose-
+// writing parts of renderMarketSignals with a fact extractor.
+function buildCardSpec(m, query, sellerLens, territory) {
+  if (!m || !m.total) return null;
+
+  const tc = s => Utils.titleCase(s);
+  const total = m.total;
+  const vendorSorted = Object.entries(m.vendors).sort((a,b) => b[1].spend - a[1].spend);
+  const agencySorted = Object.entries(m.agencies).sort((a,b) => b[1] - a[1]);
+  const vendorCount = vendorSorted.length;
+  const contractCount = m.contractCount || 0;
+  const top1Spend = vendorSorted[0]?.[1].spend || 0;
+  const top3Spend = vendorSorted.slice(0,3).reduce((s,[,v]) => s + v.spend, 0);
+  const top1Pct = total > 0 ? Math.round(top1Spend/total*100) : 0;
+  const top3Pct = total > 0 ? Math.round(top3Spend/total*100) : 0;
+  const topVendor = tc(vendorSorted[0]?.[0] || '');
+  const topAgency = Utils.cleanAgency(agencySorted[0]?.[0] || '');
+  const exp90Val = (m.expiring || []).reduce((s,c) => s + (parseFloat(c['Award Amount']) || 0), 0);
+  const recentCount = (m.recentAwards || []).length;
+  const queryType = m.queryType;
+
+  // Channel detection
+  const KNOWN_VARS = new Set(['CARAHSOFT','CARAHSOFT TECHNOLOGY','GOVPLACE','FCN','THUNDERCAT','OPTIV','CDW','CDWG','SHI','DLT','IRON BOW','RED RIVER','PRESIDIO','WORLD WIDE TECHNOLOGY','WWT','INSIGHT','DELL FEDERAL']);
+  const top5VendorsUpper = vendorSorted.slice(0, 5).map(([n]) => n.toUpperCase());
+  const varCount = top5VendorsUpper.filter(v => KNOWN_VARS.has(v)).length;
+  const isChannelMarket = varCount >= 2;
+  const isConcentrated = top3Pct >= 60 || vendorCount <= 3;
+  const isFragmented = top3Pct < 60 && vendorCount >= 5;
+  const isActive = recentCount >= 3 || (total > 0 && exp90Val/total > 0.03);
+
+  // ── Verdict + face + action ───────────────────────────────
+  let face, verdict, action;
+  if (queryType === 'vendor') {
+    const tv = tc(m.targetVendor || vendorSorted[0]?.[0] || '');
+    const tvData = m.targetVendorData || m.vendors[m.targetVendor] || { spend: 0, count: 0, agencies: new Set() };
+    const tvPct = total > 0 ? Math.round(tvData.spend / total * 100) : 0;
+    const tvAgencyCount = tvData.agencies?.size || 0;
+    if (tvPct >= 50 && tvAgencyCount >= 3) {
+      face = 'open';
+      verdict = `${tv} has this one pretty well locked down — ${tvPct}% across ${tvAgencyCount} agencies.`;
+      action = `Defend the expiring contracts and look for adjacent agency expansion.`;
+    } else if (tvPct >= 30) {
+      face = 'watch';
+      verdict = `${tv} is established here — ${tvPct}% of spend across ${tvAgencyCount} agencies.`;
+      action = `${tvAgencyCount <= 2 ? 'Watch the concentration risk. ' : ''}Look at the next agency to expand into.`;
+    } else {
+      face = 'locked';
+      verdict = `${tv} has a smaller footprint here, around ${tvPct}%.`;
+      action = `Find the 2 or 3 contracts where there's room to grow.`;
+    }
+  } else if (isChannelMarket) {
+    const topVars = top5VendorsUpper.filter(v => KNOWN_VARS.has(v)).slice(0, 2).map(v => tc(v));
+    face = 'open';
+    verdict = `Channel market. ${topVars.join(' and ')} move the product here.`;
+    action = `Get listed with ${topVars[0]}. They hold the vehicle and the agency relationship.`;
+  } else if (isConcentrated && isActive) {
+    face = 'watch';
+    verdict = `${topVendor} and a few others hold ${top3Pct}% of this market.`;
+    action = `You'll usually find a way in through them, not around them.`;
+  } else if (isConcentrated) {
+    face = 'locked';
+    verdict = `Spend is concentrated and there's not much new activity right now.`;
+    action = `Plan for a longer cycle. Industry days, RFIs, partnerships.`;
+  } else if (isActive && isFragmented) {
+    face = 'open';
+    verdict = `This one's pretty open. ${vendorCount} vendors, no single dominant incumbent.`;
+    action = exp90Val > 0
+      ? `Start with the ${(m.expiring||[]).length} contracts expiring in the next 90 days.`
+      : `A good place to start.`;
+  } else {
+    face = 'watch';
+    verdict = `Active market, but it's competitive. You'll need a clear angle.`;
+    action = `Find the gap the incumbents aren't covering.`;
+  }
+
+  // Seller-aware action override (only for keyword queries)
+  if (sellerLens && queryType !== 'vendor') {
+    const productUpper = sellerLens.toUpperCase();
+    let productInMarket = false, productSpend = 0, productShare = 0;
+    for (const [vn, vd] of Object.entries(m.vendors)) {
+      if (vn.toUpperCase().includes(productUpper) || productUpper.includes(vn.toUpperCase())) {
+        productInMarket = true;
+        productSpend = vd.spend;
+        productShare = total > 0 ? Math.round(vd.spend / total * 100) : 0;
+        break;
+      }
+    }
+    if (isChannelMarket) {
+      const topVar = tc(top5VendorsUpper.filter(v => KNOWN_VARS.has(v))[0] || '');
+      action = `Get ${sellerLens} listed with ${topVar}. Your product moves through them.`;
+    } else if (productInMarket && productShare >= 10) {
+      action = `${sellerLens} already holds ${productShare}% here. Defend the expiring contracts and expand into adjacent agencies.`;
+    } else if (productInMarket) {
+      action = `${sellerLens} has a footprint here (${Utils.money(productSpend)}). Build on it.`;
+    } else if (isConcentrated && exp90Val > 0) {
+      action = `${sellerLens} has no contracts here. Target ${Utils.money(exp90Val)} in expiring work — position as an alternative through a prime or vehicle.`;
+    } else if (isConcentrated) {
+      action = `${sellerLens} has no contracts here. Partner with ${topVendor} or sub through a prime that holds a vehicle.`;
+    }
+  }
+
+  // ── Stats — three KPIs above the fold ─────────────────────
+  const stats = [
+    { label: 'Market', value: Utils.money(total) },
+    { label: 'Vendors', value: String(vendorCount) },
+    { label: 'Top 3', value: top3Pct + '%' },
+  ];
+
+  // ── Treemap — top 6 vendors + Other ───────────────────────
+  const palette = ['#46446E','#5E5B92','#7572B7','#9B98C8','#ACAAD4','#BCB9D8'];
+  const treemap = vendorSorted.slice(0, 6).map(([name, v], i) => ({
+    name: tc(name).slice(0, 22),
+    value: Math.round(v.spend / 1e6),
+    color: palette[i] || '#CDCBE3',
+  }));
+  const otherSpend = vendorSorted.slice(6).reduce((s,[,v]) => s + v.spend, 0);
+  if (otherSpend > 0) {
+    treemap.push({ name: `Other (${vendorSorted.length - 6})`, value: Math.round(otherSpend / 1e6), color: '#CDCBE3' });
+  }
+
+  // ── Top primes — with biggest contract ID + USASpending link
+  const primes = vendorSorted.slice(0, 5).map(([name, v]) => {
+    const biggest = (v.contracts || []).sort((a,b) => (parseFloat(b['Award Amount'])||0) - (parseFloat(a['Award Amount'])||0))[0];
+    const vehicle = biggest ? Utils.detectVehicle(biggest) : null;
+    return {
+      name: tc(name),
+      spend: Utils.money(v.spend),
+      pct: Math.round(v.spend / top1Spend * 100),
+      contractId: biggest ? (biggest['Award ID'] || '') : '',
+      vehicle: vehicle,
+      link: biggest && biggest['generated_internal_id']
+        ? `https://www.usaspending.gov/award/${biggest['generated_internal_id']}`
+        : null,
+    };
+  });
+
+  // ── Expiring soon — top 3, with full agency, contract ID, link
+  const expiring = (m.expiring || []).slice(0, 3).map(c => {
+    const days = Math.ceil((c._endTs - Date.now()) / 86400000);
+    const agencyShort = Utils.cleanAgency(c['Awarding Agency'] || '');
+    const office = c['Awarding Sub Agency'] && c['Awarding Sub Agency'] !== c['Awarding Agency']
+      ? c['Awarding Sub Agency'] : '';
+    return {
+      vendor: Utils.titleCase(c['Recipient Name'] || ''),
+      amount: Utils.money(parseFloat(c['Award Amount']) || 0),
+      agency: office ? `${agencyShort} · ${office}` : agencyShort,
+      contractId: c['Award ID'] || '',
+      vehicle: Utils.detectVehicle(c),
+      days,
+      urgent: days <= 30,
+      link: c['generated_internal_id']
+        ? `https://www.usaspending.gov/award/${c['generated_internal_id']}`
+        : null,
+    };
+  });
+
+  // ── Vehicle line — what GWAC/IDIQs are moving the money ───
+  const vehicleSorted = Object.entries(m.vehicles || {}).sort((a,b) => b[1].spend - a[1].spend);
+  const topVehicles = vehicleSorted.slice(0, 3);
+  const vehicleLine = topVehicles.length > 0
+    ? topVehicles.map(([name, d]) => `${name} (${Utils.money(d.spend)})`).join(', ')
+    : null;
+
+  // ── Followups — what to ask Mo next ───────────────────────
+  const followups = [];
+  if (sellerLens) {
+    followups.push(`Who should I team with?`);
+    if (m.expiring && m.expiring.length > 0) followups.push(`Draft outreach to ${Utils.cleanAgency(m.expiring[0]['Awarding Agency'] || '')}`);
+  } else {
+    followups.push(`Who's the incumbent?`);
+    followups.push(`What's expiring next?`);
+  }
+  if (isChannelMarket) followups.push(`Which VAR has the deepest reach?`);
+  followups.push(`Tell me more`);
+
+  return {
+    query,
+    territory,
+    sellerLens,
+    verdict: { face, text: verdict, action },
+    stats,
+    treemap,
+    primes,
+    expiring,
+    vehicleLine,
+    followups: followups.slice(0, 4),
+    sourceCount: contractCount,
+  };
+}
+
+// ── Streaming SSE parser for Mo's prose layer ──────────────
+const Html = {
+  escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  },
+
+  parseAiMarkdown(rawText) {
+    if (!rawText) return '';
+    let text = rawText.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '').replace(/<mark>/gi, '').replace(/<\/mark>/gi, '').replace(/\\\$/g, '$').trim();
+    return text
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.+?)\*/g, '<em>$1</em>')
+      .replace(/\n\n/g, '</p><p>')
+      .replace(/\n/g, '<br>')
+      .replace(/^(.+)$/, '<p>$1</p>');
+  },
+
+  async streamInto(targetEl, response, onDone, onError) {
+    if (!response.body) { onError('No response stream available.'); return; }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let accumulated = '';
+    let renderPending = false;
+    const scheduleRender = () => {
+      if (renderPending) return;
+      renderPending = true;
+      requestAnimationFrame(() => {
+        renderPending = false;
+        if (accumulated && targetEl) {
+          targetEl.innerHTML = Html.parseAiMarkdown(accumulated);
+        }
+      });
+    };
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const raw = line.slice(6).trim();
+          try {
+            const msg = JSON.parse(raw);
+            if (msg.t === 'chunk' && msg.text) { accumulated += msg.text; scheduleRender(); }
+            else if (msg.t === 'done') {
+              if (targetEl) targetEl.innerHTML = Html.parseAiMarkdown(accumulated);
+              onDone(accumulated);
+              return;
+            } else if (msg.t === 'error') { onError(msg.msg || 'Mo encountered an error.'); return; }
+          } catch { /* skip malformed line */ }
+        }
+      }
+      if (accumulated) {
+        if (targetEl) targetEl.innerHTML = Html.parseAiMarkdown(accumulated);
+        onDone(accumulated);
+      } else {
+        onError('Mo returned an empty response. Try again.');
+      }
+    } catch (err) {
+      onError(err.name === 'AbortError' ? 'Mo took too long to respond. Try a more focused search.' : 'Connection lost.');
+    }
+  }
+};
+
+// ════════════════════════════════════════════════════════════
+// INTENT ROUTER — Gemini-powered, always-on
+// Every free-text input goes through Lambda → Gemini → JSON intent.
+// No regex routing. Gemini also normalizes USASpending queries
+// (legal entity names, canonical agency names, NAICS-vs-keyword)
+// so the user never has to learn USASpending's quirks.
+// ════════════════════════════════════════════════════════════
+
+async function routeIntent(text, context) {
+  // context: { lens, territory, last_query, recent_turns, card_summary }
+  const res = await fetch(PROXY_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      request_type: 'mo_route',
+      text,
+      lens: context.lens || null,
+      territory: context.territory || null,
+      last_query: context.last_query || null,
+      recent_turns: context.recent_turns || [],
+      card_summary: context.card_summary || null,
+    }),
+  });
+  if (!res.ok) {
+    let errMsg = `Router error ${res.status}`;
+    try { const eb = await res.json(); if (eb.error) errMsg = eb.error; } catch(e) {}
+    throw new Error(errMsg);
+  }
+  const intent = await res.json();
+  if (!intent || !intent.intent) throw new Error('Router returned no intent');
+  return intent;
+}
+
+// ════════════════════════════════════════════════════════════
+// APP — UI controller
+// ════════════════════════════════════════════════════════════
+
+const App = {
+  state: {
+    lens: null,
+    territory: null,
+    turns: 0,
+    // Most-recent successful card spec — used by ask-Mo follow-ups
+    lastCardSpec: null,
+    lastMarketMetrics: null,
+    lastQuery: null,
+  },
+
+  init() {
+    document.getElementById('askInput').addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); this.askFromInput(); }
+    });
+    window.addEventListener('scroll', () => this._updateJumpVisibility(), { passive: true });
+    // Restore lens from localStorage
+    const savedLens = localStorage.getItem('fedmo_seller_product');
+    if (savedLens) this.setLens(savedLens);
+
+    // Delegated click handling for data-ask buttons + analytics
+    document.addEventListener('click', e => {
+      const link = e.target.closest('.mo-view-link');
+      if (link) this._track('view_usaspending', { url: link.getAttribute('href') || '' });
+
+      const followup = e.target.closest('.mo-followup[data-ask]');
+      if (followup) {
+        const q = followup.getAttribute('data-ask');
+        if (q) {
+          this._track('ask', { source: 'followup', text: q.slice(0, 60) });
+          this.ask(q);
+        }
+        return;
+      }
+
+      const pin = e.target.closest('.mo-card-action.pinned, .mo-card-action[title="Pin"]');
+      if (pin && pin.classList.contains('pinned')) this._track('pin_card');
+    }, true);
+  },
+
+  // ── Analytics ────────────────────────────────────────────
+  // Lightweight wrapper. Fails silent if gtag not loaded.
+  _track(event, props = {}) {
+    try {
+      if (typeof gtag === 'function') {
+        gtag('event', event, { ...props, app_version: 'mo_v1' });
+      }
+    } catch(e) {}
+  },
+
+  _updateJumpVisibility() {
+    const cards = document.querySelectorAll('.turn-mo');
+    if (cards.length === 0) return;
+    const last = cards[cards.length - 1];
+    const lastBottom = last.getBoundingClientRect().bottom;
+    const askBarH = 96;
+    const visible = lastBottom > window.innerHeight - askBarH + 200;
+    document.getElementById('jumpLatest').classList.toggle('visible', visible);
+  },
+
+  jumpToLatest() {
+    const cards = document.querySelectorAll('.turn-mo');
+    const last = cards[cards.length - 1];
+    if (last) this.scrollToTurn(last);
+  },
+
+  scrollToTurn(el) {
+    const header = document.querySelector('.mo-header');
+    const headerH = header ? header.getBoundingClientRect().height : 0;
+    const padding = 12;
+    const targetY = el.getBoundingClientRect().top + window.pageYOffset - headerH - padding;
+    window.scrollTo({ top: targetY, behavior: 'smooth' });
+    setTimeout(() => this._updateJumpVisibility(), 600);
+  },
+
+  askFromInput() {
+    const inp = document.getElementById('askInput');
+    const v = inp.value.trim();
+    if (!v) return;
+    this._track('ask', { source: 'typed', length: v.length });
+    this.ask(v);
+    inp.value = '';
+    inp.blur();
+  },
+
+  // Last 3 turns for the router context. Each: { role, text }.
+  // role: 'user' | 'mo'. Truncated to last 3 in routeIntent call.
+  _recentTurns: [],
+
+  async ask(question) {
+    const greet = document.getElementById('greeting');
+    if (greet) greet.style.display = 'none';
+
+    this.appendUserTurn(question);
+    this._recentTurns.push({ role: 'user', text: question });
+    if (this._recentTurns.length > 6) this._recentTurns = this._recentTurns.slice(-6);
+
+    const loadingId = this.appendLoadingTurn('Thinking');
+
+    // Build router context
+    const ctx = {
+      lens: this.state.lens,
+      territory: this.state.territory,
+      last_query: this.state.lastQuery,
+      recent_turns: this._recentTurns,
+      card_summary: this._buildCardSummary(),
+    };
+
+    let intent;
+    try {
+      intent = await routeIntent(question, ctx);
+    } catch (err) {
+      console.error('Router error:', err);
+      this.replaceLoading(loadingId, this.buildErrorTurn(err.message || 'Mo had trouble understanding that.'));
+      return;
+    }
+
+    this._track('intent', { type: intent.intent });
+    console.debug('[Mo intent]', intent);
+
+    // Update loading message with what we're doing
+    this._updateLoadingMessage(loadingId, this._loadingMessageFor(intent));
+
+    try {
+      switch (intent.intent) {
+        case 'search':       await this.runSearch(intent, loadingId); break;
+        case 'refine':       await this.runRefine(intent, loadingId); break;
+        case 'ask':          await this.runAskMo(intent.question || question, loadingId); break;
+        case 'seller_pitch': await this.runSellerPitch(intent, loadingId); break;
+        case 'compare':      await this.runCompare(intent, loadingId); break;
+        case 'reset':        this.replaceLoading(loadingId, document.createDocumentFragment()); this.resetThread(); break;
+        case 'clarify':      this.replaceLoading(loadingId, this.buildClarifyTurn(intent.question || 'What are you trying to find?')); break;
+        default:
+          this.replaceLoading(loadingId, this.buildErrorTurn('Mo gave an unexpected answer. Try rephrasing.'));
+      }
+    } catch (err) {
+      console.error('Intent dispatch error:', err);
+      this.replaceLoading(loadingId, this.buildErrorTurn(err.message || 'Something went sideways.'));
+    }
+
+    this.state.turns++;
+  },
+
+  // ── Helpers for the router ──────────────────────────────────
+  _buildCardSummary() {
+    const spec = this.state.lastCardSpec;
+    if (!spec) return null;
+    const top = spec.primes && spec.primes[0] ? `${spec.primes[0].name} ${spec.primes[0].spend}` : '';
+    return `${spec.query || 'market'} · ${spec.stats?.[0]?.value || ''} · top: ${top} · ${(spec.expiring||[]).length} expiring`.slice(0, 200);
+  },
+
+  _loadingMessageFor(intent) {
+    switch (intent.intent) {
+      case 'search':
+      case 'seller_pitch':
+        return intent.label ? `Searching ${intent.label}` : 'Searching USASpending';
+      case 'refine':
+        return intent.label ? `Filtering to ${intent.label}` : 'Refining the data';
+      case 'ask':       return 'Mo\'s thinking';
+      case 'compare':   return intent.label ? `Pulling ${intent.label}` : 'Running comparison';
+      case 'clarify':   return 'One sec';
+      default:          return 'Reading the data';
+    }
+  },
+
+  _updateLoadingMessage(loadingId, msg) {
+    const el = document.getElementById(loadingId);
+    if (el) {
+      const span = el.querySelector('span');
+      if (span) span.textContent = msg;
+    }
+  },
+
+  // ── runSellerPitch: router gave us a parsed product + keywords + competitors
+  // Set the lens, set the territory, then run the search using the same path
+  // as a regular search.
+  async runSellerPitch(intent, loadingId) {
+    const product = intent.product || intent.label;
+    if (!product) {
+      this.replaceLoading(loadingId, this.buildErrorTurn('Mo couldn\'t pull a product name out of that.'));
+      return;
+    }
+    this.setLens(product);
+    if (intent.territory) this.setTerritory(intent.territory);
+
+    // Stash competitors for future competitive view
+    if (Array.isArray(intent.competitors)) this._sellerCompetitors = intent.competitors;
+
+    // Build a search intent from the seller pitch and run it
+    const searchIntent = {
+      label: intent.label || product,
+      keywords: intent.core_keywords || [],
+      territory: intent.territory,
+    };
+    // If product itself is a known brand, include it as a keyword for vendor-mode detection
+    if (product.length >= 3) searchIntent.keywords = [product, ...(searchIntent.keywords || [])];
+
+    return this.runSearch(searchIntent, loadingId);
+  },
+
+  // ── runSearch: hit USASpending using the structured router intent
+  async runSearch(intent, loadingId) {
+    const sellerLens = this.state.lens;
+    const territory = intent.territory || this.state.territory;
+    const label = intent.label || (intent.keywords || []).join(', ') || 'this market';
+
+    const rawResults = await API.searchFromIntent(intent, territory);
+    const active = Utils.filterActiveContracts(rawResults);
+
+    if (active.length === 0) {
+      this._track('empty_state', { query: label.slice(0, 40), has_territory: !!territory });
+      this.replaceLoading(loadingId, this.buildEmptyTurn(label));
+      return;
+    }
+
+    const m = analyzeMarket(active, label);
+    const spec = buildCardSpec(m, label, sellerLens, territory);
+
+    if (!spec) {
+      this.replaceLoading(loadingId, this.buildEmptyTurn(label));
+      return;
+    }
+
+    // Cache for follow-up "ask Mo" turns and refines
+    this.state.lastCardSpec = spec;
+    this.state.lastMarketMetrics = m;
+    this.state.lastQuery = label;
+    this.state.lastSearchIntent = intent;
+    this._askMoHistory = [];
+
+    this._track('card_render', { face: spec.verdict.face, contracts: spec.sourceCount, has_lens: !!sellerLens, has_territory: !!territory });
+
+    // Track Mo's response in recent turns for the next router call
+    this._recentTurns.push({ role: 'mo', text: `Showed card: ${label} · ${spec.verdict.text}` });
+
+    this.replaceLoading(loadingId, this.buildMoTurn(spec));
+  },
+
+  // ── runRefine: modify the active card and re-run, or filter in-browser
+  async runRefine(intent, loadingId) {
+    const lastIntent = this.state.lastSearchIntent;
+    const lastM = this.state.lastMarketMetrics;
+    if (!lastIntent || !lastM) {
+      // No active search to refine — fall back to a clarify
+      this.replaceLoading(loadingId, this.buildClarifyTurn('Run a search first, then I can refine it.'));
+      return;
+    }
+
+    const mods = intent.modifications || {};
+
+    // ── In-browser refine (no API call) ────────────────────────
+    // Used for filters that operate on already-fetched data: only_vendors,
+    // exclude_vendors, min_amount, max_amount, expiring_only, set_aside_only.
+    if (intent.in_browser_only) {
+      const filtered = this._filterContractsInBrowser(this.state.lastMarketMetrics, mods);
+      if (filtered.length === 0) {
+        this.replaceLoading(loadingId, this.buildEmptyTurn(intent.label || 'that filter'));
+        return;
+      }
+      const m = analyzeMarket(filtered, this.state.lastQuery + ' · ' + (intent.label || 'refined'));
+      const newLabel = (this.state.lastQuery || 'market') + ' · ' + (intent.label || 'refined');
+      const spec = buildCardSpec(m, newLabel, this.state.lens, this.state.territory);
+      this.state.lastCardSpec = spec;
+      this.state.lastMarketMetrics = m;
+      this.state.lastQuery = newLabel;
+      this._askMoHistory = [];
+      this._track('card_render', { face: spec.verdict.face, contracts: spec.sourceCount, refine: 'browser' });
+      this._recentTurns.push({ role: 'mo', text: `Refined to: ${newLabel}` });
+      this.replaceLoading(loadingId, this.buildMoTurn(spec));
+      return;
+    }
+
+    // ── API refine — modify the search intent and re-fetch ────
+    const newIntent = JSON.parse(JSON.stringify(lastIntent)); // deep copy
+    if (mods.territory !== undefined) newIntent.territory = mods.territory;
+    if (mods.agency) newIntent.agency = mods.agency;
+    if (Array.isArray(mods.additional_keywords) && mods.additional_keywords.length > 0) {
+      newIntent.keywords = [...(newIntent.keywords || []), ...mods.additional_keywords];
+    }
+    // Apply territory side-effect to header chip
+    if (mods.territory) this.setTerritory(mods.territory);
+
+    newIntent.label = intent.label || lastIntent.label;
+    return this.runSearch(newIntent, loadingId);
+  },
+
+  // ── runCompare: run a second search and render adjacent ─────
+  // For now, simply runs the second search as a new card. Side-by-side
+  // compare view is a future enhancement.
+  async runCompare(intent, loadingId) {
+    if (!intent.second_search) {
+      this.replaceLoading(loadingId, this.buildErrorTurn('Mo couldn\'t pull a comparison target from that.'));
+      return;
+    }
+    return this.runSearch({ ...intent.second_search, label: intent.label || intent.second_search.label }, loadingId);
+  },
+
+  // ── In-browser contract filter for instant refines ──────────
+  _filterContractsInBrowser(m, mods) {
+    // Reconstruct a contract list from the metrics' vendor->contracts map
+    let contracts = [];
+    Object.values(m.vendors).forEach(v => {
+      if (v.contracts) contracts.push(...v.contracts);
+    });
+    // Dedupe (same contract may appear in multiple vendor entries if vendor name normalization shifted)
+    const seen = new Set();
+    contracts = contracts.filter(c => {
+      const id = c['generated_internal_id'] || c['Award ID'];
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+
+    if (Array.isArray(mods.only_vendors) && mods.only_vendors.length > 0) {
+      const allow = new Set(mods.only_vendors.map(v => Utils.normalizeVendorName(v.toUpperCase())));
+      contracts = contracts.filter(c => allow.has(c['Recipient Name']));
+    }
+    if (Array.isArray(mods.exclude_vendors) && mods.exclude_vendors.length > 0) {
+      const block = new Set(mods.exclude_vendors.map(v => Utils.normalizeVendorName(v.toUpperCase())));
+      contracts = contracts.filter(c => !block.has(c['Recipient Name']));
+    }
+    if (typeof mods.min_amount === 'number') {
+      contracts = contracts.filter(c => (parseFloat(c['Award Amount']) || 0) >= mods.min_amount);
+    }
+    if (typeof mods.max_amount === 'number') {
+      contracts = contracts.filter(c => (parseFloat(c['Award Amount']) || 0) <= mods.max_amount);
+    }
+    if (mods.expiring_only) {
+      const now = Date.now();
+      const exp90 = now + 90 * 86400000;
+      contracts = contracts.filter(c => c._endTs > now && c._endTs <= exp90);
+    }
+    if (mods.set_aside_only) {
+      contracts = contracts.filter(c => !!c['Type of Set Aside']);
+    }
+    return contracts;
+  },
+
+  // ── Ask Mo: stream prose against the existing card's data ───
+  // Ask-Mo conversation history per card. Reset on new search.
+  // Lambda's govhoo_chat REQUIRES history to be a non-empty array.
+  _askMoHistory: [],
+
+  async runAskMo(question, loadingId) {
+    const m = this.state.lastMarketMetrics;
+    const spec = this.state.lastCardSpec;
+    if (!m || !spec) {
+      this.replaceLoading(loadingId, this.buildErrorTurn('Run a search first so Mo has something to look at.'));
+      return;
+    }
+
+    // Build payload in production's shape (matches what the Lambda expects)
+    const payload = this._buildAskMoPayload(m);
+
+    const objective = this.state.lens
+      ? `I sell ${this.state.lens}.` + (this.state.territory ? ` Market scoped to ${SECTORS[this.state.territory].label} agencies.` : '')
+      : null;
+
+    // Build the turn shell with a streaming target
+    const turnHtml = this.buildAskMoShell();
+    this.replaceLoading(loadingId, turnHtml);
+    const proseEl = document.getElementById('moStreamTarget');
+    const lastTurn = document.querySelectorAll('.turn-mo');
+    if (lastTurn.length) requestAnimationFrame(() => this.scrollToTurn(lastTurn[lastTurn.length - 1]));
+
+    // Lambda requires history to be a non-empty array. If this is the first
+    // ask-Mo turn against this card, seed it with a synthetic prior turn
+    // anchored to the verdict so Mo has continuity.
+    if (this._askMoHistory.length === 0) {
+      this._askMoHistory.push(
+        { role: 'user', content: `Give me an actionable plan in the "${this.state.lastQuery}" market.` },
+        { role: 'model', content: `${spec.verdict.text} ${spec.verdict.action}` }
+      );
+    }
+    this._askMoHistory.push({ role: 'user', content: question });
+
+    try {
+      const res = await fetch(AI_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          request_type: 'govhoo_chat', persona: 'mo',
+          market_data: payload,
+          objective,
+          history: this._askMoHistory.slice(-6),
+          question,
+        }),
+      });
+      if (!res.ok) {
+        // Try to read JSON error body for a useful message
+        let errMsg = `Mo error ${res.status}`;
+        try {
+          const errBody = await res.json();
+          if (errBody && errBody.error) errMsg = errBody.error;
+        } catch(e) {}
+        throw new Error(errMsg);
+      }
+      await Html.streamInto(
+        proseEl, res,
+        (fullText) => {
+          if (fullText) {
+            this._askMoHistory.push({ role: 'model', content: fullText });
+            // Also push a 200-char summary into recent turns for the router's context
+            this._recentTurns.push({ role: 'mo', text: fullText.slice(0, 200) });
+            if (this._recentTurns.length > 6) this._recentTurns = this._recentTurns.slice(-6);
+          }
+        },
+        (msg) => { if (proseEl) proseEl.innerHTML = `<span style="color:var(--text-faint);">${Html.escapeHtml(msg)}</span>`; }
+      );
+    } catch (err) {
+      console.error('runAskMo error:', err);
+      if (proseEl) proseEl.innerHTML = `<span style="color:var(--text-faint);">${Html.escapeHtml(err.message || 'Mo had trouble with that one.')}</span>`;
+    }
+  },
+
+  // Build the payload in the shape production's _buildArtiPayload uses.
+  // This is what the Lambda's buildChatBody / govhoo_chat handler expects.
+  _buildAskMoPayload(m) {
+    const spec = this.state.lastCardSpec;
+    const topAgencies = Object.entries(m.agencies).sort((a,b) => b[1] - a[1]).slice(0, 8)
+      .map(([name, amt]) => ({ name, amount: amt }));
+    const topVendors = Object.entries(m.vendors).sort((a,b) => b[1].spend - a[1].spend).slice(0, 8)
+      .map(([name, v]) => ({ name, amount: v.spend, count: v.count, agencies: v.agencies.size }));
+    const now = new Date();
+    const expiring = (m.expiring || []).slice(0, 8).map(c => ({
+      vendor: c['Recipient Name'],
+      agency: c['Awarding Sub Agency'] || c['Awarding Agency'],
+      amount: c['Award Amount'],
+      end_date: c['End Date'],
+      days_left: Math.ceil((new Date(c['End Date']) - now) / 86400000),
+      description: (c['Description'] || '').slice(0, 120),
+      contract_id: c['Award ID'],
+    }));
+    const top3Share = topVendors.slice(0, 3).reduce((s, v) => s + v.amount, 0) / (m.total || 1);
+    const agencyConc = topAgencies.length > 0 ? topAgencies[0].amount / (m.total || 1) : 0;
+    return {
+      query: this.state.lastQuery,
+      query_type: m.queryType || 'keyword',
+      target_vendor: m.targetVendor || null,
+      formula_verdict: spec ? spec.verdict.text : null,
+      formula_action: spec ? spec.verdict.action : null,
+      total_value: m.total,
+      contract_count: m.contractCount,
+      stats: {
+        top3_vendor_share: Math.round(top3Share * 100),
+        agency_concentration: Math.round(agencyConc * 100),
+        expiring_count: (m.expiring || []).length,
+        recent_award_count: (m.recentAwards || []).length,
+        unique_vendors: Object.keys(m.vendors).length,
+        unique_agencies: Object.keys(m.agencies).length,
+        top_vehicles: Object.entries(m.vehicles || {}).sort((a,b) => b[1].spend - a[1].spend).slice(0, 4)
+          .map(([name, d]) => ({ name, spend: d.spend, count: d.count })),
+      },
+      top_agencies: topAgencies,
+      top_vendors: topVendors,
+      expiring_soon: expiring,
+    };
+  },
+
+  // ── Turn builders ──────────────────────────────────────────
+  appendUserTurn(text) {
+    const thread = document.getElementById('thread');
+    const div = document.createElement('div');
+    div.className = 'turn-user';
+    div.innerHTML = `<div class="turn-user-bubble">${Html.escapeHtml(text)}</div>`;
+    thread.appendChild(div);
+  },
+
+  appendLoadingTurn(message = 'Reading the data') {
+    const thread = document.getElementById('thread');
+    const id = 'loading-' + Date.now();
+    const div = document.createElement('div');
+    div.className = 'turn-loading';
+    div.id = id;
+    div.innerHTML = `
+      <svg viewBox="0 0 40 40"><use href="#icon-face-watch"/></svg>
+      <span>${Html.escapeHtml(message)}</span>
+      <span class="turn-loading-dots"><span></span><span></span><span></span></span>
+    `;
+    thread.appendChild(div);
+    return id;
+  },
+
+  replaceLoading(loadingId, htmlEl) {
+    const ld = document.getElementById(loadingId);
+    if (ld) ld.replaceWith(htmlEl);
+    requestAnimationFrame(() => {
+      const cards = document.querySelectorAll('.turn-mo');
+      const last = cards[cards.length - 1];
+      if (last) this.scrollToTurn(last);
+    });
+  },
+
+  buildMoTurn(spec) {
+    const wrap = document.createElement('div');
+    wrap.className = 'turn-mo';
+    const faceHref = `#icon-face-${spec.verdict.face}`;
+    let html = `
+      <div class="turn-mo-header">
+        <svg viewBox="0 0 40 40"><use href="${faceHref}"/></svg>
+        <span class="turn-mo-meta">Mo · just now</span>
+      </div>
+      <div class="turn-mo-card">
+        <div class="mo-card-actions">
+          <button class="mo-card-action" title="Pin" onclick="App.togglePin(this)" aria-label="Pin">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/></svg>
+          </button>
+          <button class="mo-card-action" title="Dismiss" onclick="this.closest('.turn-mo').remove()" aria-label="Dismiss">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="mo-verdict">${Html.escapeHtml(spec.verdict.text)}</div>
+        <div class="mo-action">${Html.escapeHtml(spec.verdict.action)}</div>
+        <div class="mo-stat-row">
+    `;
+    spec.stats.forEach(s => {
+      html += `<div class="mo-stat"><div class="mo-stat-value">${Html.escapeHtml(s.value)}</div><div class="mo-stat-label">${Html.escapeHtml(s.label)}</div></div>`;
+    });
+    html += `</div>`;
+
+    if (spec.treemap && spec.treemap.length > 0) {
+      html += `<div class="mo-comp-head"><div class="mo-comp-title">Where the money is</div><div class="mo-comp-meta">last 12 months</div></div>${renderTreemap(spec.treemap)}`;
+    }
+
+    if (spec.primes && spec.primes.length > 0) {
+      html += `<div class="mo-comp-head"><div class="mo-comp-title">Top primes</div><div class="mo-comp-meta">${spec.primes.length} shown</div></div><div class="mo-list">`;
+      spec.primes.forEach(p => {
+        const idShort = p.contractId ? p.contractId.slice(0, 24) + (p.contractId.length > 24 ? '…' : '') : '';
+        const meta = [idShort, p.vehicle].filter(Boolean).join(' · ');
+        html += `<div class="mo-row-2line">
+          <div class="mo-row-2line-top">
+            <span class="mo-row-name">${Html.escapeHtml(p.name)}</span>
+            <span class="mo-row-bar"><span class="mo-row-bar-fill" style="width:${p.pct}%"></span></span>
+            <span class="mo-row-amount">${Html.escapeHtml(p.spend)}</span>
+          </div>
+          ${meta || p.link ? `<div class="mo-row-2line-bottom">
+            <span class="mo-row-2line-meta">${Html.escapeHtml(meta)}</span>
+            ${p.link ? `<a class="mo-view-link" href="${p.link}" target="_blank" rel="noopener">View<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></a>` : ''}
+          </div>` : ''}
+        </div>`;
+      });
+      html += `</div>`;
+    }
+
+    if (spec.expiring && spec.expiring.length > 0) {
+      html += `<div class="mo-comp-head"><div class="mo-comp-title">Expiring soon</div><div class="mo-comp-meta">next 90 days</div></div><div class="mo-list">`;
+      spec.expiring.forEach(e => {
+        const idShort = e.contractId ? e.contractId.slice(0, 24) + (e.contractId.length > 24 ? '…' : '') : '';
+        const meta = [idShort, e.vehicle].filter(Boolean).join(' · ');
+        html += `<div class="mo-exp-row">
+          <div class="mo-exp-top">
+            <span class="mo-exp-vendor">${Html.escapeHtml(e.vendor)}</span>
+            <span class="mo-exp-amt">${Html.escapeHtml(e.amount)}</span>
+          </div>
+          <div class="mo-exp-bottom">
+            <span class="mo-exp-agency">${Html.escapeHtml(e.agency)}</span>
+            <span class="mo-exp-days ${e.urgent ? 'urgent' : ''}">${e.days}d left</span>
+          </div>
+          ${meta || e.link ? `<div class="mo-row-2line-bottom" style="margin-top:6px;">
+            <span class="mo-row-2line-meta">${Html.escapeHtml(meta)}</span>
+            ${e.link ? `<a class="mo-view-link" href="${e.link}" target="_blank" rel="noopener">View<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></a>` : ''}
+          </div>` : ''}
+        </div>`;
+      });
+      html += `</div>`;
+    }
+
+    if (spec.vehicleLine) {
+      html += `<div style="margin-top:14px;font-size:12px;color:var(--text-muted);"><strong style="color:var(--text-title);font-weight:500;">Vehicles:</strong> ${Html.escapeHtml(spec.vehicleLine)}</div>`;
+    }
+
+    if (spec.followups && spec.followups.length > 0) {
+      html += `<div class="mo-followups">`;
+      spec.followups.forEach(f => {
+        html += `<button class="mo-followup" data-ask="${Html.escapeHtml(f)}">${Html.escapeHtml(f)}</button>`;
+      });
+      html += `</div>`;
+    }
+
+    html += `<div class="mo-source">${spec.sourceCount} contracts · USASpending.gov</div>`;
+    html += `</div>`;
+    wrap.innerHTML = html;
+    return wrap;
+  },
+
+  buildAskMoShell() {
+    const wrap = document.createElement('div');
+    wrap.className = 'turn-mo';
+    wrap.innerHTML = `
+      <div class="turn-mo-header">
+        <svg viewBox="0 0 40 40"><use href="#icon-face-open"/></svg>
+        <span class="turn-mo-meta">Mo · just now</span>
+      </div>
+      <div class="turn-mo-card">
+        <div class="mo-card-actions">
+          <button class="mo-card-action" title="Dismiss" onclick="this.closest('.turn-mo').remove()" aria-label="Dismiss">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="mo-tell-more-prose" id="moStreamTarget"><span style="color:var(--text-faint);">Mo's thinking…</span></div>
+      </div>
+    `;
+    return wrap;
+  },
+
+  buildEmptyTurn(query) {
+    const wrap = document.createElement('div');
+    wrap.className = 'turn-mo';
+    const suggestions = this.state.territory && SECTORS[this.state.territory]
+      ? ['Cybersecurity', 'Cloud', 'AI', '541512']
+      : ['Zero Trust', 'CMMC', 'Cybersecurity', 'NAICS 541512'];
+    let chips = suggestions.map(s => `<button class="mo-followup" data-ask="${Html.escapeHtml(s)}">${Html.escapeHtml(s)}</button>`).join('');
+    wrap.innerHTML = `
+      <div class="turn-mo-header">
+        <svg viewBox="0 0 40 40"><use href="#icon-face-watch"/></svg>
+        <span class="turn-mo-meta">Mo · just now</span>
+      </div>
+      <div class="turn-mo-card">
+        <div class="mo-card-actions">
+          <button class="mo-card-action" title="Dismiss" onclick="this.closest('.turn-mo').remove()" aria-label="Dismiss">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="mo-empty">
+          <div class="mo-empty-msg">Well, this is awkward. Nothing came back for <strong>${Html.escapeHtml(query)}</strong>${this.state.territory ? ` in ${SECTORS[this.state.territory].label}` : ''}. Try a different angle.</div>
+        </div>
+        <div class="mo-followups" style="border-top:none;padding-top:0;margin-top:14px;">${chips}</div>
+      </div>
+    `;
+    return wrap;
+  },
+
+  buildErrorTurn(msg) {
+    const wrap = document.createElement('div');
+    wrap.className = 'turn-mo';
+    wrap.innerHTML = `
+      <div class="turn-mo-header">
+        <svg viewBox="0 0 40 40"><use href="#icon-face-watch"/></svg>
+        <span class="turn-mo-meta">Mo · just now</span>
+      </div>
+      <div class="turn-mo-card">
+        <div class="mo-card-actions">
+          <button class="mo-card-action" title="Dismiss" onclick="this.closest('.turn-mo').remove()" aria-label="Dismiss">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="mo-empty"><div class="mo-empty-msg">${Html.escapeHtml(msg)}</div></div>
+      </div>
+    `;
+    return wrap;
+  },
+
+  // ── buildClarifyTurn — Mo asks one question to disambiguate
+  buildClarifyTurn(question) {
+    const wrap = document.createElement('div');
+    wrap.className = 'turn-mo';
+    wrap.innerHTML = `
+      <div class="turn-mo-header">
+        <svg viewBox="0 0 40 40"><use href="#icon-face-watch"/></svg>
+        <span class="turn-mo-meta">Mo · just now</span>
+      </div>
+      <div class="turn-mo-card">
+        <div class="mo-card-actions">
+          <button class="mo-card-action" title="Dismiss" onclick="this.closest('.turn-mo').remove()" aria-label="Dismiss">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="mo-verdict">${Html.escapeHtml(question)}</div>
+      </div>
+    `;
+    return wrap;
+  },
+
+  setLens(lens) {
+    this.state.lens = lens;
+    document.getElementById('lensChip').style.display = 'inline-flex';
+    document.getElementById('lensChipValue').textContent = lens;
+    try { localStorage.setItem('fedmo_seller_product', lens); } catch(e) {}
+  },
+  clearLens() {
+    this.state.lens = null;
+    document.getElementById('lensChip').style.display = 'none';
+    try { localStorage.removeItem('fedmo_seller_product'); } catch(e) {}
+  },
+  setTerritory(t) {
+    this.state.territory = t;
+    document.getElementById('terrChip').style.display = 'inline-flex';
+    document.getElementById('terrChipValue').textContent = SECTORS[t]?.label || t;
+  },
+  clearTerritory() {
+    this.state.territory = null;
+    document.getElementById('terrChip').style.display = 'none';
+  },
+  togglePin(btn) { btn.classList.toggle('pinned'); },
+
+  // Tap the face → fresh thread. Wipes card cache so next text is a search.
+  // Lens and territory chips persist (they're identity, not session state).
+  resetThread() {
+    const thread = document.getElementById('thread');
+    // Remove all turns but keep the greeting node
+    [...thread.querySelectorAll('.turn-user, .turn-mo, .turn-loading')].forEach(el => el.remove());
+    const greet = document.getElementById('greeting');
+    if (greet) greet.style.display = '';
+    this.state.lastCardSpec = null;
+    this.state.lastMarketMetrics = null;
+    this.state.lastQuery = null;
+    this._askMoHistory = [];
+    document.getElementById('jumpLatest').classList.remove('visible');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    this._track('reset_thread');
+  },
+};
+
+// ── Treemap renderer (slice & dice, single row) ──────────────
+function renderTreemap(items) {
+  const total = items.reduce((s, x) => s + x.value, 0);
+  const w = 700, h = 180;
+  let x = 0;
+  let svg = `<svg class="mo-treemap" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">`;
+  items.forEach(it => {
+    const cellW = (it.value / total) * w;
+    svg += `<rect x="${x}" y="0" width="${cellW}" height="${h}" fill="${it.color}"/>`;
+    if (cellW > 60) {
+      svg += `<text x="${x + 10}" y="22" fill="rgba(255,255,255,0.96)" font-size="13" font-weight="500">${Html.escapeHtml(it.name)}</text>`;
+      svg += `<text x="${x + 10}" y="40" fill="rgba(255,255,255,0.78)" font-size="12">$${it.value}M</text>`;
+    }
+    x += cellW;
+  });
+  svg += `</svg>`;
+  return svg;
+}
+
+App.init();
+</script>
+
+</body>
+</html>
