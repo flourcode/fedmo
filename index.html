@@ -1047,21 +1047,7 @@ const AI_ENDPOINT = 'https://llonymyskdiakyxhlxlex7ul640hbcke.lambda-url.us-east
 // because those indicate actual problems the user or operator needs to
 // know about.
 const DEBUG = false;
-const debug = (...args) => { if (DEBUG) debug(...args); };
-
-// Shared-secret header. Must match Lambda env var FEDMO_API_SECRET.
-// This is a bearer token that keeps casual scrapers from burning our
-// Gemini credits by hitting the Function URL directly. Not real auth —
-// anyone who inspects this page can grab it. If it leaks broadly,
-// rotate both here and in the Lambda env vars.
-const FEDMO_API_SECRET = 'REPLACE_WITH_GENERATED_SECRET';
-
-// Build the standard request headers including the secret. Use this
-// in every fetch() to AI_ENDPOINT.
-const apiHeaders = () => ({
-  'Content-Type': 'application/json',
-  'x-fedmo-secret': FEDMO_API_SECRET,
-});
+const debug = (...args) => { if (DEBUG) console.debug(...args); };
 
 // ════════════════════════════════════════════════════════════
 // ✏️  EDIT HERE — starter chips shown on the cold-start greeting
@@ -1571,7 +1557,7 @@ const API = {
   async _post(endpoint, body) {
     const res = await fetch(AI_ENDPOINT, {
       method: 'POST',
-      headers: apiHeaders(),
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ request_type: 'usaspending_proxy', endpoint, payload: body }),
     });
     if (!res.ok) throw new Error(`API ${res.status}`);
@@ -2313,7 +2299,7 @@ async function routeIntent(text, context) {
   // context: { last_query, recent_turns, card_summary }
   const res = await fetch(AI_ENDPOINT, {
     method: 'POST',
-    headers: apiHeaders(),
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       request_type: 'mo_route',
       text,
@@ -3335,7 +3321,7 @@ const App = {
 
       const res = await fetch(AI_ENDPOINT, {
         method: 'POST',
-        headers: apiHeaders(),
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           request_type: 'mo_chat', persona: 'mo',
           market_data: payload,
@@ -3416,7 +3402,7 @@ const App = {
       const cardSummary = this._buildCardSummary();
       const res = await fetch(AI_ENDPOINT, {
         method: 'POST',
-        headers: apiHeaders(),
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           request_type: 'mo_suggest_chips',
           card_summary: cardSummary,
