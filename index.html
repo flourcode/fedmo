@@ -1104,11 +1104,15 @@ const debug = (...args) => { if (DEBUG) console.debug(...args); };
 // ("Who's winning at Z"), 1 coaching ("Who should I team with at W").
 // Covers the three main modes of the app in one row.
 //
+// Use a specific named vendor in the pitch chip (AWS, Splunk, Sonatype)
+// rather than a generic topic like "cyber" — seller pitches work best
+// with vendor= in the data tag, and a vendor name primes Mo correctly.
+//
 // 3 chips is the sweet spot — fits mobile in one row without clipping.
 // Add a 4th only if they all stay short (≤ 25 chars each).
 //
 const GREETING_CHIPS = [
-  'I sell cyber to DoD',
+  'I sell AWS to DoD',
   "Who's winning at HHS",
   'Who should I team with at VA',
 ];
@@ -2177,6 +2181,11 @@ const App = {
     // One-time cleanup for users upgrading from the lens/territory era.
     try { localStorage.removeItem('fedmo_seller_product'); } catch(e) {}
 
+    // Render starter chips into the greeting. Uses the same .mo-followup
+    // class and data-ask wiring as inline followups, so the existing
+    // delegated click handler below picks them up for free.
+    this._renderGreetingChips();
+
     // Delegated click handling for data-ask buttons + analytics
     document.addEventListener('click', e => {
       const link = e.target.closest('.mo-view-link');
@@ -2186,7 +2195,11 @@ const App = {
       if (followup) {
         const q = followup.getAttribute('data-ask');
         if (q) {
-          this._track('ask', { source: 'followup', text: q.slice(0, 60) });
+          // Distinguish greeting-chip taps from inline-followup taps in
+          // analytics — useful for tracking which of the three starter
+          // chips users click most and whether to rotate them.
+          const source = followup.closest('#greetingChips') ? 'starter_chip' : 'followup';
+          this._track('ask', { source, text: q.slice(0, 60) });
           this.ask(q);
         }
       }
@@ -2212,6 +2225,23 @@ const App = {
     try {
       if (typeof gtag === 'function') gtag('event', event, props);
     } catch (e) { /* never break the app on analytics */ }
+  },
+
+  // ── Starter chips ───────────────────────────────────────────
+  // Render the GREETING_CHIPS array into the #greetingChips container
+  // on cold-start. Each chip's label doubles as the question sent to
+  // Mo when tapped — this is the same contract as inline followup
+  // chips, so the existing click delegation in init() handles taps.
+  //
+  // Called once from init(). No re-render on reset because resetThread
+  // just hides user/mo turns and shows the greeting again; the chip
+  // DOM is already there.
+  _renderGreetingChips() {
+    const host = document.getElementById('greetingChips');
+    if (!host) return;
+    host.innerHTML = GREETING_CHIPS.map(q =>
+      `<button class="mo-followup" data-ask="${Html.escapeHtml(q)}">${Html.escapeHtml(q)}</button>`
+    ).join('');
   },
 
   // ── Input → ask ─────────────────────────────────────────────
