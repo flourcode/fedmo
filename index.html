@@ -1566,15 +1566,18 @@ const API = {
     }
 
     // Retry 1 — if empty AND we had an agency filter, try converting the
-    // agency to a keyword and dropping the agency filter. USASpending's
-    // subaward index sometimes returns empty for valid agency filters
-    // that work fine for prime awards. Keyword match is more permissive.
+    // agency to a keyword. Use agency name alone (not combined with existing
+    // keywords) to maximize match space. If the user had topic keywords
+    // too, retry 2 below will try combining them.
     if (subs.length === 0 && filters.agencies && filters.agencies.length > 0) {
       const agencyNames = filters.agencies.map(a => a.name).filter(Boolean);
-      const retryFilters = { ...filters };
-      delete retryFilters.agencies;
-      retryFilters.keywords = [...(retryFilters.keywords || []), ...agencyNames];
-      console.debug('[subaward] attempt 2 — agency-as-keyword:', JSON.stringify(retryFilters));
+      const period = Utils.getTrailing12Mo()[0];
+      const retryFilters = {
+        time_period: [period],
+        award_type_codes: this.CONTRACT_TYPES,
+        keywords: agencyNames,
+      };
+      console.debug('[subaward] attempt 2 — agency name as keyword only:', JSON.stringify(retryFilters));
       try {
         const res = await this._postSubawards(retryFilters);
         subs = normalize(res);
@@ -1584,10 +1587,31 @@ const API = {
       }
     }
 
-    // Retry 2 — if still empty AND we have keywords, try just keywords
-    // with no other filters. Last-ditch permissive match. This mirrors the
-    // fallback logic in the prime-award searchFromIntent function.
-    if (subs.length === 0 && filters.keywords && filters.keywords.length > 0) {
+    // Retry 2 — if still empty AND we have both agency + other keywords,
+    // combine them. Narrower search but might be the right answer when the
+    // user did care about a specific topic (e.g., "cyber at HHS").
+    if (subs.length === 0 && filters.agencies && filters.agencies.length > 0 && filters.keywords && filters.keywords.length > 0) {
+      const agencyNames = filters.agencies.map(a => a.name).filter(Boolean);
+      const period = Utils.getTrailing12Mo()[0];
+      const retryFilters = {
+        time_period: [period],
+        award_type_codes: this.CONTRACT_TYPES,
+        keywords: [...filters.keywords, ...agencyNames],
+      };
+      console.debug('[subaward] attempt 3 — agency + topic keywords:', JSON.stringify(retryFilters));
+      try {
+        const res = await this._postSubawards(retryFilters);
+        subs = normalize(res);
+        console.debug('[subaward] attempt 3 returned', subs.length, 'results');
+      } catch (err) {
+        console.warn('[subaward] attempt 3 failed:', err.message);
+      }
+    }
+
+    // Retry 3 — if still empty AND we have just keywords (no agency), try
+    // them. Last-ditch permissive match. This mirrors the fallback logic in
+    // the prime-award searchFromIntent function.
+    if (subs.length === 0 && filters.keywords && filters.keywords.length > 0 && (!filters.agencies || filters.agencies.length === 0)) {
       const period = Utils.getTrailing12Mo()[0];
       const retryFilters = {
         time_period: [period],
@@ -1871,8 +1895,12 @@ function buildCardSpec(m, query, sellerLens, territory) {
   }
 
   // ── Stats — three KPIs above the fold ─────────────────────
+  // NOTE: 'total' is the sum of just the top-100 contracts shown, NOT the
+  // true market total. For big markets like "HHS" ($96B+/yr), top 100 is
+  // a thin slice. Label accordingly so sellers don't mistake this for
+  // the actual market size.
   const stats = [
-    { label: 'Market', value: Utils.money(total) },
+    { label: 'Top 100 $', value: Utils.money(total) },
     { label: 'Vendors', value: String(vendorCount) },
     { label: 'Top 3', value: top3Pct + '%' },
   ];
@@ -2930,7 +2958,7 @@ const App = {
       <button class="mo-followup" data-ask="Draft outreach to the top prime">Draft outreach to the top prime</button>
     </div>`;
 
-    html += `<div class="mo-source">${spec.totalSubs} subawards · USASpending.gov</div>`;
+    html += `<div class="mo-source">Top ${spec.totalSubs} subawards · last 12 months · USASpending.gov</div>`;
     html += `</div>`;
 
     wrap.innerHTML = html;
@@ -3365,7 +3393,7 @@ const App = {
       html += `</div>`;
     }
 
-    html += `<div class="mo-source">${spec.sourceCount} contracts · USASpending.gov</div>`;
+    html += `<div class="mo-source">Top ${spec.sourceCount} contracts · last 12 months · USASpending.gov</div>`;
     html += `</div>`;
     wrap.innerHTML = html;
     return wrap;
