@@ -243,7 +243,6 @@ button { cursor: pointer; }
   border-radius: 50%;
 }
 .mo-card-action:active { background: var(--primary-20); color: var(--primary-100); }
-.mo-card-action.pinned { color: var(--primary-100); }
 
 /* Warm one-sentence intro that precedes the verdict on seller_pitch turns.
    Feels like Mo acknowledging what the user asked before the data drops. */
@@ -1776,9 +1775,6 @@ const App = {
         }
         return;
       }
-
-      const pin = e.target.closest('.mo-card-action.pinned, .mo-card-action[title="Pin"]');
-      if (pin && pin.classList.contains('pinned')) this._track('pin_card');
     }, true);
 
     // Render starter chips from the GREETING_CHIPS source array (defined
@@ -2608,9 +2604,6 @@ const App = {
       </div>
       <div class="turn-mo-card">
         <div class="mo-card-actions">
-          <button class="mo-card-action" title="Pin" onclick="App.togglePin(this)" aria-label="Pin">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/></svg>
-          </button>
           <button class="mo-card-action" title="Dismiss" onclick="this.closest('.turn-mo').remove()" aria-label="Dismiss">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
@@ -2872,7 +2865,6 @@ const App = {
   clearLens() {},
   setTerritory(_t) {},
   clearTerritory() {},
-  togglePin(btn) { btn.classList.toggle('pinned'); },
 
   // Reset the thread to the greeting. Lens and territory chips persist
   // (they're identity, not session state). Wipes card cache so next text
