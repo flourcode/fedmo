@@ -856,7 +856,7 @@ body.thread-empty .mo-ask-bar {
     <svg class="mo-modal-face" viewBox="0 0 40 40"><use href="#icon-face-open"/></svg>
     <div>
       <div class="mo-modal-title" id="aboutTitle">Meet Mo.</div>
-      <div class="mo-modal-sub">Your federal sales buddy. Who's read every federal contract.</div>
+      <div class="mo-modal-sub">Your federal sales buddy. Plugged into USASpending.</div>
     </div>
     <button class="mo-modal-close" onclick="App.closeAbout()" aria-label="Close">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -879,14 +879,10 @@ body.thread-empty .mo-ask-bar {
       <svg class="greeting-face" viewBox="0 0 40 40"><use href="#icon-face-open"/></svg>
       <div class="greeting-intro-text">
         <div class="greeting-hi">Hi, I'm Mo.</div>
-        <div class="greeting-sub">Your federal sales buddy. Who's read every federal contract.</div>
+        <div class="greeting-sub">Your federal sales buddy. Plugged into USASpending.</div>
       </div>
     </div>
-    <div class="greeting-examples">
-      <button class="mo-followup" data-ask="I sell cyber to DoD">I sell cyber to DoD</button>
-      <button class="mo-followup" data-ask="Who's winning at HHS">Who's winning at HHS</button>
-      <button class="mo-followup" data-ask="Who should I team with at VA">Who should I team with at VA</button>
-    </div>
+    <div class="greeting-examples" id="greetingChips"></div>
   </div>
 </div>
 
@@ -916,6 +912,27 @@ body.thread-empty .mo-ask-bar {
 // ════════════════════════════════════════════════════════════
 
 const AI_ENDPOINT = 'https://llonymyskdiakyxhlxlex7ul640hbcke.lambda-url.us-east-1.on.aws/';
+
+// ════════════════════════════════════════════════════════════
+// ✏️  EDIT HERE — starter chips shown on the cold-start greeting
+// ════════════════════════════════════════════════════════════
+// Each chip is one suggestion the user can tap to kick off a conversation.
+// The text below appears as both the visible label AND the question sent
+// to Mo — so rewrite freely and it stays consistent.
+//
+// Ideal mix: 1 pitch-style ("I sell X to Y"), 1 market-intel
+// ("Who's winning at Z"), 1 coaching ("Who should I team with at W").
+// Covers the three main modes of the app in one row.
+//
+// 3 chips is the sweet spot — fits mobile in one row without clipping.
+// Add a 4th only if they all stay short (≤ 25 chars each).
+//
+const GREETING_CHIPS = [
+  'I sell cyber to DoD',
+  "Who's winning at HHS",
+  'Who should I team with at VA',
+];
+// ════════════════════════════════════════════════════════════
 
 // ── Regex constants ─────────────────────────────────────────
 const _RE_AMPERSAND = /\s+&\s+/g;
@@ -1760,8 +1777,24 @@ const App = {
       if (pin && pin.classList.contains('pinned')) this._track('pin_card');
     }, true);
 
+    // Render starter chips from the GREETING_CHIPS source array (defined
+    // at the top of this script so it's easy to edit).
+    this._renderGreetingChips();
+
     // Place the ask bar under the greeting (cold-start layout).
     this._updateEmptyState();
+  },
+
+  // Render the cold-start chips from the GREETING_CHIPS constant. Called
+  // once on init. Reads from the source array so there's only one place
+  // to edit chip text — no copy living in the HTML.
+  _renderGreetingChips() {
+    const container = document.getElementById('greetingChips');
+    if (!container) return;
+    container.innerHTML = GREETING_CHIPS.map(text => {
+      const safe = Html.escapeHtml(text);
+      return `<button class="mo-followup" data-ask="${safe}">${safe}</button>`;
+    }).join('');
   },
 
   // Manages the cold-start vs active-thread layout. When the thread has no
