@@ -1528,17 +1528,35 @@ function applySectorFilter(filters, territory) {
   }
   if (!filters.agencies || filters.agencies.length === 0) {
     filters.agencies = sectorAgencies;
+    return filters;
+  }
+  // If the filter already has subtier agencies AND their toptier_name is
+  // already covered by this sector, keep the subtier filters as-is. They
+  // are strictly more precise than the sector's toptier list — adding the
+  // toptier would widen the search, not narrow it, and mixing tiers here
+  // has historically caused USASpending to OR instead of AND, returning
+  // unrelated contracts (e.g. SOCOM + generic DoD keyword instead of
+  // SOCOM-specific contracts).
+  const sectorToptierNames = new Set(sectorAgencies.filter(a => a.tier === 'toptier').map(a => a.name.toLowerCase()));
+  const existingSubtiersUnderSector = filters.agencies.filter(a =>
+    a.tier === 'subtier' && a.toptier_name && sectorToptierNames.has(a.toptier_name.toLowerCase())
+  );
+  if (existingSubtiersUnderSector.length > 0) {
+    // Trust the subtier filter. Discard the sector layer entirely for this call.
+    return filters;
+  }
+  // Otherwise intersect by name (original behavior) — e.g. user already
+  // picked a specific toptier and we're just constraining to the sector.
+  const sectorNames = new Set(sectorAgencies.map(a => a.name.toLowerCase()));
+  const intersected = filters.agencies.filter(a => sectorNames.has((a.name || '').toLowerCase()));
+  if (intersected.length > 0) {
+    filters.agencies = intersected;
   } else {
-    const sectorNames = new Set(sectorAgencies.map(a => a.name.toLowerCase()));
-    const intersected = filters.agencies.filter(a => sectorNames.has((a.name || '').toLowerCase()));
-    if (intersected.length > 0) {
-      filters.agencies = intersected;
-    } else {
-      const agencyKeywords = filters.agencies.map(a => a.name || '').filter(Boolean);
-      filters.agencies = sectorAgencies;
-      if (!filters.keywords) filters.keywords = [];
-      filters.keywords.push(...agencyKeywords);
-    }
+    // Agency doesn't match the sector. Preserve the user's intended agency
+    // by leaving filters.agencies alone — do NOT overwrite with sector toptiers
+    // and do NOT demote to keywords. If the user picked an agency outside
+    // the sector, that's their choice; respect it.
+    debug('[sector] territory', territory, 'does not match agency filter — keeping agency filter, skipping sector');
   }
   return filters;
 }
