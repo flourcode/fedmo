@@ -370,10 +370,23 @@ export function resolve(input) {
     // Send vendor names as keywords to USASpending (it matches keywords
     // against recipient names as well as descriptions).
     topics.push(...legalNames);
-    // Post-filter: drop contracts whose Recipient Name doesn't contain one
-    // of the legal names. Uses substring match so "BOOZ ALLEN" catches
-    // "BOOZ ALLEN HAMILTON INC." variants.
-    postFilters.vendor_scope = legalNames;
+    // Post-filter needles: include BOTH the legal name ("AMAZON WEB SERVICES")
+    // AND the user's raw input ("aws"). Recipient fields on USASpending use
+    // the full legal name, so the legal name is the right match there. But
+    // contract descriptions often abbreviate ("AWS cloud services", "Splunk
+    // Enterprise", "Palantir Gotham"). Carrying both forms means we catch
+    // the reseller/integrator contracts that only mention the product by
+    // its short form in the description.
+    //
+    // Short forms below 3 characters are skipped — "ai" or "hr" would match
+    // everything. The ones that matter ("AWS", "GCP", "IBM") are all ≥3.
+    const needles = new Set();
+    for (const n of legalNames) needles.add(n);
+    for (const raw of vendorInputs) {
+      const short = String(raw).trim();
+      if (short.length >= 3) needles.add(short.toUpperCase());
+    }
+    postFilters.vendor_scope = [...needles];
   }
 
   // ── Agency resolution ──────────────────────────────────────────
@@ -458,10 +471,26 @@ export function applyPostFilters(rows, postFilters) {
   }
 
   if (postFilters.vendor_scope && postFilters.vendor_scope.length > 0) {
+    // Match EITHER the Recipient Name OR the contract Description.
+    //
+    // Why: for platform vendors like AWS, Splunk, or Palantir, a huge share
+    // of their federal footprint flows through:
+    //   - Resellers/VARs (Carahsoft, Four Points, immixGroup, WWT)
+    //   - Integrators/primes (GDIT, Booz, Northrop, Leidos)
+    // The recipient on those contracts is the reseller or integrator, NOT
+    // the platform vendor. But the contract description almost always names
+    // the platform ("AWS cloud services", "Splunk licenses for SOCOM",
+    // "Palantir Gotham professional services"). Matching description lets
+    // us keep those rows and show the real footprint.
+    //
+    // The keyword already sent to USASpending ensures the API returns only
+    // rows that mention the vendor somewhere (description OR recipient), so
+    // this filter is the browser's final "is this actually about X" check.
     const needles = postFilters.vendor_scope.map(v => v.toLowerCase());
     out = out.filter(r => {
       const recipient = (r['Recipient Name'] || '').toLowerCase();
-      return needles.some(n => recipient.includes(n));
+      const description = (r['Description'] || '').toLowerCase();
+      return needles.some(n => recipient.includes(n) || description.includes(n));
     });
   }
 
