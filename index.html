@@ -1899,7 +1899,7 @@ const App = {
       intent = await routeIntent(question, ctx);
     } catch (err) {
       console.error('Router error:', err);
-      this.replaceLoading(loadingId, this.buildErrorTurn(err.message || 'Mo had trouble understanding that.'));
+      this.replaceLoading(loadingId, this.buildErrorTurn(err.message || 'Mo had trouble understanding that.', { retry: question }));
       return;
     }
 
@@ -1942,7 +1942,7 @@ const App = {
       }
     } catch (err) {
       console.error('Intent dispatch error:', err);
-      this.replaceLoading(loadingId, this.buildErrorTurn(err.message || 'Something went sideways.'));
+      this.replaceLoading(loadingId, this.buildErrorTurn(err.message || 'Something went sideways.', { retry: question }));
     }
 
     this.state.turns++;
@@ -2774,7 +2774,34 @@ const App = {
     return wrap;
   },
 
-  buildErrorTurn(msg) {
+  buildErrorTurn(msg, opts = {}) {
+    // Translate raw technical errors into Mo-voiced messages. Upstream
+    // services (USASpending, Gemini) occasionally hiccup — surface that
+    // as something a seller can act on, not a status code.
+    const raw = String(msg || '');
+    let friendly;
+    let retryable = opts.retryable === true;
+    if (/^API\s*5\d{2}|Mo error 5|Router error 5|504|timed out/i.test(raw)) {
+      friendly = "USASpending took too long just now. That happens sometimes — try again and it usually goes through.";
+      retryable = true;
+    } else if (/^API\s*429|rate limit/i.test(raw)) {
+      friendly = "Hitting a rate limit. Give it a few seconds and try again.";
+      retryable = true;
+    } else if (/Failed to reach USASpending|Failed to fetch|NetworkError/i.test(raw)) {
+      friendly = "Can't reach USASpending at the moment. Check your connection or try again in a minute.";
+      retryable = true;
+    } else if (!raw || /Something went sideways/i.test(raw)) {
+      friendly = "Something went sideways. Try again or rephrase the question.";
+      retryable = true;
+    } else {
+      friendly = raw;
+    }
+
+    const retryAttr = opts.retry ? `data-retry="${Html.escapeHtml(opts.retry)}"` : '';
+    const retryButton = (retryable && opts.retry)
+      ? `<button class="mo-followup" ${retryAttr} onclick="App.ask(this.getAttribute('data-retry'))" style="margin-top:12px;">Try again</button>`
+      : '';
+
     const wrap = document.createElement('div');
     wrap.className = 'turn-mo';
     wrap.innerHTML = `
@@ -2788,7 +2815,10 @@ const App = {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>
-        <div class="mo-empty"><div class="mo-empty-msg">${Html.escapeHtml(msg)}</div></div>
+        <div class="mo-empty">
+          <div class="mo-empty-msg">${Html.escapeHtml(friendly)}</div>
+          ${retryButton}
+        </div>
       </div>
     `;
     return wrap;
