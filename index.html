@@ -338,14 +338,6 @@ button { cursor: pointer; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.mo-row-bar {
-  flex: 0 0 60px;
-  height: 4px;
-  background: var(--primary-20);
-  border-radius: 2px;
-  overflow: hidden;
-}
-.mo-row-bar-fill { height: 100%; background: var(--primary-60); border-radius: 2px; }
 .mo-row-amount {
   color: var(--text-title);
   font-variant-numeric: tabular-nums;
@@ -697,6 +689,16 @@ body.thread-empty .mo-ask-bar {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.mo-row-desc {
+  font-size: 12px;
+  color: var(--text-faint);
+  font-style: italic;
+  margin-top: 2px;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .mo-row-2line-meta {
   font-variant-numeric: tabular-nums;
   overflow: hidden;
@@ -705,6 +707,31 @@ body.thread-empty .mo-ask-bar {
   flex: 1;
   min-width: 0;
 }
+.mo-row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.mo-action-link {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--primary-100);
+  text-decoration: none;
+  padding: 2px 0;
+  border-bottom: 1px solid var(--primary-40);
+  transition: border-color 120ms;
+}
+.mo-action-link:hover { border-bottom-color: var(--primary-100); }
+.mo-action-link-primary {
+  padding: 4px 10px;
+  background: var(--primary-20);
+  border-bottom: none;
+  border-radius: var(--radius-pill);
+}
+.mo-action-link-primary:hover { background: var(--primary-40); }
+
+/* Legacy pill style, still used on expiring rows below */
 .mo-view-link {
   display: inline-flex;
   align-items: center;
@@ -809,7 +836,6 @@ body.thread-empty .mo-ask-bar {
   .turn-mo-card { padding: 22px; }
   .mo-stat-value { font-size: 20px; }
   body { padding-bottom: 100px; }
-  .mo-row-bar { flex: 0 0 100px; }
 }
 </style>
 </head>
@@ -1246,6 +1272,36 @@ const Utils = {
     if (String(award['idv_type'] || '') === 'B') return 'IDIQ T.O.';
     return null;
   },
+
+  // USASpending descriptions usually come in SHOUTING ALL CAPS like
+  // "PROFESSIONAL SERVICES TO SUPPORT SBOM OPTIMIZATION". Humanize them:
+  // keep obvious acronyms, sentence-case everything else, clip cleanly.
+  _DESC_ACRONYMS: new Set([
+    'IT','SBOM','RFP','IDIQ','GWAC','OTA','SEWP','CIO-SP','FAR','DFARS','SOW',
+    'DoD','DOD','DHS','HHS','VA','GSA','NASA','USDA','DOJ','DOT','FBI','CIA','NSA','DOE',
+    'CDM','CMMC','EDR','ERP','HRIS','CRM','ITSM','API','SaaS','PaaS','IaaS',
+    'AI','ML','GenAI','LLM','RPA','OCR','SOC','NOC','SIEM','DLP','EDR','MDR','XDR',
+    'JWCC','OASIS','NETCENTS','ENCORE','ITES','SeaPort','POLARIS','CIO-CS','ADCNOMS'
+  ]),
+  cleanDescription(raw) {
+    if (!raw || typeof raw !== 'string') return '';
+    const s = raw.trim();
+    if (!s) return '';
+    // If it's already got mixed case, leave it alone — upstream source cared enough to format it
+    const isAllCaps = s === s.toUpperCase() && /[A-Z]/.test(s);
+    if (!isAllCaps) return s.slice(0, 100);
+    // Sentence-case each word, keeping acronyms. First word always capitalized.
+    const words = s.split(/\s+/);
+    const cleaned = words.map((w, i) => {
+      const stripped = w.replace(/[^A-Za-z0-9]/g, '');
+      if (this._DESC_ACRONYMS.has(stripped)) return w;
+      if (i === 0) {
+        return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+      }
+      return w.toLowerCase();
+    }).join(' ');
+    return cleaned.slice(0, 100);
+  },
 };
 
 // ── SECTORS / Territory ─────────────────────────────────────
@@ -1562,6 +1618,9 @@ function buildCardSpec(m, query, sellerLens, territory) {
     const office = biggest && biggest['Awarding Sub Agency'] && biggest['Awarding Sub Agency'] !== biggest['Awarding Agency']
       ? biggest['Awarding Sub Agency'] : '';
     const agency = office ? `${agencyShort} · ${office}` : agencyShort;
+    // First line of the description: tells the seller what kind of work this
+    // really is — "Splunk renewal" vs "Professional services" vs "R&D".
+    const description = biggest ? Utils.cleanDescription(biggest['Description'] || '') : '';
     return {
       name: tc(name),
       spend: Utils.money(v.spend),
@@ -1569,6 +1628,7 @@ function buildCardSpec(m, query, sellerLens, territory) {
       contractId: biggest ? (biggest['Award ID'] || '') : '',
       vehicle: vehicle,
       agency: agency,
+      description: description,
       link: biggest && biggest['generated_internal_id']
         ? `https://www.usaspending.gov/award/${biggest['generated_internal_id']}`
         : null,
@@ -1589,6 +1649,7 @@ function buildCardSpec(m, query, sellerLens, territory) {
       agency: office ? `${agencyShort} · ${office}` : agencyShort,
       contractId: c['Award ID'] || '',
       vehicle: Utils.detectVehicle(c),
+      description: Utils.cleanDescription(c['Description'] || ''),
       days,
       urgent: days <= 30,
       link: c['generated_internal_id']
@@ -2127,6 +2188,116 @@ const App = {
     });
   },
 
+  // Wrap the FIRST mention of each payload vendor in Mo's prose with a
+  // LinkedIn People search link. Same hide-in-the-DOM approach as contract
+  // linkification so we preserve streaming structure.
+  //
+  // Rules:
+  //   - Only vendors that appear in the current payload get linked.
+  //   - Each vendor is linked once per response (first mention only) to
+  //     avoid ransom-note paragraphs with five links in one sentence.
+  //   - Match is case-insensitive, word-boundary aware.
+  //   - Skip very short names (< 4 chars) — too many false positives.
+  _linkifyVendorNames(proseEl, metrics) {
+    if (!proseEl || !metrics) return;
+
+    // Build a sorted list of vendor names. Longest first so we match
+    // "Booz Allen Hamilton" before matching just "Booz Allen".
+    const vendorNames = Object.keys(metrics.vendors || {})
+      .filter(n => n && n.length >= 4)
+      .sort((a, b) => b.length - a.length);
+
+    if (vendorNames.length === 0) return;
+
+    // Track which vendors have already been linked in this response
+    const linkedVendors = new Set();
+
+    // Escape for regex
+    const escapeRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+    // Walk text nodes. Skip nodes inside existing anchor tags so we don't
+    // nest <a> elements.
+    const walker = document.createTreeWalker(
+      proseEl,
+      NodeFilter.SHOW_TEXT,
+      {
+        acceptNode(node) {
+          // Skip if we're already inside an anchor (e.g., contract ID link)
+          let el = node.parentElement;
+          while (el && el !== proseEl) {
+            if (el.tagName === 'A') return NodeFilter.FILTER_REJECT;
+            el = el.parentElement;
+          }
+          return NodeFilter.FILTER_ACCEPT;
+        }
+      }
+    );
+    const candidates = [];
+    let node;
+    while ((node = walker.nextNode())) {
+      if (node.nodeValue && node.nodeValue.trim()) candidates.push(node);
+    }
+
+    candidates.forEach(textNode => {
+      const text = textNode.nodeValue;
+      // Find the earliest match across all remaining vendors
+      // We need to process left-to-right so the "first mention" rule is
+      // stable across multiple paragraphs.
+      const matches = [];
+      for (const vendor of vendorNames) {
+        if (linkedVendors.has(vendor.toUpperCase())) continue;
+        // Build a case-insensitive word-boundary regex
+        const re = new RegExp(`\\b${escapeRe(vendor)}\\b`, 'i');
+        const m = text.match(re);
+        if (m && m.index !== undefined) {
+          matches.push({ vendor, index: m.index, length: m[0].length, matched: m[0] });
+        }
+      }
+      if (matches.length === 0) return;
+      // Sort by index — we insert in document order
+      matches.sort((a, b) => a.index - b.index);
+
+      // Walk through matches and build replacement fragment. If two matches
+      // overlap (shouldn't happen with the longest-first sort, but guard
+      // anyway), skip the later one.
+      const frag = document.createDocumentFragment();
+      let cursor = 0;
+      for (const mm of matches) {
+        if (mm.index < cursor) continue;
+        if (linkedVendors.has(mm.vendor.toUpperCase())) continue;
+        // Text before the match
+        if (mm.index > cursor) {
+          frag.appendChild(document.createTextNode(text.slice(cursor, mm.index)));
+        }
+        // The link itself — use Utils.titleCase for the display text so
+        // "BOOZ ALLEN HAMILTON" in payload renders as "Booz Allen Hamilton"
+        // if that's how it appeared in the prose.
+        const displayText = mm.matched;
+        const liUrl = `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent('"' + mm.vendor + '"')}&origin=GLOBAL_SEARCH_HEADER`;
+        const a = document.createElement('a');
+        a.href = liUrl;
+        a.target = '_blank';
+        a.rel = 'noopener';
+        a.className = 'mo-inline-link';
+        a.title = `Find ${mm.vendor} employees on LinkedIn`;
+        a.textContent = displayText;
+        a.addEventListener('click', () => {
+          try { this._track('linkedin_search_prose', { vendor: mm.vendor.slice(0, 40) }); } catch(e) {}
+        });
+        frag.appendChild(a);
+        cursor = mm.index + mm.length;
+        linkedVendors.add(mm.vendor.toUpperCase());
+      }
+      // Tail text after the last match
+      if (cursor < text.length) {
+        frag.appendChild(document.createTextNode(text.slice(cursor)));
+      }
+      if (frag.childNodes.length > 0 && cursor > 0) {
+        textNode.parentNode.replaceChild(frag, textNode);
+      }
+    });
+  },
+
   _loadingMessageFor(intent) {
     switch (intent.intent) {
       case 'search':
@@ -2465,6 +2636,12 @@ const App = {
             // the trust gap: if Mo mentions W91RUS19F0174, the user can tap
             // it and verify on USASpending instantly.
             this._linkifyContractIds(proseEl, fullText, this.state.lastMarketMetrics);
+
+            // Linkify vendor mentions — first occurrence of each payload
+            // vendor becomes a LinkedIn People search link. So if Mo says
+            // "Booz Allen is defending the expiring work," tapping Booz
+            // Allen opens a LinkedIn search for their employees.
+            this._linkifyVendorNames(proseEl, this.state.lastMarketMetrics);
           }
         },
         (msg) => { if (proseEl) proseEl.innerHTML = `<span style="color:var(--text-faint);">${Html.escapeHtml(msg)}</span>`; }
@@ -2627,17 +2804,21 @@ const App = {
       spec.primes.forEach(p => {
         const idShort = p.contractId ? p.contractId.slice(0, 24) + (p.contractId.length > 24 ? '…' : '') : '';
         const meta = [idShort, p.vehicle].filter(Boolean).join(' · ');
+        const liUrl = `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent('"' + p.name + '"')}&origin=GLOBAL_SEARCH_HEADER`;
         html += `<div class="mo-row-2line">
           <div class="mo-row-2line-top">
             <span class="mo-row-name">${Html.escapeHtml(p.name)}</span>
-            <span class="mo-row-bar"><span class="mo-row-bar-fill" style="width:${p.pct}%"></span></span>
             <span class="mo-row-amount">${Html.escapeHtml(p.spend)}</span>
           </div>
           ${p.agency ? `<div class="mo-row-agency">${Html.escapeHtml(p.agency)}</div>` : ''}
-          ${meta || p.link ? `<div class="mo-row-2line-bottom">
+          ${p.description ? `<div class="mo-row-desc">${Html.escapeHtml(p.description)}</div>` : ''}
+          <div class="mo-row-2line-bottom">
             <span class="mo-row-2line-meta">${Html.escapeHtml(meta)}</span>
-            ${p.link ? `<a class="mo-view-link" href="${p.link}" target="_blank" rel="noopener">View<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></a>` : ''}
-          </div>` : ''}
+            <span class="mo-row-actions">
+              <a class="mo-action-link" href="${liUrl}" target="_blank" rel="noopener" title="Find ${Html.escapeHtml(p.name)} employees on LinkedIn" onclick="App._track('linkedin_search', { vendor: '${Html.escapeHtml(p.name).slice(0,40)}' })">People</a>
+              ${p.link ? `<a class="mo-action-link mo-action-link-primary" href="${p.link}" target="_blank" rel="noopener">View</a>` : ''}
+            </span>
+          </div>
         </div>`;
       });
       html += `</div>`;
@@ -2648,6 +2829,7 @@ const App = {
       const renderExpRow = (e) => {
         const idShort = e.contractId ? e.contractId.slice(0, 24) + (e.contractId.length > 24 ? '…' : '') : '';
         const meta = [idShort, e.vehicle].filter(Boolean).join(' · ');
+        const liUrl = `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent('"' + e.vendor + '"')}&origin=GLOBAL_SEARCH_HEADER`;
         return `<div class="mo-exp-row">
           <div class="mo-exp-top">
             <span class="mo-exp-vendor">${Html.escapeHtml(e.vendor)}</span>
@@ -2657,10 +2839,14 @@ const App = {
             <span class="mo-exp-agency">${Html.escapeHtml(e.agency)}</span>
             <span class="mo-exp-days ${e.urgent ? 'urgent' : ''}">${e.days}d left</span>
           </div>
-          ${meta || e.link ? `<div class="mo-row-2line-bottom" style="margin-top:6px;">
+          ${e.description ? `<div class="mo-row-desc">${Html.escapeHtml(e.description)}</div>` : ''}
+          <div class="mo-row-2line-bottom" style="margin-top:6px;">
             <span class="mo-row-2line-meta">${Html.escapeHtml(meta)}</span>
-            ${e.link ? `<a class="mo-view-link" href="${e.link}" target="_blank" rel="noopener">View<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></a>` : ''}
-          </div>` : ''}
+            <span class="mo-row-actions">
+              <a class="mo-action-link" href="${liUrl}" target="_blank" rel="noopener" title="Find ${Html.escapeHtml(e.vendor)} employees on LinkedIn" onclick="App._track('linkedin_search', { vendor: '${Html.escapeHtml(e.vendor).slice(0,40)}' })">People</a>
+              ${e.link ? `<a class="mo-action-link mo-action-link-primary" href="${e.link}" target="_blank" rel="noopener">View</a>` : ''}
+            </span>
+          </div>
         </div>`;
       };
       spec.expiring.forEach(e => { html += renderExpRow(e); });
