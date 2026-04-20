@@ -258,9 +258,11 @@ export function summarizePayloadForMo(rows, resolverInput) {
   // framing that's the whole point.
   let framing = '';
   if (resolverInput?._competitors && resolverInput?._competitorList) {
-    const sellerName = (resolverInput._competitorList?.length ? null : null);
-    const seller = (resolverInput.vendors && Array.isArray(resolverInput.vendors))
-      ? resolverInput.vendors[0] : '';
+    // Use _sellerName stashed during competitor expansion. Falls back to
+    // the first entry in vendors[] if somehow that wasn't set.
+    const seller = resolverInput._sellerName
+      || (Array.isArray(resolverInput.vendors) ? resolverInput.vendors[0] : '')
+      || '';
     const category = resolverInput._competitorCategory || '';
     framing = `
 THIS IS A COMPETITOR CUT.
@@ -442,8 +444,13 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
       try {
         competitorInfo = await fetchCompetitors(resolverInput.vendor, endpoint);
         // Build multi-vendor input: keep the original vendor AND add each
-        // competitor. Drop the singular `vendor` field in favor of the array.
+        // competitor. Drop the singular `vendor` field in favor of the array
+        // so the resolver ORs them all together as keywords for USASpending.
         const combined = [resolverInput.vendor, ...(competitorInfo.competitors || [])];
+        // Preserve the original seller name BEFORE we delete vendor — the
+        // card renderer uses this as sellerLens to write the verdict through
+        // the seller's lens (not the whole competitor list concatenated).
+        resolverInput._sellerName = resolverInput.vendor;
         delete resolverInput.vendor;
         resolverInput.vendors = combined;
         // Stash the competitor metadata so the renderer and payload
