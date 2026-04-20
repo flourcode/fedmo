@@ -1,11 +1,33 @@
 <!DOCTYPE html>
+<!--
+  ════════════════════════════════════════════════════════════════════
+  Mo v2 — working copy — April 20, 2026
+  ════════════════════════════════════════════════════════════════════
+
+  v2 architecture — simpler than v1, external modules do the heavy lifting. It uses:
+    - resolver.js  (external module) for canonical-name resolution
+    - mo-stream-client.v2.js  (external module) for streaming + <data> tags
+    - index.v2.mjs  (Lambda) for the single streaming endpoint
+
+  What changed from v1:
+    - No intent router. One ask() path for everything.
+    - No client-side acronym tables (moved to resolver.js).
+    - No agency/vendor post-filters (moved to resolver.js).
+    - No separate runSearch/runRefine/runAskMo/runSellerPitch/runCompare.
+    - Mo drives via <data> tags; browser intercepts and fetches data.
+    - Two-shot streaming: Mo writes, hits <data>, pauses, browser fetches,
+      renders card, fires second Mo call grounded in real payload.
+
+  v1 lives at mo_mock.v1.html + index.v1.mjs as a frozen rollback target.
+  ════════════════════════════════════════════════════════════════════
+-->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#FDFCFF" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0F0E13" media="(prefers-color-scheme: dark)">
-<title>Fedmo — Federal Market Intelligence</title>
+<title>Fedmo v2 — Federal Market Intelligence</title>
 <meta name="description" content="Talk to Mo. Know any federal market before the meeting starts.">
 
 <!-- Open Graph (LinkedIn, Slack, iMessage, Facebook, Discord) -->
@@ -1019,7 +1041,15 @@ body.thread-empty .mo-ask-bar {
   </div>
 </div>
 
-<script>
+<script type="module">
+// Import v2 modules. These ship as separate files alongside mo_mock.v2.html
+// and must be served from the same origin (any static hosting works).
+//
+// If you're serving from Amplify, just drop resolver.js and
+// mo-stream-client.v2.js in the same folder as this HTML file.
+import { resolve, applyPostFilters } from './resolver.js';
+import { askMo } from './stream-client.js';
+
 // Always start at the top on reload — disable the browser's default scroll
 // restoration which remembers where the user was before reload. That behavior
 // is fine for articles but wrong for a chat app where the greeting is the
@@ -1027,13 +1057,15 @@ body.thread-empty .mo-ask-bar {
 if ('scrollRestoration' in history) { history.scrollRestoration = 'manual'; }
 
 // ════════════════════════════════════════════════════════════
-// REAL ENGINE — pure data layer over the fedmo-hello Lambda.
-// One Lambda, one Function URL. Everything dispatched by `request_type`:
-//   usaspending_proxy  → USASpending passthrough (buffered JSON)
-//   mo_route           → intent classifier (buffered JSON)
-//   mo_search_expand   → seller keyword expansion (buffered JSON)
-//   mo_suggest_chips   → followup chip generation (buffered JSON)
-//   mo_chat, mo_brief  → Mo's prose (streamed SSE)
+// DATA LAYER — v2
+// ════════════════════════════════════════════════════════════
+// The old multi-endpoint dispatcher (mo_route, mo_brief, mo_chat,
+// mo_search_expand, mo_suggest_chips) is gone. v2 talks to one
+// streaming endpoint — mo_stream — via askMo() from the imported
+// client module. Canonical-name resolution happens in resolver.js.
+//
+// usaspending_proxy is still used (via stream-client) for the
+// Mo-initiated data pulls triggered by <data> tags.
 // ════════════════════════════════════════════════════════════
 
 const AI_ENDPOINT = 'https://llonymyskdiakyxhlxlex7ul640hbcke.lambda-url.us-east-1.on.aws/';
@@ -1516,328 +1548,14 @@ const SECTORS = {
   },
 };
 
-function applySectorFilter(filters, territory) {
-  if (!territory) return filters;
-  const sector = SECTORS[territory];
-  if (!sector) return filters;
-  const sectorAgencies = sector.agencies.map(name => ({ type: 'awarding', tier: 'toptier', name }));
-  if (territory === 'fedhealth') {
-    ['Centers for Medicare and Medicaid Services','Centers for Disease Control and Prevention','Food and Drug Administration','National Institutes of Health'].forEach(name => {
-      sectorAgencies.push({ type: 'awarding', tier: 'subtier', name, toptier_name: 'Department of Health and Human Services' });
-    });
-  }
-  if (!filters.agencies || filters.agencies.length === 0) {
-    filters.agencies = sectorAgencies;
-    return filters;
-  }
-  // If the filter already has subtier agencies AND their toptier_name is
-  // already covered by this sector, keep the subtier filters as-is. They
-  // are strictly more precise than the sector's toptier list — adding the
-  // toptier would widen the search, not narrow it, and mixing tiers here
-  // has historically caused USASpending to OR instead of AND, returning
-  // unrelated contracts (e.g. SOCOM + generic DoD keyword instead of
-  // SOCOM-specific contracts).
-  const sectorToptierNames = new Set(sectorAgencies.filter(a => a.tier === 'toptier').map(a => a.name.toLowerCase()));
-  const existingSubtiersUnderSector = filters.agencies.filter(a =>
-    a.tier === 'subtier' && a.toptier_name && sectorToptierNames.has(a.toptier_name.toLowerCase())
-  );
-  if (existingSubtiersUnderSector.length > 0) {
-    // Trust the subtier filter. Discard the sector layer entirely for this call.
-    return filters;
-  }
-  // Otherwise intersect by name (original behavior) — e.g. user already
-  // picked a specific toptier and we're just constraining to the sector.
-  const sectorNames = new Set(sectorAgencies.map(a => a.name.toLowerCase()));
-  const intersected = filters.agencies.filter(a => sectorNames.has((a.name || '').toLowerCase()));
-  if (intersected.length > 0) {
-    filters.agencies = intersected;
-  } else {
-    // Agency doesn't match the sector. Preserve the user's intended agency
-    // by leaving filters.agencies alone — do NOT overwrite with sector toptiers
-    // and do NOT demote to keywords. If the user picked an agency outside
-    // the sector, that's their choice; respect it.
-    debug('[sector] territory', territory, 'does not match agency filter — keeping agency filter, skipping sector');
-  }
-  return filters;
-}
+// applySectorFilter() from v1 is gone. v2 resolver.js handles territory/agency
+// scoping via the resolve() function.
 
-// ── API ─────────────────────────────────────────────────────
-const API = {
-  CONTRACT_TYPES: ['A', 'B', 'C', 'D'],
-  AWARD_FIELDS: [
-    'Award ID', 'Recipient Name', 'Awarding Agency', 'Awarding Sub Agency',
-    'Awarding Office', 'Award Amount', 'Description', 'generated_internal_id',
-    'Start Date', 'End Date', 'NAICS', 'PSC',
-    'Contract Award Type', 'Type of Set Aside',
-    'parent_award_id', 'pop_city_name', 'pop_state_code', 'idv_type'
-  ],
 
-  async _post(endpoint, body) {
-    const res = await fetch(AI_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ request_type: 'usaspending_proxy', endpoint, payload: body }),
-    });
-    if (!res.ok) throw new Error(`API ${res.status}`);
-    return res.json();
-  },
+// The API object from v1 is gone. v2 uses mo-stream-client.v2.js.
+// Card rendering (analyzeMarket + buildCardSpec + buildMoTurn) still runs
+// locally; only the fetch+route logic moved to the external module.
 
-  // ── searchFromIntent: structured search from the router ──────
-  // The router already gave us normalized keywords, NAICS, PSC, and an agency
-  // object with the canonical USASpending name. We build filters directly —
-  // no string parsing, no alias guessing. Much more reliable.
-  async searchFromIntent(intent, territory) {
-    const period = Utils.getTrailing12Mo()[0];
-    const filters = { time_period: [period], award_type_codes: this.CONTRACT_TYPES };
-
-    if (Array.isArray(intent.keywords) && intent.keywords.length > 0) {
-      filters.keywords = intent.keywords;
-    }
-    if (Array.isArray(intent.naics) && intent.naics.length > 0) {
-      filters.naics_codes = { require: intent.naics };
-    }
-    if (Array.isArray(intent.psc) && intent.psc.length > 0) {
-      filters.psc_codes = intent.psc.map(p => p.toUpperCase());
-    }
-    if (intent.agency && intent.agency.name) {
-      filters.agencies = [{
-        type: 'awarding',
-        tier: intent.agency.tier || 'toptier',
-        name: intent.agency.name,
-        toptier_name: intent.agency.toptier_name,
-      }];
-    }
-
-    const useTerritory = intent.territory || territory;
-    applySectorFilter(filters, useTerritory);
-
-    const cleanAndSort = data => {
-      // Agency scope enforcement — belt-and-suspenders over USASpending.
-      // When a user asks for a specific subtier agency (Air Force, Navy, DARPA),
-      // USASpending's filter sometimes returns contracts from sibling agencies
-      // under the same toptier. Drop them before we render, otherwise the
-      // treemap shows "Navy $73B at Air Force" which is nonsense.
-      let scoped = data;
-      if (intent.agency && intent.agency.tier === 'subtier' && intent.agency.name) {
-        const wantedSub = intent.agency.name.toLowerCase();
-        const droppedBefore = scoped.length;
-        scoped = scoped.filter(award => {
-          const sub = (award['Awarding Sub Agency'] || '').toLowerCase();
-          const top = (award['Awarding Agency'] || '').toLowerCase();
-          // Match either exact sub name, or fuzzy contains (handles slight
-          // canonical-name drift like "Department of the Air Force" vs "Air Force")
-          return sub === wantedSub
-            || sub.includes(wantedSub.replace(/^department of the /, ''))
-            || top === wantedSub
-            || top.includes(wantedSub.replace(/^department of the /, ''));
-        });
-        const dropped = droppedBefore - scoped.length;
-        if (dropped > 0) {
-          debug(`[search] agency scope dropped ${dropped} cross-agency contracts, kept ${scoped.length}`);
-        }
-      }
-
-      return scoped.map(award => {
-        if (award['Recipient Name']) award['Recipient Name'] = Utils.normalizeVendorName(award['Recipient Name']);
-        const topAgency = (award['Awarding Agency'] || '').toUpperCase();
-        if (topAgency.includes('DEFENSE') && award['Awarding Sub Agency']) award['Awarding Agency'] = award['Awarding Sub Agency'];
-        award._endTs   = award['End Date']   ? new Date(award['End Date']).getTime()   : 0;
-        award._startTs = award['Start Date'] ? new Date(award['Start Date']).getTime() : 0;
-        return award;
-      }).sort((a,b) => (b['Award Amount'] || 0) - (a['Award Amount'] || 0));
-    };
-
-    debug('[search] filter →', JSON.stringify(filters));
-    let rawData;
-    try {
-      rawData = (await this._post('/search/spending_by_award/', { filters, fields: this.AWARD_FIELDS, limit: 100, sort: 'Award Amount', order: 'desc' })).results || [];
-    } catch (err) {
-      console.warn('[search] primary request failed:', err.message, '— filter was:', JSON.stringify(filters));
-      // On 422 (filter rejection), try a simpler recovery: strip NAICS/PSC
-      // constraints and retry with just keywords + agency + territory. The
-      // router occasionally emits a shape USASpending doesn't honor, and a
-      // looser retry gets the user something rather than an error.
-      if (/API\s*422/i.test(err.message)) {
-        const simpler = { time_period: filters.time_period, award_type_codes: filters.award_type_codes };
-        if (filters.keywords) simpler.keywords = filters.keywords;
-        if (filters.agencies) simpler.agencies = filters.agencies;
-        debug('[search] retrying with simplified filter →', JSON.stringify(simpler));
-        try {
-          rawData = (await this._post('/search/spending_by_award/', { filters: simpler, fields: this.AWARD_FIELDS, limit: 100, sort: 'Award Amount', order: 'desc' })).results || [];
-        } catch (retryErr) {
-          console.warn('[search] simplified retry also failed:', retryErr.message);
-          throw err;
-        }
-      } else {
-        throw err;
-      }
-    }
-
-    // Keyword fallback: if agency-only search returned nothing, retry with the
-    // agency name as a keyword. USASpending sometimes uses different canonical
-    // names than what the autocomplete API returns.
-    if (rawData.length === 0 && intent.agency && !intent.keywords?.length && !intent.naics?.length && !intent.psc?.length) {
-      const fallbackFilters = { time_period: [period], award_type_codes: this.CONTRACT_TYPES, keywords: [intent.agency.name] };
-      applySectorFilter(fallbackFilters, useTerritory);
-      rawData = (await this._post('/search/spending_by_award/', { filters: fallbackFilters, fields: this.AWARD_FIELDS, limit: 100, sort: 'Award Amount', order: 'desc' })).results || [];
-    }
-
-    return cleanAndSort(rawData);
-  },
-
-  // Subaward data — prime-to-sub relationships. Not a subset of prime awards,
-  // a separate lens answering "who's actually delivering the work underneath."
-  // Reporting has known gaps (mandatory only >$30k, self-reported, months of lag).
-  // Session-cached by filter hash since users often re-ask in the same thread.
-  _subawardCache: new Map(),
-
-  // Build filter object from intent. Extracted so we can try progressively
-  // looser shapes on empty returns — USASpending's subaward index is known
-  // to be finicky about exact agency shape and tier.
-  _buildSubawardFilters(searchIntent) {
-    const period = Utils.getTrailing12Mo()[0];
-    const filters = { time_period: [period], award_type_codes: this.CONTRACT_TYPES };
-
-    if (Array.isArray(searchIntent.keywords) && searchIntent.keywords.length > 0) {
-      filters.keywords = searchIntent.keywords;
-    }
-    if (Array.isArray(searchIntent.naics) && searchIntent.naics.length > 0) {
-      filters.naics_codes = { require: searchIntent.naics };
-    }
-    if (Array.isArray(searchIntent.psc) && searchIntent.psc.length > 0) {
-      filters.psc_codes = searchIntent.psc.map(p => p.toUpperCase());
-    }
-    if (searchIntent.agency && searchIntent.agency.name) {
-      // Build the agency filter carefully. USASpending is picky about the
-      // shape — stray undefined fields cause silent empty returns on the
-      // subaward endpoint even when prime-award searches succeed.
-      const agencyFilter = {
-        type: 'awarding',
-        tier: searchIntent.agency.tier || 'toptier',
-        name: searchIntent.agency.name,
-      };
-      // Only include toptier_name when it's meaningful (subtier agencies).
-      // For toptier agencies, including an undefined/empty toptier_name
-      // can cause the filter to fail. Govhoo avoids this by only setting
-      // toptier_name when the agency object explicitly has one.
-      if (searchIntent.agency.toptier_name && searchIntent.agency.tier === 'subtier') {
-        agencyFilter.toptier_name = searchIntent.agency.toptier_name;
-      }
-      filters.agencies = [agencyFilter];
-    }
-    const useTerritory = searchIntent.territory;
-    applySectorFilter(filters, useTerritory);
-    return filters;
-  },
-
-  async _postSubawards(filters) {
-    return this._post('/search/spending_by_award/', {
-      subawards: true,
-      filters,
-      fields: [
-        'Sub-Award ID', 'Sub-Awardee Name', 'Sub-Award Amount', 'Sub-Award Date',
-        'Prime Award ID', 'Prime Recipient Name', 'Awarding Agency', 'Awarding Sub Agency',
-        'prime_award_generated_internal_id', 'Description', 'pop_state_code', 'NAICS'
-      ],
-      limit: 100,
-      sort: 'Sub-Award Amount',
-      order: 'desc',
-    });
-  },
-
-  async fetchSubawards(searchIntent) {
-    const filters = this._buildSubawardFilters(searchIntent);
-
-    // Session cache — same filter shape means same answer for this session
-    const cacheKey = JSON.stringify(filters);
-    if (this._subawardCache.has(cacheKey)) {
-      debug('[subaward] cache hit');
-      return this._subawardCache.get(cacheKey);
-    }
-
-    const normalize = (res) => (res.results || []).map(s => {
-      if (s['Prime Recipient Name']) s['Prime Recipient Name'] = Utils.normalizeVendorName(s['Prime Recipient Name']);
-      if (s['Sub-Awardee Name']) s['Sub-Awardee Name'] = Utils.normalizeVendorName(s['Sub-Awardee Name']);
-      return s;
-    });
-
-    debug('[subaward] attempt 1 — primary filters:', JSON.stringify(filters));
-    let subs = [];
-    try {
-      const res = await this._postSubawards(filters);
-      subs = normalize(res);
-      debug('[subaward] attempt 1 returned', subs.length, 'results');
-    } catch (err) {
-      console.warn('[subaward] attempt 1 failed:', err.message);
-    }
-
-    // Retry 1 — if empty AND we had an agency filter, try converting the
-    // agency to a keyword. Use agency name alone (not combined with existing
-    // keywords) to maximize match space. If the user had topic keywords
-    // too, retry 2 below will try combining them.
-    if (subs.length === 0 && filters.agencies && filters.agencies.length > 0) {
-      const agencyNames = filters.agencies.map(a => a.name).filter(Boolean);
-      const period = Utils.getTrailing12Mo()[0];
-      const retryFilters = {
-        time_period: [period],
-        award_type_codes: this.CONTRACT_TYPES,
-        keywords: agencyNames,
-      };
-      debug('[subaward] attempt 2 — agency name as keyword only:', JSON.stringify(retryFilters));
-      try {
-        const res = await this._postSubawards(retryFilters);
-        subs = normalize(res);
-        debug('[subaward] attempt 2 returned', subs.length, 'results');
-      } catch (err) {
-        console.warn('[subaward] attempt 2 failed:', err.message);
-      }
-    }
-
-    // Retry 2 — if still empty AND we have both agency + other keywords,
-    // combine them. Narrower search but might be the right answer when the
-    // user did care about a specific topic (e.g., "cyber at HHS").
-    if (subs.length === 0 && filters.agencies && filters.agencies.length > 0 && filters.keywords && filters.keywords.length > 0) {
-      const agencyNames = filters.agencies.map(a => a.name).filter(Boolean);
-      const period = Utils.getTrailing12Mo()[0];
-      const retryFilters = {
-        time_period: [period],
-        award_type_codes: this.CONTRACT_TYPES,
-        keywords: [...filters.keywords, ...agencyNames],
-      };
-      debug('[subaward] attempt 3 — agency + topic keywords:', JSON.stringify(retryFilters));
-      try {
-        const res = await this._postSubawards(retryFilters);
-        subs = normalize(res);
-        debug('[subaward] attempt 3 returned', subs.length, 'results');
-      } catch (err) {
-        console.warn('[subaward] attempt 3 failed:', err.message);
-      }
-    }
-
-    // Retry 3 — if still empty AND we have just keywords (no agency), try
-    // them. Last-ditch permissive match. This mirrors the fallback logic in
-    // the prime-award searchFromIntent function.
-    if (subs.length === 0 && filters.keywords && filters.keywords.length > 0 && (!filters.agencies || filters.agencies.length === 0)) {
-      const period = Utils.getTrailing12Mo()[0];
-      const retryFilters = {
-        time_period: [period],
-        award_type_codes: this.CONTRACT_TYPES,
-        keywords: filters.keywords,
-      };
-      debug('[subaward] attempt 3 — keywords only:', JSON.stringify(retryFilters));
-      try {
-        const res = await this._postSubawards(retryFilters);
-        subs = normalize(res);
-        debug('[subaward] attempt 3 returned', subs.length, 'results');
-      } catch (err) {
-        console.warn('[subaward] attempt 3 failed:', err.message);
-      }
-    }
-
-    this._subawardCache.set(cacheKey, subs);
-    return subs;
-  },
-};
 
 // ── analyzeMarket: build marketMetrics from raw contracts ────
 function analyzeMarket(data, currentQuery) {
@@ -2313,43 +2031,45 @@ const Html = {
 // so the user never has to learn USASpending's quirks.
 // ════════════════════════════════════════════════════════════
 
-async function routeIntent(text, context) {
-  // context: { last_query, recent_turns, card_summary }
-  const res = await fetch(AI_ENDPOINT, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      request_type: 'mo_route',
-      text,
-      last_query: context.last_query || null,
-      recent_turns: context.recent_turns || [],
-      card_summary: context.card_summary || null,
-    }),
-  });
-  if (!res.ok) {
-    let errMsg = `Router error ${res.status}`;
-    try { const eb = await res.json(); if (eb.error) errMsg = eb.error; } catch(e) {}
-    throw new Error(errMsg);
-  }
-  const intent = await res.json();
-  if (!intent || !intent.intent) throw new Error('Router returned no intent');
-  return intent;
-}
+// routeIntent() from v1 is gone. v2 uses askMo() from mo-stream-client.v2.js.
+
 
 // ════════════════════════════════════════════════════════════
 // APP — UI controller
 // ════════════════════════════════════════════════════════════
 
+// ════════════════════════════════════════════════════════════
+// APP — UI controller (v2)
+// ════════════════════════════════════════════════════════════
+//
+// Radically simpler than v1. No intent routing, no run* dispatcher,
+// no acronym tables. The App object just:
+//   - Tracks thread state (turns, active card, history)
+//   - Wires user input to askMo() from the stream-client module
+//   - Provides render callbacks that use the existing DOM builders
+//
+// The heavy lifting happens in external modules:
+//   - resolver.js → canonical-name resolution
+//   - mo-stream-client.v2.js → streaming + <data> tag handling
+//
+// Size target: ~800 lines (down from v1's ~1,800 inside App).
+
 const App = {
   state: {
     turns: 0,
-    // Most-recent successful card spec — used by ask-Mo follow-ups
+    // Most-recent successful card — used for "what's on screen" context
+    // the browser injects into the system prompt on each new turn.
     lastCardSpec: null,
     lastMarketMetrics: null,
     lastQuery: null,
-    lastSearchIntent: null,
-    lastSubawardSpec: null,
+    // Last resolved input that produced the card. Used for subaward probes.
+    lastResolverInput: null,
   },
+
+  // Conversation history for Mo. Each entry: { role: 'user'|'model', content: '...' }
+  // Trimmed to last ~12 turns. Mo's system prompt is NOT in here — the Lambda
+  // prepends it at request time.
+  _history: [],
 
   init() {
     document.getElementById('askInput').addEventListener('keydown', e => {
@@ -2357,7 +2077,6 @@ const App = {
     });
     window.addEventListener('scroll', () => this._updateJumpVisibility(), { passive: true });
     // One-time cleanup for users upgrading from the lens/territory era.
-    // Safe to remove this line after a few weeks in production.
     try { localStorage.removeItem('fedmo_seller_product'); } catch(e) {}
 
     // Delegated click handling for data-ask buttons + analytics
@@ -2372,103 +2091,35 @@ const App = {
           this._track('ask', { source: 'followup', text: q.slice(0, 60) });
           this.ask(q);
         }
-        return;
       }
-    }, true);
 
-    // Render starter chips from the GREETING_CHIPS source array (defined
-    // at the top of this script so it's easy to edit).
-    this._renderGreetingChips();
+      const viewLink = e.target.closest('.mo-view-link');
+      if (viewLink) this._track('view_usaspending', { url: viewLink.getAttribute('href') });
 
-    // Place the ask bar under the greeting (cold-start layout).
+      const peopleLink = e.target.closest('.mo-people-link');
+      if (peopleLink) this._track('view_linkedin', { vendor: peopleLink.getAttribute('data-vendor') || '' });
+
+      const jumpBtn = e.target.closest('#jumpLatest');
+      if (jumpBtn) this._track('jump_latest');
+    });
+
     this._updateEmptyState();
-
-    // Force scroll to top. Works with scrollRestoration='manual' set above
-    // to ensure the page always opens on Mo's greeting, not wherever the
-    // user happened to be scrolled when they reloaded.
-    window.scrollTo(0, 0);
+    this._track('app_init');
   },
 
-  // Render the cold-start chips from the GREETING_CHIPS constant. Called
-  // once on init. Reads from the source array so there's only one place
-  // to edit chip text — no copy living in the HTML.
-  _renderGreetingChips() {
-    const container = document.getElementById('greetingChips');
-    if (!container) return;
-    container.innerHTML = GREETING_CHIPS.map(text => {
-      const safe = Html.escapeHtml(text);
-      return `<button class="mo-followup" data-ask="${safe}">${safe}</button>`;
-    }).join('');
-  },
-
-  // Manages the cold-start vs active-thread layout. When the thread has no
-  // turns, the ask bar sits in-flow under Mo's greeting (like ChatGPT's
-  // empty-state). When the user creates a turn, the bar flips to its
-  // fixed-footer position so it stays reachable as they scroll.
-  _updateEmptyState() {
-    const thread = document.getElementById('thread');
-    const greeting = document.getElementById('greeting');
-    const askBar = document.querySelector('.mo-ask-bar');
-    const chips = greeting ? greeting.querySelector('.greeting-examples') : null;
-    if (!thread || !greeting || !askBar) return;
-
-    const hasTurns = !!thread.querySelector('.turn-user, .turn-mo, .turn-loading');
-    if (hasTurns) {
-      // Active thread — ensure bar is at its default footer spot.
-      // If currently parked inside the greeting, move it back to body end.
-      if (askBar.parentNode !== document.body) {
-        document.body.appendChild(askBar);
-      }
-      document.body.classList.remove('thread-empty');
-    } else {
-      // Cold start — move the ask bar into the greeting, between intro and chips.
-      document.body.classList.add('thread-empty');
-      if (chips && askBar.parentNode !== greeting) {
-        greeting.insertBefore(askBar, chips);
-      } else if (!chips && askBar.parentNode !== greeting) {
-        greeting.appendChild(askBar);
-      }
-    }
-  },
-
-  // ── Analytics ────────────────────────────────────────────
-  // Lightweight wrapper. Fails silent if gtag not loaded.
+  // ── Analytics tracking ──────────────────────────────────────
+  // Wraps Google Analytics. Always safe to call even if gtag isn't loaded
+  // (dev environments, ad blockers).
   _track(event, props = {}) {
     try {
-      if (typeof gtag === 'function') {
-        gtag('event', event, { ...props, app_version: 'mo_v1' });
-      }
-    } catch(e) {}
+      if (typeof gtag === 'function') gtag('event', event, props);
+    } catch (e) { /* never break the app on analytics */ }
   },
 
-  _updateJumpVisibility() {
-    const cards = document.querySelectorAll('.turn-mo');
-    if (cards.length === 0) return;
-    const last = cards[cards.length - 1];
-    const lastBottom = last.getBoundingClientRect().bottom;
-    const askBarH = 96;
-    const visible = lastBottom > window.innerHeight - askBarH + 200;
-    document.getElementById('jumpLatest').classList.toggle('visible', visible);
-  },
-
-  jumpToLatest() {
-    const cards = document.querySelectorAll('.turn-mo');
-    const last = cards[cards.length - 1];
-    if (last) this.scrollToTurn(last);
-  },
-
-  scrollToTurn(el) {
-    const header = document.querySelector('.mo-header');
-    const headerH = header ? header.getBoundingClientRect().height : 0;
-    const padding = 12;
-    const targetY = el.getBoundingClientRect().top + window.pageYOffset - headerH - padding;
-    window.scrollTo({ top: targetY, behavior: 'smooth' });
-    setTimeout(() => this._updateJumpVisibility(), 600);
-  },
-
+  // ── Input → ask ─────────────────────────────────────────────
   askFromInput() {
     const inp = document.getElementById('askInput');
-    const v = inp.value.trim();
+    const v = (inp?.value || '').trim();
     if (!v) return;
     this._track('ask', { source: 'typed', length: v.length });
     this.ask(v);
@@ -2476,776 +2127,339 @@ const App = {
     inp.blur();
   },
 
-  // Last 3 turns for the router context. Each: { role, text }.
-  // role: 'user' | 'mo'. Truncated to last 3 in routeIntent call.
-  _recentTurns: [],
-
+  // ── ask — the one entry point ───────────────────────────────
+  //
+  // Calls askMo() from the stream-client, passes render callbacks that draw
+  // into a composite turn shell. Handles both coaching-only and data-backed
+  // responses. Wraps everything in a top-level try/catch so any unhandled
+  // error falls through to the error builder.
   async ask(question) {
     let loadingId = null;
     try {
+      // Hide greeting on first turn
       const greet = document.getElementById('greeting');
       if (greet) greet.style.display = 'none';
 
       this.appendUserTurn(question);
-      this._recentTurns.push({ role: 'user', text: question });
-      if (this._recentTurns.length > 6) this._recentTurns = this._recentTurns.slice(-6);
 
-      loadingId = this.appendLoadingTurn('Thinking');
+      // Push user turn to history for Mo's context
+      this._history.push({ role: 'user', content: question });
+      if (this._history.length > 12) this._history = this._history.slice(-12);
 
-      // Build router context. No persistent lens/territory anymore — the
-      // router reads context from recent_turns + the user's latest message.
-      const ctx = {
-        last_query: this.state.lastQuery,
-        recent_turns: this._recentTurns,
-        card_summary: this._buildCardSummary(),
-      };
+      // Create a composite turn shell. Has three slots:
+      //   preProse   — streams Mo's pre-tag text (or whole response if no tag)
+      //   cardSlot   — holds loading state → real data card
+      //   postProse  — streams Mo's grounded interpretation after card
+      const turnEls = this.appendCompositeTurn();
+      loadingId = turnEls.turnId;
 
-      let intent;
-      try {
-        intent = await routeIntent(question, ctx);
-      } catch (err) {
-        console.error('Router error:', err);
-        this.replaceLoading(loadingId, this.buildErrorTurn(err.message || 'Mo had trouble understanding that.', { retry: question }));
-        return;
+      // Active card summary — injected into the Lambda's system prompt as
+      // context. Lets Mo handle refines ("just Navy", "above $5M") naturally.
+      const activeCardSummary = this._buildCardSummary();
+
+      // Build render callbacks that drive the composite turn shell
+      const render = this._buildRenderCallbacks(turnEls);
+
+      const result = await askMo({
+        question,
+        history: this._history.slice(0, -1), // askMo appends the current question itself
+        activeCardSummary,
+        endpoint: AI_ENDPOINT,
+        render,
+      });
+
+      // Update state + history based on what happened
+      if (result.mode === 'data' && result.rows && result.rows.length > 0) {
+        this._onDataTurnComplete(result, question);
+      } else if (result.mode === 'prose' && result.text) {
+        this._history.push({ role: 'model', content: result.text });
+        this._track('turn_prose', { length: result.text.length });
       }
-
-      this._track('intent', { type: intent.intent });
-      debug('[Mo intent]', intent);
-
-      // Update loading message with what we're doing
-      this._updateLoadingMessage(loadingId, this._loadingMessageFor(intent));
-
-      try {
-        // Safety net: refine needs an active card. If the router sent refine at
-        // cold start, rewrite as a search. (ASK at cold start is coaching mode
-        // — we let it flow through to Mo.)
-        const hasCard = !!this.state.lastCardSpec;
-        let effectiveIntent = intent;
-        if (intent.intent === 'refine' && !hasCard) {
-          debug('[dispatch] rewriting refine → search (no active card)');
-          const stripped = question
-            .replace(/^(who|what|when|where|why|how|which|is|are|does|do|show me|tell me|find|search for|look up)\s+(owns?|has|runs?|manages?|is|are|does|do|the|a|an)?\s*/i, '')
-            .replace(/[?.!]+$/, '')
-            .trim();
-          const keywordText = stripped || question;
-          effectiveIntent = {
-            intent: 'search',
-            label: keywordText,
-            keywords: [keywordText],
-          };
-        }
-
-        switch (effectiveIntent.intent) {
-          case 'search':       await this.runSearch(effectiveIntent, loadingId); break;
-          case 'refine':       await this.runRefine(effectiveIntent, loadingId); break;
-          case 'ask':          await this.runAskMo(effectiveIntent.question || question, loadingId); break;
-          case 'seller_pitch': await this.runSellerPitch(effectiveIntent, loadingId); break;
-          case 'compare':      await this.runCompare(effectiveIntent, loadingId); break;
-          case 'subaward_search': await this.runSubawardSearch(loadingId); break;
-          case 'reset':        this.replaceLoading(loadingId, document.createDocumentFragment()); this.resetThread(); break;
-          case 'clarify':      this.replaceLoading(loadingId, this.buildClarifyTurn(effectiveIntent.question || "Not sure what you're looking for. Try a vendor, agency, or what you sell.")); break;
-          default:
-            this.replaceLoading(loadingId, this.buildErrorTurn('Mo gave an unexpected answer. Try rephrasing.'));
-        }
-      } catch (err) {
-        console.error('Intent dispatch error:', err);
-        this.replaceLoading(loadingId, this.buildErrorTurn(err.message || 'Something went sideways.', { retry: question }));
-      }
+      // On error, we don't push to history — the user will retry
 
       this.state.turns++;
     } catch (fatalErr) {
-      // Last-resort error boundary. Catches anything the inner try/catches
-      // missed — a null deref, a parsing crash, a renderer blowup. The
-      // user sees a clear error instead of a forever-spinning loader.
-      console.error('[ask] fatal error:', fatalErr);
+      // Last-resort boundary. Shouldn't fire because askMo() has its own
+      // error handling, but if it does, don't leave the user hanging.
+      console.error('[ask] fatal:', fatalErr);
       this._track('ask_fatal_error', {
         message: String(fatalErr?.message || fatalErr).slice(0, 200),
-        stack: String(fatalErr?.stack || '').slice(0, 500),
       });
+      // If a turn shell exists, replace with error; otherwise append fresh
       try {
         if (loadingId) {
-          this.replaceLoading(loadingId, this.buildErrorTurn('Something broke on my end. Try rephrasing or reloading the page.', { retry: question, retryable: true }));
+          const el = document.getElementById(loadingId);
+          if (el) el.replaceWith(this.buildErrorTurn('Something broke on my end. Try rephrasing or reloading.', { retry: question, retryable: true }));
         }
-      } catch (_) {
-        // If even the error turn fails to render, there's nothing we can do
-        // except log. Don't throw from the boundary.
-      }
+      } catch (_) { /* last resort */ }
     }
   },
 
-  // ── Helpers for the router ──────────────────────────────────
+  // When a data-backed turn completes successfully, stash the card state and
+  // write a compact transcript entry to history. We don't push the raw payload
+  // into history — Gemini doesn't need it again, and it would bloat context.
+  _onDataTurnComplete(result, question) {
+    // State update: the card is now the active card
+    const m = analyzeMarket(result.rows, this._labelForResolverInput(result.resolverInput));
+    const spec = buildCardSpec(m, this._labelForResolverInput(result.resolverInput), null, null);
+    if (spec) {
+      this.state.lastCardSpec = spec;
+      this.state.lastMarketMetrics = m;
+      this.state.lastQuery = spec.query;
+      this.state.lastResolverInput = result.resolverInput;
+    }
+    // History entry: combined pre+post prose, so Mo can reference her own
+    // earlier analysis in later turns.
+    const combined = [result.preTagText || '', '[data card rendered]', result.postTagText || ''].filter(Boolean).join('\n\n');
+    this._history.push({ role: 'model', content: combined });
+    this._track('turn_data', {
+      rows: result.rows.length,
+      query: this._labelForResolverInput(result.resolverInput).slice(0, 60),
+    });
+  },
+
+  // Build a short human-readable label from resolver input, used as the
+  // card's query title. Mirrors what a user might have typed.
+  _labelForResolverInput(input) {
+    if (!input) return 'this market';
+    const parts = [];
+    if (input.vendor) parts.push(input.vendor);
+    if (input.vendors) {
+      const vs = Array.isArray(input.vendors) ? input.vendors : String(input.vendors).split(',').map(s => s.trim());
+      parts.push(vs.join(' + '));
+    }
+    if (input.agency) parts.push(`at ${input.agency}`);
+    if (input.topic) parts.push(`· ${input.topic}`);
+    if (input.expiring_only) parts.push('(expiring)');
+    return parts.join(' ') || 'this market';
+  },
+
+  // ── Render callbacks — wire stream-client to the DOM ────────
+  _buildRenderCallbacks(turnEls) {
+    const { preProseEl, cardSlotEl, postProseEl } = turnEls;
+
+    return {
+      // Stream Mo's pre-tag prose (or whole response if no <data> tag).
+      // Called repeatedly with progressively-accumulating text.
+      streamPreTagProse: (text) => {
+        if (!preProseEl || !text) return;
+        preProseEl.innerHTML = Html.parseAiMarkdown(text);
+      },
+
+      // Called when a complete <data> tag is parsed. Return a DOM ref
+      // that renderDataCard will later target. We keep it simple: return
+      // the cardSlotEl itself and attach a loading placeholder inline.
+      onDataTag: (resolverInput) => {
+        if (cardSlotEl) {
+          cardSlotEl.innerHTML = `
+            <div class="mo-empty" style="padding: 16px 0;">
+              <div class="mo-empty-msg"><em>Pulling data…</em></div>
+            </div>`;
+        }
+        return cardSlotEl;
+      },
+
+      // Replace the loading placeholder with a real rendered card.
+      renderDataCard: (cardRef, rows, resolverInput) => {
+        if (!cardRef) return;
+        if (!rows || rows.length === 0) {
+          cardRef.innerHTML = '';
+          const label = this._labelForResolverInput(resolverInput);
+          const empty = this.buildEmptyTurn(label);
+          // buildEmptyTurn returns a full turn-mo div; we just want its inner
+          // card content. Lift the card body out.
+          const emptyCard = empty.querySelector('.turn-mo-card');
+          if (emptyCard) cardRef.appendChild(emptyCard);
+          else cardRef.appendChild(empty);
+          return;
+        }
+        const label = this._labelForResolverInput(resolverInput);
+        const m = analyzeMarket(rows, label);
+        const spec = buildCardSpec(m, label, null, null);
+        if (!spec) {
+          cardRef.innerHTML = '<div class="mo-empty-msg">Data came back but I couldn\'t shape it. Try rephrasing.</div>';
+          return;
+        }
+        // Use the existing buildMoTurn builder, then lift out its card body
+        // so we can drop it into our composite turn shell (which already
+        // has its own header).
+        const fullTurn = this.buildMoTurn(spec);
+        const cardBody = fullTurn.querySelector('.turn-mo-card');
+        cardRef.innerHTML = '';
+        if (cardBody) {
+          cardRef.appendChild(cardBody);
+        } else {
+          cardRef.appendChild(fullTurn);
+        }
+        // Render treemaps inside the new card
+        initTreemaps(cardRef);
+        // Track
+        this._track('card_render', {
+          face: spec.verdict?.face,
+          contracts: spec.sourceCount,
+        });
+      },
+
+      // Stream Mo's grounded post-card interpretation.
+      streamPostTagProse: (text) => {
+        if (!postProseEl || !text) return;
+        postProseEl.innerHTML = Html.parseAiMarkdown(text);
+      },
+
+      // Show an error state inside the turn. Keeps any successfully-rendered
+      // pre-tag prose and card above, only the bottom shows the error.
+      renderError: (msg) => {
+        if (postProseEl) {
+          postProseEl.innerHTML = `<div class="mo-empty-msg" style="color: var(--text-muted);">${Html.escapeHtml(msg || 'Something went sideways.')}</div>`;
+        } else if (preProseEl) {
+          preProseEl.innerHTML = `<div class="mo-empty-msg" style="color: var(--text-muted);">${Html.escapeHtml(msg || 'Something went sideways.')}</div>`;
+        }
+        this._track('error_shown', { msg: (msg || '').slice(0, 80) });
+      },
+
+      // Final cleanup after the whole turn is done. Unused for now but kept
+      // for future hooks (auto-scroll, analytics, chip generation, etc.).
+      complete: () => {
+        this._updateEmptyState();
+        this._updateJumpVisibility();
+      },
+    };
+  },
+
+  // ── Turn shell builders ─────────────────────────────────────
+  // Composite turn with three slots: pre-prose, card, post-prose.
+  // Both coaching and data-backed responses use this shape.
+  appendCompositeTurn() {
+    const thread = document.getElementById('thread');
+    const turnId = 'mo-turn-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+    const wrap = document.createElement('div');
+    wrap.className = 'turn-mo';
+    wrap.id = turnId;
+    wrap.innerHTML = `
+      <div class="turn-mo-header">
+        <svg viewBox="0 0 40 40"><use href="#icon-face-open"/></svg>
+        <span class="turn-mo-meta">Mo · just now</span>
+      </div>
+      <div class="mo-tell-more-prose" id="${turnId}-pre"><span style="color:var(--text-faint);">Mo's thinking…</span></div>
+      <div id="${turnId}-card"></div>
+      <div class="mo-tell-more-prose" id="${turnId}-post" style="margin-top: 12px;"></div>
+    `;
+    thread.appendChild(wrap);
+    this._updateEmptyState();
+    this._updateJumpVisibility();
+    return {
+      turnId,
+      wrap,
+      preProseEl: document.getElementById(turnId + '-pre'),
+      cardSlotEl: document.getElementById(turnId + '-card'),
+      postProseEl: document.getElementById(turnId + '-post'),
+    };
+  },
+
+  appendUserTurn(text) {
+    const thread = document.getElementById('thread');
+    const wrap = document.createElement('div');
+    wrap.className = 'turn-user';
+    wrap.innerHTML = `<div class="user-bubble">${Html.escapeHtml(text)}</div>`;
+    thread.appendChild(wrap);
+    this._updateEmptyState();
+    // Auto-scroll the user turn into view
+    setTimeout(() => {
+      const header = document.getElementById('moHeader');
+      const headerH = header ? header.getBoundingClientRect().height : 60;
+      const target = wrap.getBoundingClientRect().top + window.pageYOffset - headerH - 12;
+      window.scrollTo({ top: target, behavior: 'smooth' });
+    }, 50);
+  },
+
+  // Build the "currently on screen" card summary that gets injected into
+  // Mo's system prompt on each new turn. Gives her enough context to do
+  // natural refines ("just Navy", "above $5M") without calling a router.
   _buildCardSummary() {
     const spec = this.state.lastCardSpec;
     if (!spec) return null;
-    const top = spec.primes && spec.primes[0] ? `${spec.primes[0].name} ${spec.primes[0].spend}` : '';
-    return `${spec.query || 'market'} · ${spec.stats?.[0]?.value || ''} · top: ${top} · ${(spec.expiring||[]).length} expiring`.slice(0, 200);
+    const topPrime = spec.primes?.[0];
+    const topPart = topPrime ? `top prime: ${topPrime.name} (${topPrime.spend})` : '';
+    const exp = (spec.expiring || []).length;
+    const expPart = exp > 0 ? `${exp} expiring` : 'none expiring';
+    return [
+      `Query: ${spec.query || 'market'}`,
+      spec.stats?.[0] ? `${spec.stats[0].label}: ${spec.stats[0].value}` : '',
+      topPart,
+      expPart,
+    ].filter(Boolean).join(' · ').slice(0, 400);
   },
 
-  // Summarize Mo's prose for the router's context. We keep the beginning AND
-  // the end, because Mo's closing sentence often contains a follow-up question
-  // that changes how the router should interpret the user's next message.
-  //   "Want me to draft one for Navy instead?" at the end = the user's next
-  //   "Ok Navy" is an ANSWER to Mo, not a new search request.
-  _summarizeMoProse(fullText) {
-    if (!fullText) return '';
-    const text = String(fullText).trim();
-    if (text.length <= 400) return text;
-    const head = text.slice(0, 150);
-    const tail = text.slice(-250);
-    return `${head} … ${tail}`;
+  // ── Empty state + scroll helpers ────────────────────────────
+  _updateEmptyState() {
+    const thread = document.getElementById('thread');
+    const greet = document.getElementById('greeting');
+    const hasTurns = thread.querySelector('.turn-user, .turn-mo');
+    if (hasTurns && greet) greet.style.display = 'none';
+    if (!hasTurns && greet) greet.style.display = '';
   },
 
-  // Hallucination audit. Extract dollar amounts and contract IDs from Mo's
-  // response and verify each one appears in the payload we sent to the Lambda.
-  // Anything unverified is logged as a warning. This is instrumentation, not
-  // a gate — we don't block the response, we surface the risk so we can tune.
-  //
-  // Thresholds are deliberately generous. A dollar amount like "$614 million"
-  // might appear as 614600000 in the payload — we check if ANY close match
-  // exists (within 5% rounding) before flagging.
-  _auditMoResponse(payload, moText) {
-    if (!payload || !moText) return;
-
-    // Flatten payload to a lowercase searchable string
-    const payloadStr = JSON.stringify(payload).toLowerCase();
-
-    // Collect all numeric values in the payload for dollar-amount matching
-    const payloadNums = [];
-    const walk = (obj) => {
-      if (obj === null || obj === undefined) return;
-      if (typeof obj === 'number') { payloadNums.push(obj); return; }
-      if (typeof obj === 'string') {
-        const n = parseFloat(obj);
-        if (!isNaN(n)) payloadNums.push(n);
-        return;
-      }
-      if (Array.isArray(obj)) { obj.forEach(walk); return; }
-      if (typeof obj === 'object') { Object.values(obj).forEach(walk); }
-    };
-    walk(payload);
-
-    const warnings = [];
-
-    // 1) Contract IDs: USASpending contract IDs are 10-20 char alphanumeric,
-    //    typically starting with a letter. Pattern match is conservative.
-    const contractIdRe = /\b[A-Z][A-Z0-9]{6,19}\b/g;
-    const citedIds = new Set();
-    let m;
-    while ((m = contractIdRe.exec(moText)) !== null) {
-      // Skip obvious non-IDs: common words, state codes, NAICS-like 6-digit numbers
-      if (/^(SBOM|EDR|JWCC|CMMC|NAICS|PSC|NAVWAR|DEVSECOPS|USASPENDING|DOD|DHS|HHS|GSA)$/i.test(m[0])) continue;
-      citedIds.add(m[0]);
-    }
-    for (const id of citedIds) {
-      if (!payloadStr.includes(id.toLowerCase())) {
-        warnings.push(`contract ID "${id}" not in payload`);
-      }
-    }
-
-    // 2) Dollar amounts: look for $N, $N.N, $N,NNN patterns with M/K/million/billion
-    const dollarRe = /\$\s*([\d,]+(?:\.\d+)?)\s*(million|billion|thousand|m|k|b)?/gi;
-    const citedDollars = [];
-    while ((m = dollarRe.exec(moText)) !== null) {
-      let val = parseFloat(m[1].replace(/,/g, ''));
-      if (isNaN(val)) continue;
-      const suffix = (m[2] || '').toLowerCase();
-      if (suffix === 'million' || suffix === 'm') val *= 1_000_000;
-      else if (suffix === 'billion' || suffix === 'b') val *= 1_000_000_000;
-      else if (suffix === 'thousand' || suffix === 'k') val *= 1_000;
-      // Ignore trivially-small numbers (year references, days, etc.)
-      if (val < 1000) continue;
-      citedDollars.push({ raw: m[0], value: val });
-    }
-    for (const d of citedDollars) {
-      // Check for a close match in the payload (within 5% rounding tolerance)
-      const hit = payloadNums.some(n => {
-        if (n === 0) return false;
-        const ratio = Math.abs(n - d.value) / Math.max(n, d.value);
-        return ratio < 0.05;
-      });
-      if (!hit) {
-        warnings.push(`dollar "${d.raw}" (≈${d.value.toLocaleString()}) has no close match in payload`);
-      }
-    }
-
-    if (warnings.length > 0) {
-      console.warn('[mo-audit] Possible hallucinations in Mo\'s response:\n  - ' + warnings.join('\n  - '));
-      this._track('mo_audit_warning', { count: warnings.length, sample: warnings[0] });
-    } else {
-      debug('[mo-audit] ✓ all dollars and contract IDs verified against payload');
-    }
+  _updateJumpVisibility() {
+    const jump = document.getElementById('jumpLatest');
+    if (!jump) return;
+    const lastTurn = document.querySelector('.turn-user:last-of-type, .turn-mo:last-of-type');
+    if (!lastTurn) { jump.classList.remove('visible'); return; }
+    const rect = lastTurn.getBoundingClientRect();
+    const windowH = window.innerHeight || document.documentElement.clientHeight;
+    // Show jump button when the latest turn is more than 400px below the fold
+    const isOffscreen = rect.top > windowH + 400;
+    jump.classList.toggle('visible', isOffscreen);
   },
 
-  // Wrap contract IDs in Mo's prose with tappable USASpending links — but
-  // only if the ID appears in the real market metrics (i.e., it's a real
-  // contract we have a USASpending internal ID for). Unverified IDs stay
-  // as plain text; they've already been flagged by the auditor.
-  _linkifyContractIds(proseEl, fullText, metrics) {
-    if (!proseEl || !fullText || !metrics) return;
-
-    // Build a map of contract ID → generated_internal_id for every contract
-    // the user's search pulled back. That's how we construct the correct
-    // USASpending URL.
-    const idToInternal = new Map();
-    Object.values(metrics.vendors || {}).forEach(v => {
-      (v.contracts || []).forEach(c => {
-        const awardId = c['Award ID'];
-        const internal = c['generated_internal_id'];
-        if (awardId && internal) idToInternal.set(awardId, internal);
-      });
-    });
-
-    if (idToInternal.size === 0) return;
-
-    // Replace each matching ID in the prose with an anchor tag. Iterate over
-    // the textContent (not innerHTML) to avoid nested-anchor weirdness.
-    // Walk text nodes and replace in-place so we preserve the streamed
-    // structure (<p>, <strong>, etc.) that Html.streamInto rendered.
-    const walker = document.createTreeWalker(proseEl, NodeFilter.SHOW_TEXT);
-    const toReplace = [];
-    let node;
-    while ((node = walker.nextNode())) {
-      const text = node.nodeValue;
-      if (!text) continue;
-      // Quick filter: does this text node contain anything that looks like an ID?
-      if (!/\b[A-Z][A-Z0-9]{6,19}\b/.test(text)) continue;
-      toReplace.push(node);
-    }
-
-    toReplace.forEach(textNode => {
-      const text = textNode.nodeValue;
-      const frag = document.createDocumentFragment();
-      let lastIdx = 0;
-      const re = /\b([A-Z][A-Z0-9]{6,19})\b/g;
-      let m;
-      while ((m = re.exec(text)) !== null) {
-        const id = m[1];
-        const internal = idToInternal.get(id);
-        if (!internal) continue;  // leave plain; auditor may have already flagged
-        // Push any plain text before this match
-        if (m.index > lastIdx) {
-          frag.appendChild(document.createTextNode(text.slice(lastIdx, m.index)));
-        }
-        const a = document.createElement('a');
-        a.href = `https://www.usaspending.gov/award/${internal}`;
-        a.target = '_blank';
-        a.rel = 'noopener';
-        a.className = 'mo-inline-link';
-        a.textContent = id;
-        frag.appendChild(a);
-        lastIdx = m.index + id.length;
-      }
-      // Tail
-      if (lastIdx < text.length) {
-        frag.appendChild(document.createTextNode(text.slice(lastIdx)));
-      }
-      // Only replace if we actually inserted any links
-      if (frag.childNodes.length > 0 && lastIdx > 0) {
-        textNode.parentNode.replaceChild(frag, textNode);
-      }
-    });
+  jumpToLatest() {
+    const lastTurn = document.querySelector('.turn-user:last-of-type, .turn-mo:last-of-type');
+    if (!lastTurn) return;
+    const header = document.getElementById('moHeader');
+    const headerH = header ? header.getBoundingClientRect().height : 60;
+    const target = lastTurn.getBoundingClientRect().top + window.pageYOffset - headerH - 12;
+    window.scrollTo({ top: target, behavior: 'smooth' });
+    setTimeout(() => this._updateJumpVisibility(), 600);
   },
 
-  // Wrap the FIRST mention of each payload vendor in Mo's prose with a
-  // LinkedIn People search link. Same hide-in-the-DOM approach as contract
-  // linkification so we preserve streaming structure.
-  //
-  // Rules:
-  //   - Only vendors that appear in the current payload get linked.
-  //   - Each vendor is linked once per response (first mention only) to
-  //     avoid ransom-note paragraphs with five links in one sentence.
-  //   - Match is case-insensitive, word-boundary aware.
-  //   - Skip very short names (< 4 chars) — too many false positives.
-  _linkifyVendorNames(proseEl, metrics) {
-    if (!proseEl || !metrics) return;
-
-    // Build a sorted list of vendor names. Longest first so we match
-    // "Booz Allen Hamilton" before matching just "Booz Allen".
-    const vendorNames = Object.keys(metrics.vendors || {})
-      .filter(n => n && n.length >= 4)
-      .sort((a, b) => b.length - a.length);
-
-    if (vendorNames.length === 0) return;
-
-    // Track which vendors have already been linked in this response
-    const linkedVendors = new Set();
-
-    // Escape for regex
-    const escapeRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-    // Walk text nodes. Skip nodes inside existing anchor tags so we don't
-    // nest <a> elements.
-    const walker = document.createTreeWalker(
-      proseEl,
-      NodeFilter.SHOW_TEXT,
-      {
-        acceptNode(node) {
-          // Skip if we're already inside an anchor (e.g., contract ID link)
-          let el = node.parentElement;
-          while (el && el !== proseEl) {
-            if (el.tagName === 'A') return NodeFilter.FILTER_REJECT;
-            el = el.parentElement;
-          }
-          return NodeFilter.FILTER_ACCEPT;
-        }
-      }
-    );
-    const candidates = [];
-    let node;
-    while ((node = walker.nextNode())) {
-      if (node.nodeValue && node.nodeValue.trim()) candidates.push(node);
-    }
-
-    candidates.forEach(textNode => {
-      const text = textNode.nodeValue;
-      // Find the earliest match across all remaining vendors
-      // We need to process left-to-right so the "first mention" rule is
-      // stable across multiple paragraphs.
-      const matches = [];
-      for (const vendor of vendorNames) {
-        if (linkedVendors.has(vendor.toUpperCase())) continue;
-        // Build a case-insensitive word-boundary regex
-        const re = new RegExp(`\\b${escapeRe(vendor)}\\b`, 'i');
-        const m = text.match(re);
-        if (m && m.index !== undefined) {
-          matches.push({ vendor, index: m.index, length: m[0].length, matched: m[0] });
-        }
-      }
-      if (matches.length === 0) return;
-      // Sort by index — we insert in document order
-      matches.sort((a, b) => a.index - b.index);
-
-      // Walk through matches and build replacement fragment. If two matches
-      // overlap (shouldn't happen with the longest-first sort, but guard
-      // anyway), skip the later one.
-      const frag = document.createDocumentFragment();
-      let cursor = 0;
-      for (const mm of matches) {
-        if (mm.index < cursor) continue;
-        if (linkedVendors.has(mm.vendor.toUpperCase())) continue;
-        // Text before the match
-        if (mm.index > cursor) {
-          frag.appendChild(document.createTextNode(text.slice(cursor, mm.index)));
-        }
-        // The link itself — use Utils.titleCase for the display text so
-        // "BOOZ ALLEN HAMILTON" in payload renders as "Booz Allen Hamilton"
-        // if that's how it appeared in the prose.
-        const displayText = mm.matched;
-        const liUrl = `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(Utils.linkedinSearchTerm(mm.vendor))}&origin=GLOBAL_SEARCH_HEADER`;
-        const a = document.createElement('a');
-        a.href = liUrl;
-        a.target = '_blank';
-        a.rel = 'noopener';
-        a.className = 'mo-inline-link';
-        a.title = `Find ${mm.vendor} employees on LinkedIn`;
-        a.textContent = displayText;
-        a.addEventListener('click', () => {
-          try { this._track('linkedin_search_prose', { vendor: mm.vendor.slice(0, 40) }); } catch(e) {}
-        });
-        frag.appendChild(a);
-        cursor = mm.index + mm.length;
-        linkedVendors.add(mm.vendor.toUpperCase());
-      }
-      // Tail text after the last match
-      if (cursor < text.length) {
-        frag.appendChild(document.createTextNode(text.slice(cursor)));
-      }
-      if (frag.childNodes.length > 0 && cursor > 0) {
-        textNode.parentNode.replaceChild(frag, textNode);
-      }
-    });
+  // ── Reset ────────────────────────────────────────────────────
+  resetThread() {
+    const thread = document.getElementById('thread');
+    [...thread.querySelectorAll('.turn-user, .turn-mo, .turn-loading')].forEach(el => el.remove());
+    const greet = document.getElementById('greeting');
+    if (greet) greet.style.display = '';
+    this.state.lastCardSpec = null;
+    this.state.lastMarketMetrics = null;
+    this.state.lastQuery = null;
+    this.state.lastResolverInput = null;
+    this._history = [];
+    document.getElementById('jumpLatest')?.classList.remove('visible');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    this._updateEmptyState();
+    this._track('reset_thread');
   },
 
-  // Fire subaward fetch post-stream. If results come back non-empty, append
-  // a "Who's subbing here" chip below the prose. Silent on empty results or
-  // errors — user never sees a failed probe.
-  async _appendSubawardChipIfAvailable(proseEl) {
-    if (!proseEl || !this.state.lastSearchIntent) return;
-    try {
-      const subs = await API.fetchSubawards(this.state.lastSearchIntent);
-      if (!subs || subs.length === 0) return;  // Silent fallback — no chip, no indicator
-      if (!proseEl.isConnected) return;  // User dismissed the card while we were fetching
-
-      const chip = document.createElement('button');
-      chip.className = 'mo-post-stream-chip';
-      chip.setAttribute('data-ask', "Who's subbing here?");
-      chip.innerHTML = `Who's subbing here? <span style="opacity:0.7;font-weight:400;">(${subs.length} found)</span>`;
-      chip.addEventListener('click', () => this.ask("Who's subbing here?"));
-
-      const wrapper = document.createElement('div');
-      wrapper.style.marginTop = '4px';
-      wrapper.appendChild(chip);
-      proseEl.parentElement.insertBefore(wrapper, proseEl.nextSibling);
-      this._track('subaward_chip_shown', { count: subs.length });
-    } catch (err) {
-      debug('[subaward] probe failed silently:', err.message);
-      // Intentionally no UI — silent fallback
-    }
+  resetEverything() {
+    this.resetThread();
+    this._track('reset_everything');
   },
 
-  _loadingMessageFor(intent) {
-    switch (intent.intent) {
-      case 'search':
-      case 'seller_pitch':
-        return intent.label ? `Searching ${intent.label}` : 'Searching USASpending';
-      case 'refine':
-        return intent.label ? `Filtering to ${intent.label}` : 'Refining the data';
-      case 'ask':       return 'Mo\'s thinking';
-      case 'compare':   return intent.label ? `Pulling ${intent.label}` : 'Running comparison';
-      case 'subaward_search': return 'Pulling subaward data';
-      case 'clarify':   return 'One sec';
-      default:          return 'Reading the data';
-    }
+  // ── About modal ─────────────────────────────────────────────
+  openAbout() {
+    const m = document.getElementById('aboutModal');
+    if (m) m.classList.add('open');
+    this._track('about_open');
+  },
+  closeAbout() {
+    const m = document.getElementById('aboutModal');
+    if (m) m.classList.remove('open');
   },
 
-  _updateLoadingMessage(loadingId, msg) {
-    const el = document.getElementById(loadingId);
-    if (el) {
-      const span = el.querySelector('span');
-      if (span) span.textContent = msg;
-    }
-  },
+  // ────────────────────────────────────────────────────────────
+  // BUILDERS — DOM constructors for various turn types
+  // These are the RENDERERS, kept from v1 largely unchanged.
+  // ────────────────────────────────────────────────────────────
 
-  // ── runSellerPitch: router gave us a parsed product + keywords + competitors
-  // Run a vendor-focused search. Handles single-product case AND the
-  // channel/partner-manager case where the user covers multiple ISVs.
-  async runSellerPitch(intent, loadingId) {
-    // Pull the vendor list. Prefer an explicit "vendors" array (channel
-    // case — user covers multiple ISVs), fall back to "product" (single
-    // vendor case), and finally the label as last resort.
-    let vendors = [];
-    if (Array.isArray(intent.vendors) && intent.vendors.length > 0) {
-      vendors = intent.vendors.filter(v => typeof v === 'string' && v.trim().length > 0);
-    } else if (intent.product) {
-      vendors = [intent.product];
-    } else if (intent.label) {
-      vendors = [intent.label];
-    }
-
-    if (vendors.length === 0) {
-      this.replaceLoading(loadingId, this.buildErrorTurn('Mo couldn\'t pull a vendor name out of that.'));
-      return;
-    }
-
-    // Stash competitors for future competitive view
-    if (Array.isArray(intent.competitors)) this._sellerCompetitors = intent.competitors;
-
-    // Build a search intent from the seller pitch and run it. Carry the
-    // router's one-sentence framing through so the card can render it as
-    // a warm intro above the verdict. sellerLens travels in the intent
-    // object for this one turn only — no persistence.
-    //
-    // For multi-vendor pitches (partner manager covering ISVs), pass the
-    // vendors array to runSearch and let it OR them together as keywords.
-    // Mo will then render primes from either company in the same card.
-    const searchIntent = {
-      label: intent.label || vendors.join(' + '),
-      keywords: intent.core_keywords || [],
-      territory: intent.territory,
-      framing: intent.framing || null,
-      sellerLens: vendors.length === 1 ? vendors[0] : vendors.join(', '),
-      // Pass the vendor list through so runSearch / searchFromIntent knows
-      // these are vendor names (not topic keywords) and can treat them as
-      // recipient-name targets rather than description keywords.
-      vendors,
-    };
-
-    // Include each vendor name as a keyword so USASpending will match
-    // contracts where the company appears in the recipient field.
-    // Keep the order — the first vendor is the primary for verdict voice.
-    searchIntent.keywords = [...vendors, ...(searchIntent.keywords || [])];
-
-    return this.runSearch(searchIntent, loadingId);
-  },
-
-  // ── runSearch: hit USASpending using the structured router intent
-  async runSearch(intent, loadingId) {
-    const sellerLens = intent.sellerLens || null;
-    const territory = intent.territory || null;
-
-    // Safety net: expand program-office acronyms the router may have missed.
-    // USASpending indexes contracts by Awarding Sub Agency, but descriptions
-    // often mention the program office by acronym or full name. For each
-    // acronym we recognize, add both forms to keywords AND set the parent
-    // agency filter if none was set. This rescues queries like "AFLCMC"
-    // that would otherwise return zero matches.
-    intent = this._expandProgramOfficeAcronyms(intent);
-
-    const label = intent.label || (intent.keywords || []).join(', ') || 'this market';
-
-    const rawResults = await API.searchFromIntent(intent, territory);
-    let active = Utils.filterActiveContracts(rawResults);
-
-    // Post-filter: honor any filter flags the router put on the search intent.
-    // Gemini sometimes emits expiring_only, min_amount, etc. at the top level
-    // of a search intent. Accept them here so the user gets what they asked for.
-    active = this._applyInlineFilters(active, intent);
-
-    // Vendor scope enforcement — when the intent specifies a vendors[]
-    // array (partner-manager covering multiple ISVs), drop contracts whose
-    // Recipient Name doesn't match one of the named vendors. Without this,
-    // a search for "Ethos Systems and Govini" returns the top AWS cloud
-    // contracts because USASpending matches keywords against description
-    // text AND recipient name — and AWS resellers dwarf the ISVs in raw
-    // dollar volume. We want the ISVs' contracts specifically.
-    if (Array.isArray(intent.vendors) && intent.vendors.length > 0) {
-      const vendorNeedles = intent.vendors.map(v => String(v || '').toLowerCase().trim()).filter(Boolean);
-      if (vendorNeedles.length > 0) {
-        const before = active.length;
-        active = active.filter(c => {
-          const recipient = String(c['Recipient Name'] || '').toLowerCase();
-          return vendorNeedles.some(needle => recipient.includes(needle));
-        });
-        const dropped = before - active.length;
-        if (dropped > 0) debug(`[search] vendor scope kept ${active.length} of ${before} contracts matching`, intent.vendors);
-      }
-    }
-
-    if (active.length === 0) {
-      this._track('empty_state', { query: label.slice(0, 40), has_territory: !!territory });
-      this.replaceLoading(loadingId, this.buildEmptyTurn(label));
-      return;
-    }
-
-    const m = analyzeMarket(active, label);
-    const spec = buildCardSpec(m, label, sellerLens, territory);
-
-    if (!spec) {
-      this.replaceLoading(loadingId, this.buildEmptyTurn(label));
-      return;
-    }
-
-    // Attach the router's warm framing sentence if we got one. Rendered
-    // above the verdict so the user sees Mo acknowledge what they asked
-    // before the data drops.
-    if (intent.framing) spec.framing = intent.framing;
-
-    // Cache for follow-up "ask Mo" turns and refines
-    this.state.lastCardSpec = spec;
-    this.state.lastMarketMetrics = m;
-    this.state.lastQuery = label;
-    this.state.lastSearchIntent = intent;
-    this._askMoHistory = [];
-
-    this._track('card_render', { face: spec.verdict.face, contracts: spec.sourceCount, has_lens: !!sellerLens, has_territory: !!territory });
-
-    // Track Mo's response in recent turns for the next router call
-    this._recentTurns.push({ role: 'mo', text: `Showed card: ${label} · ${spec.verdict.text}` });
-
-    this.replaceLoading(loadingId, this.buildMoTurn(spec));
-  },
-
-  // Program office acronym map. These are well-known federal program
-  // offices whose acronyms don't cleanly match a USASpending subtier but
-  // ARE commonly used by federal sellers. For each entry we store the
-  // canonical full name (used as an additional keyword so contract
-  // descriptions match) and the parent subtier agency (used as a scope
-  // filter if the router didn't already specify one).
-  //
-  // Keep this map small and correct. Adding speculative entries is worse
-  // than leaving them out — a bad match sends a seller to empty results
-  // under a false pretense.
-  _PROGRAM_OFFICES: {
-    // Air Force centers
-    'AFLCMC':  { fullName: 'Air Force Life Cycle Management Center', parent: { tier: 'subtier', name: 'Department of the Air Force', toptier_name: 'Department of Defense' } },
-    'AFRL':    { fullName: 'Air Force Research Laboratory', parent: { tier: 'subtier', name: 'Department of the Air Force', toptier_name: 'Department of Defense' } },
-    'AFMC':    { fullName: 'Air Force Materiel Command', parent: { tier: 'subtier', name: 'Department of the Air Force', toptier_name: 'Department of Defense' } },
-    'ACC':     { fullName: 'Air Combat Command', parent: { tier: 'subtier', name: 'Department of the Air Force', toptier_name: 'Department of Defense' } },
-    'AFSOC':   { fullName: 'Air Force Special Operations Command', parent: { tier: 'subtier', name: 'Department of the Air Force', toptier_name: 'Department of Defense' } },
-    'SMC':     { fullName: 'Space and Missile Systems Center', parent: { tier: 'subtier', name: 'United States Space Force', toptier_name: 'Department of Defense' } },
-    'SSC':     { fullName: 'Space Systems Command', parent: { tier: 'subtier', name: 'United States Space Force', toptier_name: 'Department of Defense' } },
-    // Navy commands
-    'NAVAIR':  { fullName: 'Naval Air Systems Command', parent: { tier: 'subtier', name: 'Department of the Navy', toptier_name: 'Department of Defense' } },
-    'NAVSEA':  { fullName: 'Naval Sea Systems Command', parent: { tier: 'subtier', name: 'Department of the Navy', toptier_name: 'Department of Defense' } },
-    'NAVWAR':  { fullName: 'Naval Information Warfare Systems Command', parent: { tier: 'subtier', name: 'Department of the Navy', toptier_name: 'Department of Defense' } },
-    'SPAWAR':  { fullName: 'Naval Information Warfare Systems Command', parent: { tier: 'subtier', name: 'Department of the Navy', toptier_name: 'Department of Defense' } }, // legacy name
-    'NAVSUP':  { fullName: 'Naval Supply Systems Command', parent: { tier: 'subtier', name: 'Department of the Navy', toptier_name: 'Department of Defense' } },
-    'ONR':     { fullName: 'Office of Naval Research', parent: { tier: 'subtier', name: 'Department of the Navy', toptier_name: 'Department of Defense' } },
-    // Army commands
-    'AMC':     { fullName: 'Army Materiel Command', parent: { tier: 'subtier', name: 'Department of the Army', toptier_name: 'Department of Defense' } },
-    'CECOM':   { fullName: 'Army Communications-Electronics Command', parent: { tier: 'subtier', name: 'Department of the Army', toptier_name: 'Department of Defense' } },
-    'SMDC':    { fullName: 'Army Space and Missile Defense Command', parent: { tier: 'subtier', name: 'Department of the Army', toptier_name: 'Department of Defense' } },
-    'NETCOM':  { fullName: 'Network Enterprise Technology Command', parent: { tier: 'subtier', name: 'Department of the Army', toptier_name: 'Department of Defense' } },
-    'ERDC':    { fullName: 'Army Engineer Research and Development Center', parent: { tier: 'subtier', name: 'Department of the Army', toptier_name: 'Department of Defense' } },
-  },
-
-  // Check keywords for program-office acronyms and expand them. Adds the
-  // full name as an additional keyword and sets the parent agency if the
-  // router didn't already specify one. Non-destructive — preserves any
-  // other keywords and overrides nothing that's already set.
-  _expandProgramOfficeAcronyms(intent) {
-    const keywords = Array.isArray(intent.keywords) ? intent.keywords : [];
-    if (keywords.length === 0) return intent;
-
-    // Look for any keyword that matches a known acronym (case-insensitive,
-    // trimmed). Keep the original acronym in keywords for matches against
-    // descriptions that use the short form, and add the full name so
-    // descriptions that spell it out also match.
-    let matched = null;
-    for (const kw of keywords) {
-      const upper = String(kw || '').trim().toUpperCase();
-      if (this._PROGRAM_OFFICES[upper]) {
-        matched = { acronym: upper, ...this._PROGRAM_OFFICES[upper] };
-        break; // first match wins
-      }
-    }
-    if (!matched) return intent;
-
-    debug('[program-office] expanding', matched.acronym, '→', matched.fullName);
-
-    const expanded = { ...intent };
-    // Add the full name as a keyword if not already present
-    if (!keywords.some(k => String(k || '').toLowerCase() === matched.fullName.toLowerCase())) {
-      expanded.keywords = [...keywords, matched.fullName];
-    }
-    // Only set parent agency if router didn't already specify one —
-    // avoid overriding explicit user intent
-    if (!expanded.agency) {
-      expanded.agency = matched.parent;
-    }
-
-    return expanded;
-  },
-
-  // Apply simple post-fetch filters that the router may put on a search intent.
-  // Not a full refine — these are lightweight filters (expiring window, amount
-  // bounds, vendor allow/block, set-aside only) that don't change the USASpending
-  // query itself.
-  _applyInlineFilters(contracts, intent) {
-    let filtered = contracts;
-    const now = Date.now();
-
-    if (intent.expiring_only) {
-      const exp90 = now + 90 * 86400000;
-      filtered = filtered.filter(c => c._endTs > now && c._endTs <= exp90);
-    }
-    if (typeof intent.min_amount === 'number') {
-      filtered = filtered.filter(c => (parseFloat(c['Award Amount']) || 0) >= intent.min_amount);
-    }
-    if (typeof intent.max_amount === 'number') {
-      filtered = filtered.filter(c => (parseFloat(c['Award Amount']) || 0) <= intent.max_amount);
-    }
-    if (intent.set_aside_only) {
-      filtered = filtered.filter(c => !!c['Type of Set Aside']);
-    }
-    if (Array.isArray(intent.only_vendors) && intent.only_vendors.length > 0) {
-      const allow = new Set(intent.only_vendors.map(v => Utils.normalizeVendorName(v.toUpperCase())));
-      filtered = filtered.filter(c => allow.has(c['Recipient Name']));
-    }
-    if (Array.isArray(intent.exclude_vendors) && intent.exclude_vendors.length > 0) {
-      const block = new Set(intent.exclude_vendors.map(v => Utils.normalizeVendorName(v.toUpperCase())));
-      filtered = filtered.filter(c => !block.has(c['Recipient Name']));
-    }
-    return filtered;
-  },
-
-  // ── runRefine: modify the active card and re-run, or filter in-browser
-  async runRefine(intent, loadingId) {
-    const lastIntent = this.state.lastSearchIntent;
-    const lastM = this.state.lastMarketMetrics;
-    if (!lastIntent || !lastM) {
-      // No active search to refine — fall back to a clarify
-      this.replaceLoading(loadingId, this.buildClarifyTurn('Run a search first, then I can refine it.'));
-      return;
-    }
-
-    const mods = intent.modifications || {};
-
-    // ── In-browser refine (no API call) ────────────────────────
-    // Used for filters that operate on already-fetched data: only_vendors,
-    // exclude_vendors, min_amount, max_amount, expiring_only, set_aside_only.
-    if (intent.in_browser_only) {
-      const filtered = this._filterContractsInBrowser(this.state.lastMarketMetrics, mods);
-      if (filtered.length === 0) {
-        this.replaceLoading(loadingId, this.buildEmptyTurn(intent.label || 'that filter'));
-        return;
-      }
-      const m = analyzeMarket(filtered, this.state.lastQuery + ' · ' + (intent.label || 'refined'));
-      const newLabel = (this.state.lastQuery || 'market') + ' · ' + (intent.label || 'refined');
-      // Carry the previous turn's sellerLens and territory forward so the
-      // refined card still reads under the same seller context.
-      const carriedLens = lastIntent?.sellerLens || null;
-      const carriedTerritory = lastIntent?.territory || null;
-      const spec = buildCardSpec(m, newLabel, carriedLens, carriedTerritory);
-      this.state.lastCardSpec = spec;
-      this.state.lastMarketMetrics = m;
-      this.state.lastQuery = newLabel;
-      this._askMoHistory = [];
-      this._track('card_render', { face: spec.verdict.face, contracts: spec.sourceCount, refine: 'browser' });
-      this._recentTurns.push({ role: 'mo', text: `Refined to: ${newLabel}` });
-      this.replaceLoading(loadingId, this.buildMoTurn(spec));
-      return;
-    }
-
-    // ── API refine — modify the search intent and re-fetch ────
-    const newIntent = JSON.parse(JSON.stringify(lastIntent)); // deep copy
-    if (mods.territory !== undefined) newIntent.territory = mods.territory;
-    if (mods.agency) newIntent.agency = mods.agency;
-    if (Array.isArray(mods.additional_keywords) && mods.additional_keywords.length > 0) {
-      newIntent.keywords = [...(newIntent.keywords || []), ...mods.additional_keywords];
-    }
-
-    newIntent.label = intent.label || lastIntent.label;
-    return this.runSearch(newIntent, loadingId);
-  },
-
-  // ── runCompare: run a second search and render adjacent ─────
-  // For now, simply runs the second search as a new card. Side-by-side
-  // compare view is a future enhancement.
-  async runCompare(intent, loadingId) {
-    if (!intent.second_search) {
-      this.replaceLoading(loadingId, this.buildErrorTurn('Mo couldn\'t pull a comparison target from that.'));
-      return;
-    }
-    return this.runSearch({ ...intent.second_search, label: intent.label || intent.second_search.label }, loadingId);
-  },
-
-  // ── runSubawardSearch: fetch and render sub-relationships ───
-  // Uses the most recent search intent as the filter context so the
-  // subaward view stays scoped to the same market the user's looking at.
-  // Graceful empty state — no sub data disclosed is a real and common
-  // case, not an error.
-  async runSubawardSearch(loadingId) {
-    const searchIntent = this.state.lastSearchIntent;
-    const label = this.state.lastQuery || 'this market';
-
-    if (!searchIntent) {
-      this.replaceLoading(loadingId, this.buildErrorTurn('Run a search first, then Mo can pull the subaward data for it.'));
-      return;
-    }
-
-    let subs;
-    try {
-      subs = await API.fetchSubawards(searchIntent);
-    } catch (err) {
-      console.error('Subaward fetch error:', err);
-      this.replaceLoading(loadingId, this.buildErrorTurn(err.message || 'Something went sideways.', { retry: 'who subs here' }));
-      return;
-    }
-
-    if (!subs || subs.length === 0) {
-      this.replaceLoading(loadingId, this.buildSubawardEmptyTurn(label));
-      return;
-    }
-
-    const subSpec = analyzeSubawards(subs, label);
-    if (!subSpec) {
-      this.replaceLoading(loadingId, this.buildSubawardEmptyTurn(label));
-      return;
-    }
-
-    this.state.lastSubawardSpec = subSpec;
-    this._track('subaward_render', { market: label.slice(0, 40), primes: subSpec.stats[1].value, subs: subSpec.stats[2].value });
-    this._recentTurns.push({ role: 'mo', text: `Showed subaward card: ${label} · ${subSpec.verdict.text}` });
-
-    this.replaceLoading(loadingId, this.buildSubawardTurn(subSpec));
-  },
-
-  // ── buildSubawardTurn — subaward card renderer ──────────────
-  // Same visual DNA as the primary market card: face, verdict, action,
-  // stat row, section heads. Different content underneath: prime→sub
-  // relationships instead of prime awards, teaming signals instead of
-  // expiring contracts. Ends with the reporting-gap note.
+  // ── buildSubawardTurn — ported verbatim from v1 ─────────────────────────
   buildSubawardTurn(spec) {
     const wrap = document.createElement('div');
     wrap.className = 'turn-mo';
@@ -3329,330 +2543,7 @@ const App = {
     return wrap;
   },
 
-  _expandSubawardRows(btn) {
-    const moreRows = btn.parentElement.querySelector('.mo-subaward-more-rows');
-    if (moreRows) moreRows.style.display = 'block';
-    btn.remove();
-  },
-
-  buildSubawardEmptyTurn(label) {
-    const wrap = document.createElement('div');
-    wrap.className = 'turn-mo';
-    wrap.innerHTML = `
-      <div class="turn-mo-header">
-        <svg viewBox="0 0 40 40"><use href="#icon-face-watch"/></svg>
-        <span class="turn-mo-meta">Mo · just now</span>
-      </div>
-      <div class="turn-mo-card">
-        <div class="mo-card-actions">
-          <button class="mo-card-action" title="Dismiss" onclick="this.closest('.turn-mo').remove()" aria-label="Dismiss">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
-        </div>
-        <div class="mo-empty">
-          <div class="mo-empty-msg">No subaward data disclosed for <strong>${Html.escapeHtml(label)}</strong>. That's common — reporting is only mandatory above $30K and many primes disclose late or not at all. The prime awards are where you'd work instead.</div>
-        </div>
-      </div>
-    `;
-    return wrap;
-  },
-
-  // ── In-browser contract filter for instant refines ──────────
-  _filterContractsInBrowser(m, mods) {
-    // Reconstruct a contract list from the metrics' vendor->contracts map
-    let contracts = [];
-    Object.values(m.vendors).forEach(v => {
-      if (v.contracts) contracts.push(...v.contracts);
-    });
-    // Dedupe (same contract may appear in multiple vendor entries if vendor name normalization shifted)
-    const seen = new Set();
-    contracts = contracts.filter(c => {
-      const id = c['generated_internal_id'] || c['Award ID'];
-      if (seen.has(id)) return false;
-      seen.add(id);
-      return true;
-    });
-
-    if (Array.isArray(mods.only_vendors) && mods.only_vendors.length > 0) {
-      const allow = new Set(mods.only_vendors.map(v => Utils.normalizeVendorName(v.toUpperCase())));
-      contracts = contracts.filter(c => allow.has(c['Recipient Name']));
-    }
-    if (Array.isArray(mods.exclude_vendors) && mods.exclude_vendors.length > 0) {
-      const block = new Set(mods.exclude_vendors.map(v => Utils.normalizeVendorName(v.toUpperCase())));
-      contracts = contracts.filter(c => !block.has(c['Recipient Name']));
-    }
-    if (typeof mods.min_amount === 'number') {
-      contracts = contracts.filter(c => (parseFloat(c['Award Amount']) || 0) >= mods.min_amount);
-    }
-    if (typeof mods.max_amount === 'number') {
-      contracts = contracts.filter(c => (parseFloat(c['Award Amount']) || 0) <= mods.max_amount);
-    }
-    if (mods.expiring_only) {
-      const now = Date.now();
-      const exp90 = now + 90 * 86400000;
-      contracts = contracts.filter(c => c._endTs > now && c._endTs <= exp90);
-    }
-    if (mods.set_aside_only) {
-      contracts = contracts.filter(c => !!c['Type of Set Aside']);
-    }
-    return contracts;
-  },
-
-  // ── Ask Mo: stream prose against the existing card's data ───
-  // Ask-Mo conversation history per card. Reset on new search.
-  // Lambda's mo_chat REQUIRES history to be a non-empty array.
-  _askMoHistory: [],
-
-  async runAskMo(question, loadingId) {
-    const m = this.state.lastMarketMetrics;
-    const spec = this.state.lastCardSpec;
-    const hasCard = !!(m && spec);
-
-    // Coaching mode: no card, just a selling-situation question. Mo
-    // answers from her coaching patterns in the system prompt. No market_data.
-    const payload = hasCard ? this._buildAskMoPayload(m) : null;
-
-    // Build the "objective" string from the most recent search intent,
-    // if we have one. Gives Mo a little context about what the user
-    // is working on without requiring persistent lens/territory state.
-    const lastIntent = this.state.lastSearchIntent;
-    const lastLens = lastIntent?.sellerLens || null;
-    const lastTerritory = lastIntent?.territory || null;
-    const sectorLabel = lastTerritory && SECTORS[lastTerritory]
-      ? SECTORS[lastTerritory].label
-      : null;
-    const objective = lastLens
-      ? `I sell ${lastLens}.` + (sectorLabel ? ` Market scoped to ${sectorLabel} agencies.` : '')
-      : null;
-
-    // Build the turn shell with a streaming target.
-    // Each turn gets a unique ID so multiple ask-Mo turns in the same thread
-    // don't collide when getElementById() would otherwise return the oldest.
-    const streamId = 'mo-stream-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
-    const turnHtml = this.buildAskMoShell(streamId);
-    this.replaceLoading(loadingId, turnHtml);
-    const proseEl = document.getElementById(streamId);
-    const lastTurn = document.querySelectorAll('.turn-mo');
-    if (lastTurn.length) requestAnimationFrame(() => this.scrollToTurn(lastTurn[lastTurn.length - 1]));
-
-    // Lambda requires history to be a non-empty array. Seed it with a
-    // synthetic prior turn so Mo has continuity. The seed depends on mode.
-    if (this._askMoHistory.length === 0) {
-      if (hasCard) {
-        // Data mode — anchor to the current card's verdict
-        this._askMoHistory.push(
-          { role: 'user', content: `Give me an actionable plan in the "${this.state.lastQuery}" market.` },
-          { role: 'model', content: `${spec.verdict.text} ${spec.verdict.action}` }
-        );
-      } else {
-        // Coaching mode — generic opener so history is non-empty
-        this._askMoHistory.push(
-          { role: 'user', content: 'I want to talk through a situation on a federal deal.' },
-          { role: 'model', content: "Sure thing. Tell me what's going on." }
-        );
-      }
-    }
-    this._askMoHistory.push({ role: 'user', content: question });
-
-    try {
-      // Fire Mo's prose stream AND the chip suggestion in PARALLEL so the chip
-      // call is done (or nearly done) by the time Mo finishes streaming.
-      // The user reads Mo's prose while chips generate in the background.
-      const chipPromise = this._fetchGeminiChips(question);
-
-      const res = await fetch(AI_ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          request_type: 'mo_chat', persona: 'mo',
-          market_data: payload,
-          objective,
-          history: this._askMoHistory.slice(-6),
-          question,
-        }),
-      });
-      if (!res.ok) {
-        // Try to read JSON error body for a useful message
-        let errMsg = `Mo error ${res.status}`;
-        try {
-          const errBody = await res.json();
-          if (errBody && errBody.error) errMsg = errBody.error;
-        } catch(e) {}
-        throw new Error(errMsg);
-      }
-      await Html.streamInto(
-        proseEl, res,
-        async (fullText) => {
-          if (fullText) {
-            this._askMoHistory.push({ role: 'model', content: fullText });
-            // Summarize Mo's reply into recent turns for the router — keeps
-            // beginning and end so closing questions survive.
-            this._recentTurns.push({ role: 'mo', text: this._summarizeMoProse(fullText) });
-            if (this._recentTurns.length > 6) this._recentTurns = this._recentTurns.slice(-6);
-
-            // Await the chip promise that fired in parallel. By now (stream
-            // took 2-6s) it should already be resolved. Prefer Gemini's chips;
-            // fall back to rule-based if Gemini returned nothing usable.
-            let chips = null;
-            try { chips = await chipPromise; } catch (e) { chips = null; }
-            if (!chips || chips.length === 0) {
-              chips = this._pickAskMoChips(question, fullText);
-            }
-            this._renderAskMoChips(streamId, chips);
-
-            // Hallucination check: warn in console if Mo cited dollar amounts
-            // or contract IDs that aren't in the payload we sent
-            this._auditMoResponse(payload, fullText);
-
-            // Linkify contract IDs that ARE in the payload — turn them into
-            // tappable USASpending links inline in Mo's prose. This closes
-            // the trust gap: if Mo mentions W91RUS19F0174, the user can tap
-            // it and verify on USASpending instantly.
-            this._linkifyContractIds(proseEl, fullText, this.state.lastMarketMetrics);
-
-            // Linkify vendor mentions — first occurrence of each payload
-            // vendor becomes a LinkedIn People search link. So if Mo says
-            // "Booz Allen is defending the expiring work," tapping Booz
-            // Allen opens a LinkedIn search for their employees.
-            this._linkifyVendorNames(proseEl, this.state.lastMarketMetrics);
-
-            // Post-stream subaward probe — ONLY on Tell Me More. Fires the
-            // subaward fetch AFTER prose streaming finishes so it never
-            // delays the primary response. If results come back non-empty,
-            // we silently append a "Who's subbing here" chip below the
-            // prose. If empty or errored, nothing appears — user never
-            // knows a probe happened.
-            if (/\btell me more\b/i.test(question) && this.state.lastSearchIntent) {
-              this._appendSubawardChipIfAvailable(proseEl);
-            }
-          }
-        },
-        (msg) => { if (proseEl) proseEl.innerHTML = `<span style="color:var(--text-faint);">${Html.escapeHtml(msg)}</span>`; }
-      );
-    } catch (err) {
-      console.error('runAskMo error:', err);
-      if (proseEl) proseEl.innerHTML = `<span style="color:var(--text-faint);">${Html.escapeHtml(err.message || 'Mo had trouble with that one.')}</span>`;
-    }
-  },
-
-  // Fire the chip suggestion request to the Lambda. Resolves to an array of
-  // chips (may be empty). Fail-soft — returns null on any error so the caller
-  // falls back to rule-based chips.
-  async _fetchGeminiChips(question) {
-    try {
-      const cardSummary = this._buildCardSummary();
-      const res = await fetch(AI_ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          request_type: 'mo_suggest_chips',
-          card_summary: cardSummary,
-          last_user_message: question,
-          // last_mo_response isn't known until the stream completes, so we
-          // generate chips from the question + card summary alone. That's
-          // usually enough signal for federal-sales-style follow-ups, and it
-          // means chips are ready by the time Mo finishes streaming.
-          last_mo_response: null,
-          lens: this.state.lastSearchIntent?.sellerLens || null,
-          territory: this.state.lastSearchIntent?.territory || null,
-        }),
-      });
-      if (!res.ok) return null;
-      const data = await res.json();
-      return Array.isArray(data.chips) ? data.chips : null;
-    } catch (e) {
-      debug('[chips] fetch failed, falling back to rules:', e.message);
-      return null;
-    }
-  },
-
-  // Build the payload for mo_chat — the Lambda expects market_data in a shape
-  // with top_agencies, top_vendors, expiring_soon, stats, etc.
-  _buildAskMoPayload(m) {
-    const spec = this.state.lastCardSpec;
-    const topAgencies = Object.entries(m.agencies).sort((a,b) => b[1] - a[1]).slice(0, 8)
-      .map(([name, amt]) => ({ name, amount: amt }));
-    const topVendors = Object.entries(m.vendors).sort((a,b) => b[1].spend - a[1].spend).slice(0, 8)
-      .map(([name, v]) => ({ name, amount: v.spend, count: v.count, agencies: v.agencies.size }));
-    const now = new Date();
-    const expiring = (m.expiring || []).slice(0, 8).map(c => ({
-      vendor: c['Recipient Name'],
-      agency: c['Awarding Sub Agency'] || c['Awarding Agency'],
-      amount: c['Award Amount'],
-      end_date: c['End Date'],
-      days_left: Math.ceil((new Date(c['End Date']) - now) / 86400000),
-      description: (c['Description'] || '').slice(0, 120),
-      contract_id: c['Award ID'],
-    }));
-    const top3Share = topVendors.slice(0, 3).reduce((s, v) => s + v.amount, 0) / (m.total || 1);
-    const agencyConc = topAgencies.length > 0 ? topAgencies[0].amount / (m.total || 1) : 0;
-    return {
-      query: this.state.lastQuery,
-      query_type: m.queryType || 'keyword',
-      target_vendor: m.targetVendor || null,
-      formula_verdict: spec ? spec.verdict.text : null,
-      formula_action: spec ? spec.verdict.action : null,
-      total_value: m.total,
-      contract_count: m.contractCount,
-      stats: {
-        top3_vendor_share: Math.round(top3Share * 100),
-        agency_concentration: Math.round(agencyConc * 100),
-        expiring_count: (m.expiring || []).length,
-        recent_award_count: (m.recentAwards || []).length,
-        unique_vendors: Object.keys(m.vendors).length,
-        unique_agencies: Object.keys(m.agencies).length,
-        top_vehicles: Object.entries(m.vehicles || {}).sort((a,b) => b[1].spend - a[1].spend).slice(0, 4)
-          .map(([name, d]) => ({ name, spend: d.spend, count: d.count })),
-      },
-      top_agencies: topAgencies,
-      top_vendors: topVendors,
-      expiring_soon: expiring,
-    };
-  },
-
-  // ── Turn builders ──────────────────────────────────────────
-  appendUserTurn(text) {
-    const thread = document.getElementById('thread');
-    const div = document.createElement('div');
-    div.className = 'turn-user';
-    div.innerHTML = `<div class="turn-user-bubble">${Html.escapeHtml(text)}</div>`;
-    thread.appendChild(div);
-    // First turn of a thread: hide the greeting and move the ask bar back to
-    // its permanent footer position.
-    const greeting = document.getElementById('greeting');
-    if (greeting) greeting.style.display = 'none';
-    this._updateEmptyState();
-  },
-
-  appendLoadingTurn(message = 'Reading the data') {
-    const thread = document.getElementById('thread');
-    const id = 'loading-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
-    const div = document.createElement('div');
-    div.className = 'turn-loading';
-    div.id = id;
-    div.innerHTML = `
-      <svg viewBox="0 0 40 40"><use href="#icon-face-watch"/></svg>
-      <span>${Html.escapeHtml(message)}</span>
-      <span class="turn-loading-dots"><span></span><span></span><span></span></span>
-    `;
-    thread.appendChild(div);
-    return id;
-  },
-
-  replaceLoading(loadingId, htmlEl) {
-    const ld = document.getElementById(loadingId);
-    if (ld) ld.replaceWith(htmlEl);
-    requestAnimationFrame(() => {
-      // Render any treemap placeholders inside the freshly inserted turn
-      // using their real container width. Must be deferred until AFTER the
-      // element is in the DOM so clientWidth returns the real value.
-      initTreemaps(document);
-      const cards = document.querySelectorAll('.turn-mo');
-      const last = cards[cards.length - 1];
-      if (last) this.scrollToTurn(last);
-    });
-  },
-
+  // ── buildMoTurn — ported verbatim from v1 ─────────────────────────
   buildMoTurn(spec) {
     const wrap = document.createElement('div');
     wrap.className = 'turn-mo';
@@ -3768,71 +2659,10 @@ const App = {
     return wrap;
   },
 
-  buildAskMoShell(streamId) {
-    const wrap = document.createElement('div');
-    wrap.className = 'turn-mo';
-    wrap.innerHTML = `
-      <div class="turn-mo-header">
-        <svg viewBox="0 0 40 40"><use href="#icon-face-open"/></svg>
-        <span class="turn-mo-meta">Mo · just now</span>
-      </div>
-      <div class="turn-mo-card">
-        <div class="mo-card-actions">
-          <button class="mo-card-action" title="Dismiss" onclick="this.closest('.turn-mo').remove()" aria-label="Dismiss">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
-        </div>
-        <div class="mo-tell-more-prose" id="${streamId}"><span style="color:var(--text-faint);">Mo's thinking…</span></div>
-        <div class="mo-followups" id="${streamId}-chips" style="display:none; margin-top:16px;"></div>
-      </div>
-    `;
-    return wrap;
-  },
-
-  // Decide what follow-up chips to show under Mo's streamed response.
-  // Rule-based for now: intent + whether a card is active → fixed set.
-  // Each chip becomes a tap-to-ask. Keep max 4, keep short.
-  _pickAskMoChips(question, moResponse) {
-    const q = (question || '').toLowerCase();
-    const hasCard = !!this.state.lastCardSpec;
-    if (!hasCard) return [];
-
-    // Draft-outreach family
-    if (/draft|write|email|outreach|letter/.test(q)) {
-      return ['Make it shorter', 'More formal', 'Draft for a different agency', 'Who else should I contact?'];
-    }
-    // Teaming family
-    if (/team|partner|prime|channel|reseller|sub/.test(q)) {
-      return ['Draft outreach to a prime', 'Which one is easiest to approach?', 'Who\'s the incumbent?', 'Tell me more'];
-    }
-    // Incumbent/vendor family
-    if (/incumbent|who owns|who has|vendor|prime/.test(q)) {
-      return ['Where are they vulnerable?', 'Who could displace them?', 'Draft outreach', 'Tell me more'];
-    }
-    // Expiring family
-    if (/expir|recompet|ending|bridge/.test(q)) {
-      return ['Draft outreach on the biggest one', 'Who should I team with?', 'What vehicles cover this?', 'Tell me more'];
-    }
-    // Default / "tell me more" / "ok" / catch-all
-    return ['Who should I team with?', 'Draft outreach', 'What\'s expiring?', 'Where\'s the opening?'];
-  },
-
-  // Render chips inside the ask-Mo turn after the stream completes.
-  _renderAskMoChips(streamId, chips) {
-    if (!chips || chips.length === 0) return;
-    const slot = document.getElementById(streamId + '-chips');
-    if (!slot) return;
-    slot.innerHTML = chips.map(c =>
-      `<button class="mo-followup" data-ask="${Html.escapeHtml(c)}">${Html.escapeHtml(c)}</button>`
-    ).join('');
-    slot.style.display = '';
-  },
-
+  // ── buildEmptyTurn — ported verbatim from v1 ─────────────────────────
   buildEmptyTurn(query) {
     const wrap = document.createElement('div');
     wrap.className = 'turn-mo';
-    const lastTerr = this.state.lastSearchIntent?.territory || null;
-    const territoryLabel = lastTerr && SECTORS[lastTerr] ? ` in ${SECTORS[lastTerr].label}` : '';
 
     // Different message depending on whether it looks like a real query
     // that just didn't hit, vs. something that was probably misrouted.
@@ -3840,12 +2670,10 @@ const App = {
     // a longer query suggests Mo was genuinely looking and came up short.
     const isShort = (query || '').trim().split(/\s+/).length <= 2;
     const msg = isShort
-      ? `No contracts came back for <strong>${Html.escapeHtml(query)}</strong>${territoryLabel}. Either the term's too narrow for USASpending or I'm reading it wrong. Try a product name, vendor, agency, or NAICS code.`
-      : `Couldn't find matching contracts for <strong>${Html.escapeHtml(query)}</strong>${territoryLabel}. Try a shorter phrase, a vendor name, or an agency.`;
+      ? `No contracts came back for <strong>${Html.escapeHtml(query)}</strong>. Either the term's too narrow for USASpending or I'm reading it wrong. Try a product name, vendor, agency, or NAICS code.`
+      : `Couldn't find matching contracts for <strong>${Html.escapeHtml(query)}</strong>. Try a shorter phrase, a vendor name, or an agency.`;
 
-    const suggestions = lastTerr && SECTORS[lastTerr]
-      ? ['Cybersecurity', 'Cloud', 'AI', '541512']
-      : ['Zero Trust', 'CMMC', 'Cybersecurity', 'NAICS 541512'];
+    const suggestions = ['Zero Trust', 'CMMC', 'Cybersecurity', 'NAICS 541512'];
     let chips = suggestions.map(s => `<button class="mo-followup" data-ask="${Html.escapeHtml(s)}">${Html.escapeHtml(s)}</button>`).join('');
     wrap.innerHTML = `
       <div class="turn-mo-header">
@@ -3867,6 +2695,7 @@ const App = {
     return wrap;
   },
 
+  // ── buildErrorTurn — ported verbatim from v1 ─────────────────────────
   buildErrorTurn(msg, opts = {}) {
     // Translate raw technical errors into Mo-voiced messages. Upstream
     // services (USASpending, Gemini) occasionally hiccup — surface that
@@ -3927,7 +2756,7 @@ const App = {
     return wrap;
   },
 
-  // ── buildClarifyTurn — Mo asks one question to disambiguate
+  // ── buildClarifyTurn — ported verbatim from v1 ─────────────────────────
   buildClarifyTurn(question) {
     const wrap = document.createElement('div');
     wrap.className = 'turn-mo';
@@ -3948,49 +2777,6 @@ const App = {
     return wrap;
   },
 
-  // Reset the thread to the greeting. Wipes card cache so next text
-  // is a search. Invoked from the About modal's "Start a new thread" button.
-  resetThread() {
-    const thread = document.getElementById('thread');
-    // Remove all turns but keep the greeting node
-    [...thread.querySelectorAll('.turn-user, .turn-mo, .turn-loading')].forEach(el => el.remove());
-    const greet = document.getElementById('greeting');
-    if (greet) greet.style.display = '';
-    this.state.lastCardSpec = null;
-    this.state.lastMarketMetrics = null;
-    this.state.lastQuery = null;
-    this.state.lastSearchIntent = null;
-    this.state.lastSubawardSpec = null;
-    this._askMoHistory = [];
-    this._recentTurns = [];
-    document.getElementById('jumpLatest').classList.remove('visible');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-    // Re-park the ask bar under the greeting
-    this._updateEmptyState();
-    this._track('reset_thread');
-  },
-
-  // Full reset. Same as resetThread now since there's no persistent
-  // identity state to clear. Kept as a separate entry point because the
-  // About modal button still calls it, and because we may re-introduce
-  // persistent preferences later.
-  resetEverything() {
-    this.resetThread();
-    this._track('reset_everything');
-  },
-
-  // About modal — opens from the hamburger menu.
-  openAbout() {
-    document.getElementById('aboutBackdrop').classList.add('open');
-    document.getElementById('aboutModal').classList.add('open');
-    document.getElementById('aboutModal').setAttribute('aria-hidden', 'false');
-    this._track('open_about');
-  },
-  closeAbout() {
-    document.getElementById('aboutBackdrop').classList.remove('open');
-    document.getElementById('aboutModal').classList.remove('open');
-    document.getElementById('aboutModal').setAttribute('aria-hidden', 'true');
-  },
 };
 
 // ── Treemap renderer (slice & dice, single row) ──────────────
@@ -4142,6 +2928,12 @@ function initTreemaps(root) {
     host.setAttribute('data-rendered', '1');
   });
 }
+
+// Expose App globally so inline HTML onclick/onkeydown handlers can reach
+// it. Required because <script type="module"> scopes are NOT global by
+// default, unlike classic scripts. The reset button, About modal close,
+// per-turn dismiss, etc. all call window.App.*() from inline attrs.
+window.App = App;
 
 App.init();
 
