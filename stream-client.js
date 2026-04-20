@@ -107,6 +107,11 @@ export function dataAttrsToResolverInput(attrs) {
   // before fetching USASpending. The resulting card shows the competitive
   // landscape in one view.
   if (attrs.competitors === 'true') input._competitors = true;
+  // Subaward mode: when Mo emits subawards="true", the browser fetches from
+  // USASpending's subaward endpoint instead of prime. The card is a different
+  // shape (prime → sub relationships, not primes alone) so we route this
+  // through a different fetch + render path in askMo.
+  if (attrs.subawards === 'true') input._subawards = true;
   return input;
 }
 
@@ -142,6 +147,14 @@ const AWARD_FIELDS = [
   'Awarding Office', 'Award Amount', 'Description', 'generated_internal_id',
   'Start Date', 'End Date', 'NAICS', 'PSC',
   'Contract Award Type', 'Type of Set Aside',
+];
+// Subawards endpoint returns different fields — prime+sub relationships,
+// not prime contracts alone. Same URL, different shape.
+const SUBAWARD_FIELDS = [
+  'Sub-Award ID', 'Sub-Awardee Name', 'Sub-Award Amount', 'Sub-Award Date',
+  'Prime Award ID', 'Prime Recipient Name',
+  'Awarding Agency', 'Awarding Sub Agency',
+  'prime_award_generated_internal_id', 'Description', 'NAICS',
 ];
 
 function trailing12Mo() {
@@ -193,6 +206,129 @@ export async function fetchUsaspending(resolverInput, endpoint) {
 
   // Apply post-filters (vendor scope, agency scope, amount bounds, expiring)
   return applyPostFilters(raw, postFilters);
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// fetchSubawards — pull prime→sub relationships from USASpending
+// ─────────────────────────────────────────────────────────────────────
+//
+// Same URL as fetchUsaspending (/search/spending_by_award/), but the payload
+// has `subawards: true` at the top level which flips USASpending into
+// subaward mode — it returns sub-tier records with Prime Recipient Name +
+// Sub-Awardee Name instead of prime contracts.
+//
+// Returns an array of { prime, sub, amount, agency, desc, date, link } objects
+// ready for the subaward card renderer. No post-filtering is applied here
+// (subaward data is already narrow) — the filter just scopes the result set.
+// ─────────────────────────────────────────────────────────────────────
+export async function fetchSubawards(resolverInput, endpoint) {
+  const { filters: resolvedFilters } = resolve(resolverInput);
+  const filters = {
+    time_period: trailing12Mo(),
+    award_type_codes: CONTRACT_TYPES,
+    ...resolvedFilters,
+  };
+
+  const payload = {
+    subawards: true,
+    filters,
+    fields: SUBAWARD_FIELDS,
+    limit: 100,
+    sort: 'Sub-Award Amount',
+    order: 'desc',
+  };
+
+  const res = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      request_type: 'usaspending_proxy',
+      endpoint: '/search/spending_by_award/',
+      payload,
+    }),
+  });
+
+  if (!res.ok) throw new Error(`subawards API ${res.status}`);
+  const body = await res.json();
+  const raw = Array.isArray(body.results) ? body.results : [];
+
+  // Shape for the subaward card renderer. Pulled from govhoo's structure
+  // so the existing buildSubawardTurn can consume these without changes.
+  return raw.map(s => ({
+    prime: s['Prime Recipient Name'] || 'Unknown Prime',
+    sub: s['Sub-Awardee Name'] || 'Unknown Sub',
+    amount: parseFloat(s['Sub-Award Amount']) || 0,
+    agency: s['Awarding Sub Agency'] || s['Awarding Agency'] || '',
+    desc: s['Description'] || '',
+    date: s['Sub-Award Date'] || '',
+    primeAwardId: s['prime_award_generated_internal_id'] || '',
+    subAwardId: s['Sub-Award ID'] || '',
+    naics: s['NAICS'] || '',
+    _raw: s,
+  }));
+}
+
+// Compact payload summary for Mo's grounded second-pass call when she
+// pulled subawards. Tells her who's moving sub work, top primes by
+// sub spend, top subs by take.
+export function summarizeSubawardsForMo(subs, resolverInput) {
+  if (!subs || subs.length === 0) {
+    return `No subaward records returned. Tell the user subaward data is sparse for this slice and suggest they look at the prime-level recompete signals instead.`;
+  }
+  const total = subs.reduce((s, r) => s + (r.amount || 0), 0);
+
+  // Top primes (who's handing out the sub work)
+  const primeMap = new Map();
+  for (const s of subs) {
+    primeMap.set(s.prime, (primeMap.get(s.prime) || 0) + s.amount);
+  }
+  const topPrimes = [...primeMap.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([n, a]) => `${n} ($${(a / 1_000_000).toFixed(1)}M in sub work given out)`);
+
+  // Top subs (who's taking it)
+  const subMap = new Map();
+  for (const s of subs) {
+    subMap.set(s.sub, (subMap.get(s.sub) || 0) + s.amount);
+  }
+  const topSubs = [...subMap.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([n, a]) => `${n} ($${(a / 1_000_000).toFixed(1)}M in sub work received)`);
+
+  // Subs working with multiple primes = the leverage players
+  const subPrimes = new Map();
+  for (const s of subs) {
+    if (!subPrimes.has(s.sub)) subPrimes.set(s.sub, new Set());
+    subPrimes.get(s.sub).add(s.prime);
+  }
+  const multiPrimeSubs = [...subPrimes.entries()]
+    .filter(([, primes]) => primes.size >= 2)
+    .sort((a, b) => b[1].size - a[1].size)
+    .slice(0, 5)
+    .map(([sub, primes]) => `${sub} (works with ${primes.size} primes)`);
+
+  const queryDesc = Object.entries(resolverInput)
+    .filter(([k, v]) => v != null && v !== '' && !k.startsWith('_'))
+    .map(([k, v]) => `${k}=${Array.isArray(v) ? v.join('|') : v}`)
+    .join(', ');
+
+  return `Query: ${queryDesc || '(no filters)'} (SUBAWARD CUT)
+Total sub work (top ${subs.length} subs, last 12mo): $${(total / 1_000_000).toFixed(1)}M
+Unique primes giving out sub work: ${primeMap.size}
+Unique subs receiving work: ${subMap.size}
+
+Top primes by sub work disbursed:
+${topPrimes.map(p => '  - ' + p).join('\n')}
+
+Top subs by work received:
+${topSubs.map(s => '  - ' + s).join('\n')}
+
+Subs with leverage (working for multiple primes):
+${multiPrimeSubs.length > 0 ? multiPrimeSubs.map(s => '  - ' + s).join('\n') : '  (none — subs here are locked to single primes)'}
+
+Your job: tell the seller who's REALLY doing the work behind the primes. Call out leverage plays (subs working multiple primes are free agents worth pursuing). If a sub is taking a huge share, that's who actually delivers the capability. The prime is the contract vehicle; the sub is the hands.`;
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -462,6 +598,63 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
         // Fall through with the original single-vendor input. The card
         // will still render, just without competitors.
       }
+    }
+
+    // ── Subaward branch ───────────────────────────────────────────
+    // If Mo emitted subawards="true", we short-circuit the normal prime
+    // fetch and instead hit USASpending's subaward mode. Different card,
+    // different payload summary, different render path. Returns early
+    // with its own second stream — none of the prime-path logic below
+    // runs for subaward turns.
+    if (resolverInput?._subawards) {
+      let subs;
+      try {
+        subs = await fetchSubawards(resolverInput, endpoint);
+      } catch (subErr) {
+        console.error('[askMo] subaward fetch failed:', subErr);
+        render.renderError(`Couldn't pull subaward data. ${subErr.message || ''}`.trim());
+        return { mode: 'error', error: subErr.message };
+      }
+
+      if (!subs || subs.length === 0) {
+        // Subaward data is legitimately sparse in federal. Not every
+        // contract has visible sub-tier reporting. Tell the user honestly
+        // instead of rendering an empty card.
+        render.renderError(`I don't see subaward data for that slice. Federal subaward reporting is patchy — smaller task orders and some vehicles don't require it. Try a different agency or a broader vendor filter.`);
+        return { mode: 'no_subaward_data' };
+      }
+
+      // Render the subaward card
+      render.renderSubawardCard(cardRef, subs, resolverInput);
+
+      // Build subaward-specific payload summary
+      const subSummary = summarizeSubawardsForMo(subs, resolverInput);
+
+      const historyForSecondCall = [
+        ...fullHistory,
+        { role: 'model', content: preTagText + '\n\n[subaward data pulled; see card]' },
+      ];
+
+      const secondAbort = new AbortController();
+      const secondPassFull = await streamOnce({
+        endpoint,
+        history: historyForSecondCall,
+        activeCardSummary,
+        payloadSummary: subSummary,
+        abortController: secondAbort,
+        onChunk: (accumulated) => {
+          render.streamPostTagProse(accumulated);
+        },
+      });
+
+      render.complete();
+      return {
+        mode: 'subaward',
+        preTagText,
+        subs,
+        resolverInput,
+        postTagText: secondPassFull,
+      };
     }
 
     let rows;

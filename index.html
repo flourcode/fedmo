@@ -2465,6 +2465,45 @@ const App = {
         postProseEl.innerHTML = Html.parseAiMarkdown(text);
       },
 
+      // Subaward card renderer. Takes the shaped subaward array from
+      // fetchSubawards (prime+sub pairs with amount, agency, desc) and
+      // routes it through the existing v1-ported analyzeSubawards +
+      // buildSubawardTurn pipeline.
+      renderSubawardCard: (cardRef, subs, resolverInput) => {
+        if (!cardRef) return;
+        if (!subs || subs.length === 0) {
+          cardRef.innerHTML = '<div class="mo-empty-msg">No subaward data came back for that slice.</div>';
+          return;
+        }
+        // Convert the shaped stream-client output into the row shape
+        // analyzeSubawards expects (matches USASpending's raw field names
+        // because v1's analyzer reads from those directly).
+        const rows = subs.map(s => ({
+          'Prime Recipient Name': s.prime,
+          'Sub-Awardee Name': s.sub,
+          'Sub-Award Amount': s.amount,
+          'Sub-Award Date': s.date,
+          'Awarding Agency': s.agency,
+          'Awarding Sub Agency': s.agency,
+          'Description': s.desc,
+          'NAICS': s.naics,
+          'prime_award_generated_internal_id': s.primeAwardId,
+        }));
+        const label = this._labelForResolverInput(resolverInput);
+        const spec = analyzeSubawards(rows, label);
+        if (!spec) {
+          cardRef.innerHTML = '<div class="mo-empty-msg">Subaward data came back but I couldn\'t shape it.</div>';
+          return;
+        }
+        // Use the v1 builder, lift its card body into our composite shell
+        const fullTurn = this.buildSubawardTurn(spec);
+        const cardBody = fullTurn.querySelector('.turn-mo-card');
+        cardRef.innerHTML = '';
+        if (cardBody) cardRef.appendChild(cardBody);
+        else cardRef.appendChild(fullTurn);
+        this._track('subaward_card_render', { rows: subs.length });
+      },
+
       // Show an error state inside the turn. Keeps any successfully-rendered
       // pre-tag prose and card above, only the bottom shows the error.
       renderError: (msg) => {
