@@ -1299,6 +1299,91 @@ const Utils = {
     return name;
   },
 
+  // Federal legal entity names don't match what people list on LinkedIn.
+  // "MAXIMUS FEDERAL SERVICES, INC." returns zero LinkedIn employees, but
+  // "Maximus" returns thousands. Normalize to the brand-ish core that a
+  // person would actually write on their profile.
+  //
+  // Strategy: explicit brand map for the top federal primes (no guessing),
+  // then conservative suffix stripping.
+  _LINKEDIN_BRAND_MAP: {
+    'GENERAL DYNAMICS INFORMATION TECHNOLOGY': 'GDIT',
+    'GENERAL DYNAMICS IT': 'GDIT',
+    'SCIENCE APPLICATIONS INTERNATIONAL': 'SAIC',
+    'SCIENCE APPLICATIONS INTERNATIONAL CORPORATION': 'SAIC',
+    'WORLD WIDE TECHNOLOGY': 'WWT',
+    'WORLDWIDE TECHNOLOGY': 'WWT',
+    'BOOZ ALLEN HAMILTON': 'Booz Allen Hamilton',
+    'CARAHSOFT TECHNOLOGY': 'Carahsoft',
+    'LEIDOS INNOVATIONS': 'Leidos',
+    'LOCKHEED MARTIN CORPORATION': 'Lockheed Martin',
+    'NORTHROP GRUMMAN SYSTEMS': 'Northrop Grumman',
+    'NORTHROP GRUMMAN CORPORATION': 'Northrop Grumman',
+    'RAYTHEON TECHNOLOGIES': 'Raytheon',
+    'RAYTHEON COMPANY': 'Raytheon',
+    'L3HARRIS TECHNOLOGIES': 'L3Harris',
+    'HONEYWELL INTERNATIONAL': 'Honeywell',
+    'INTERNATIONAL BUSINESS MACHINES': 'IBM',
+    'AMAZON WEB SERVICES': 'Amazon Web Services',
+    'MICROSOFT CORPORATION': 'Microsoft',
+    'GOOGLE LLC': 'Google',
+    'ORACLE AMERICA': 'Oracle',
+    'SALESFORCE.COM': 'Salesforce',
+    'PALO ALTO NETWORKS': 'Palo Alto Networks',
+    'ACCENTURE FEDERAL SERVICES': 'Accenture Federal',
+    'DELOITTE CONSULTING': 'Deloitte',
+    'DELOITTE AND TOUCHE': 'Deloitte',
+    'MAXIMUS FEDERAL SERVICES': 'Maximus',
+    'MAXIMUS': 'Maximus',
+    'CACI INC - FEDERAL': 'CACI',
+    'CACI NATIONAL SECURITY': 'CACI',
+    'CACI INTERNATIONAL': 'CACI',
+    'PERATON INC': 'Peraton',
+    'MANTECH INTERNATIONAL': 'ManTech',
+    'MANTECH ADVANCED SYSTEMS INTERNATIONAL': 'ManTech',
+    'KBR SERVICES': 'KBR',
+    'KBR WYLE SERVICES': 'KBR',
+  },
+
+  // Suffixes/trailing tokens that almost always hurt LinkedIn matching.
+  // Conservative — only strip obvious legal and geographic tails.
+  _LINKEDIN_STRIP_TRAILING: [
+    'INC', 'LLC', 'LTD', 'CORP', 'CORPORATION', 'CO', 'COMPANY',
+    'PLC', 'LLP', 'LP', 'LIMITED', 'HOLDINGS', 'GROUP',
+    // Common geographic tails from legal entity names
+    'GAITHERSBURG', 'HERNDON', 'RESTON', 'ARLINGTON', 'MCLEAN',
+    'CHANTILLY', 'TYSONS', 'FAIRFAX', 'FALLS CHURCH',
+  ],
+
+  linkedinSearchTerm(vendorName) {
+    if (!vendorName) return '';
+    const upper = vendorName.toUpperCase().trim();
+
+    // Exact brand map match — highest confidence
+    if (this._LINKEDIN_BRAND_MAP[upper]) return this._LINKEDIN_BRAND_MAP[upper];
+
+    // Try without legal suffix chunks — match any brand-map key that's
+    // a prefix of the normalized name
+    for (const [legalName, brand] of Object.entries(this._LINKEDIN_BRAND_MAP)) {
+      if (upper.startsWith(legalName + ' ') || upper.startsWith(legalName + ',')) {
+        return brand;
+      }
+    }
+
+    // Strip legal punctuation and suffix tokens
+    let name = upper.replace(/[.,]/g, '').trim();
+    const tokens = name.split(/\s+/);
+    while (tokens.length > 1 && this._LINKEDIN_STRIP_TRAILING.includes(tokens[tokens.length - 1])) {
+      tokens.pop();
+    }
+    // Strip trailing ", INC" or "INCORPORATED" style remainders
+    name = tokens.join(' ');
+
+    // Title case the result so the LinkedIn search URL looks clean to
+    // anyone inspecting the link. LinkedIn itself doesn't care about case.
+    return Utils.titleCase(name);
+  },
+
   filterActiveContracts(awards) {
     const nowMs = Date.now();
     return awards.filter(a => {
@@ -2064,14 +2149,30 @@ const Html = {
   parseAiMarkdown(rawText) {
     if (!rawText) return '';
     let text = rawText.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '').replace(/<mark>/gi, '').replace(/<\/mark>/gi, '').replace(/\\\$/g, '$').trim();
-    return text
-      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    // Escape HTML first
+    text = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+    // Bold and italic — support both asterisk and underscore syntaxes.
+    // Order matters: triple-character first, then double, then single.
+    text = text
       .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
+      .replace(/___(.+?)___/g, '<strong><em>$1</em></strong>')
       .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/__(.+?)__/g, '<strong>$1</strong>')
       .replace(/\*(.+?)\*/g, '<em>$1</em>')
+      // Single underscore italic — more restrictive to avoid mangling
+      // snake_case identifiers and vendor names with underscores. Require
+      // letter boundaries on both ends.
+      .replace(/(^|[\s(])_([^_\n]+?)_(?=[\s).,!?;:]|$)/g, '$1<em>$2</em>');
+
+    // Paragraph + line breaks. Do this AFTER inline formatting so the
+    // replacements above don't have to deal with partial tags.
+    text = text
       .replace(/\n\n/g, '</p><p>')
       .replace(/\n/g, '<br>')
       .replace(/^(.+)$/, '<p>$1</p>');
+
+    return text;
   },
 
   async streamInto(targetEl, response, onDone, onError) {
@@ -2363,7 +2464,7 @@ const App = {
         case 'compare':      await this.runCompare(effectiveIntent, loadingId); break;
         case 'subaward_search': await this.runSubawardSearch(loadingId); break;
         case 'reset':        this.replaceLoading(loadingId, document.createDocumentFragment()); this.resetThread(); break;
-        case 'clarify':      this.replaceLoading(loadingId, this.buildClarifyTurn(effectiveIntent.question || 'What are you trying to find?')); break;
+        case 'clarify':      this.replaceLoading(loadingId, this.buildClarifyTurn(effectiveIntent.question || "Not sure what you're looking for. Try a vendor, agency, or what you sell.")); break;
         default:
           this.replaceLoading(loadingId, this.buildErrorTurn('Mo gave an unexpected answer. Try rephrasing.'));
       }
@@ -2633,7 +2734,7 @@ const App = {
         // "BOOZ ALLEN HAMILTON" in payload renders as "Booz Allen Hamilton"
         // if that's how it appeared in the prose.
         const displayText = mm.matched;
-        const liUrl = `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent('"' + mm.vendor + '"')}&origin=GLOBAL_SEARCH_HEADER`;
+        const liUrl = `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(Utils.linkedinSearchTerm(mm.vendor))}&origin=GLOBAL_SEARCH_HEADER`;
         const a = document.createElement('a');
         a.href = liUrl;
         a.target = '_blank';
@@ -2963,7 +3064,7 @@ const App = {
       const hasMore = spec.relationships.length > shownCount;
       html += `<div class="mo-comp-head"><div class="mo-comp-title">Prime → Sub</div><div class="mo-comp-meta">${shownCount} of ${spec.totalSubs} shown</div></div><div class="mo-list">`;
       const renderRelRow = (r) => {
-        const liUrl = `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent('"' + r.sub + '"')}&origin=GLOBAL_SEARCH_HEADER`;
+        const liUrl = `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(Utils.linkedinSearchTerm(r.sub))}&origin=GLOBAL_SEARCH_HEADER`;
         return `<div class="mo-row-2line">
           <div class="mo-row-2line-top">
             <span class="mo-row-name"><span class="mo-sub-prime">${Html.escapeHtml(r.prime)}</span> <span class="mo-sub-arrow">→</span> ${Html.escapeHtml(r.sub)}</span>
@@ -3359,7 +3460,7 @@ const App = {
       spec.primes.forEach(p => {
         const idShort = p.contractId ? p.contractId.slice(0, 24) + (p.contractId.length > 24 ? '…' : '') : '';
         const meta = [idShort, p.vehicle].filter(Boolean).join(' · ');
-        const liUrl = `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent('"' + p.name + '"')}&origin=GLOBAL_SEARCH_HEADER`;
+        const liUrl = `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(Utils.linkedinSearchTerm(p.name))}&origin=GLOBAL_SEARCH_HEADER`;
         html += `<div class="mo-row-2line">
           <div class="mo-row-2line-top">
             <span class="mo-row-name">${Html.escapeHtml(p.name)}</span>
@@ -3384,7 +3485,7 @@ const App = {
       const renderExpRow = (e) => {
         const idShort = e.contractId ? e.contractId.slice(0, 24) + (e.contractId.length > 24 ? '…' : '') : '';
         const meta = [idShort, e.vehicle].filter(Boolean).join(' · ');
-        const liUrl = `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent('"' + e.vendor + '"')}&origin=GLOBAL_SEARCH_HEADER`;
+        const liUrl = `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(Utils.linkedinSearchTerm(e.vendor))}&origin=GLOBAL_SEARCH_HEADER`;
         return `<div class="mo-exp-row">
           <div class="mo-exp-top">
             <span class="mo-exp-vendor">${Html.escapeHtml(e.vendor)}</span>
@@ -3503,6 +3604,17 @@ const App = {
   buildEmptyTurn(query) {
     const wrap = document.createElement('div');
     wrap.className = 'turn-mo';
+    const territoryLabel = this.state.territory && SECTORS[this.state.territory] ? ` in ${SECTORS[this.state.territory].label}` : '';
+
+    // Different message depending on whether it looks like a real query
+    // that just didn't hit, vs. something that was probably misrouted.
+    // A short query (1-2 words) is often just a term Mo couldn't match;
+    // a longer query suggests Mo was genuinely looking and came up short.
+    const isShort = (query || '').trim().split(/\s+/).length <= 2;
+    const msg = isShort
+      ? `No contracts came back for <strong>${Html.escapeHtml(query)}</strong>${territoryLabel}. Either the term's too narrow for USASpending or I'm reading it wrong. Try a product name, vendor, agency, or NAICS code.`
+      : `Couldn't find matching contracts for <strong>${Html.escapeHtml(query)}</strong>${territoryLabel}. Try a shorter phrase, a vendor name, or an agency.`;
+
     const suggestions = this.state.territory && SECTORS[this.state.territory]
       ? ['Cybersecurity', 'Cloud', 'AI', '541512']
       : ['Zero Trust', 'CMMC', 'Cybersecurity', 'NAICS 541512'];
@@ -3519,7 +3631,7 @@ const App = {
           </button>
         </div>
         <div class="mo-empty">
-          <div class="mo-empty-msg">Well, this is awkward. Nothing came back for <strong>${Html.escapeHtml(query)}</strong>${(this.state.territory && SECTORS[this.state.territory]) ? ` in ${SECTORS[this.state.territory].label}` : ''}. Try a different angle.</div>
+          <div class="mo-empty-msg">${msg}</div>
         </div>
         <div class="mo-followups" style="border-top:none;padding-top:0;margin-top:16px;">${chips}</div>
       </div>
