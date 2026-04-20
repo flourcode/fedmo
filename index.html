@@ -2922,6 +2922,15 @@ const App = {
   async runSearch(intent, loadingId) {
     const sellerLens = intent.sellerLens || null;
     const territory = intent.territory || null;
+
+    // Safety net: expand program-office acronyms the router may have missed.
+    // USASpending indexes contracts by Awarding Sub Agency, but descriptions
+    // often mention the program office by acronym or full name. For each
+    // acronym we recognize, add both forms to keywords AND set the parent
+    // agency filter if none was set. This rescues queries like "AFLCMC"
+    // that would otherwise return zero matches.
+    intent = this._expandProgramOfficeAcronyms(intent);
+
     const label = intent.label || (intent.keywords || []).join(', ') || 'this market';
 
     const rawResults = await API.searchFromIntent(intent, territory);
@@ -2964,6 +2973,78 @@ const App = {
     this._recentTurns.push({ role: 'mo', text: `Showed card: ${label} · ${spec.verdict.text}` });
 
     this.replaceLoading(loadingId, this.buildMoTurn(spec));
+  },
+
+  // Program office acronym map. These are well-known federal program
+  // offices whose acronyms don't cleanly match a USASpending subtier but
+  // ARE commonly used by federal sellers. For each entry we store the
+  // canonical full name (used as an additional keyword so contract
+  // descriptions match) and the parent subtier agency (used as a scope
+  // filter if the router didn't already specify one).
+  //
+  // Keep this map small and correct. Adding speculative entries is worse
+  // than leaving them out — a bad match sends a seller to empty results
+  // under a false pretense.
+  _PROGRAM_OFFICES: {
+    // Air Force centers
+    'AFLCMC':  { fullName: 'Air Force Life Cycle Management Center', parent: { tier: 'subtier', name: 'Department of the Air Force', toptier_name: 'Department of Defense' } },
+    'AFRL':    { fullName: 'Air Force Research Laboratory', parent: { tier: 'subtier', name: 'Department of the Air Force', toptier_name: 'Department of Defense' } },
+    'AFMC':    { fullName: 'Air Force Materiel Command', parent: { tier: 'subtier', name: 'Department of the Air Force', toptier_name: 'Department of Defense' } },
+    'ACC':     { fullName: 'Air Combat Command', parent: { tier: 'subtier', name: 'Department of the Air Force', toptier_name: 'Department of Defense' } },
+    'AFSOC':   { fullName: 'Air Force Special Operations Command', parent: { tier: 'subtier', name: 'Department of the Air Force', toptier_name: 'Department of Defense' } },
+    'SMC':     { fullName: 'Space and Missile Systems Center', parent: { tier: 'subtier', name: 'United States Space Force', toptier_name: 'Department of Defense' } },
+    'SSC':     { fullName: 'Space Systems Command', parent: { tier: 'subtier', name: 'United States Space Force', toptier_name: 'Department of Defense' } },
+    // Navy commands
+    'NAVAIR':  { fullName: 'Naval Air Systems Command', parent: { tier: 'subtier', name: 'Department of the Navy', toptier_name: 'Department of Defense' } },
+    'NAVSEA':  { fullName: 'Naval Sea Systems Command', parent: { tier: 'subtier', name: 'Department of the Navy', toptier_name: 'Department of Defense' } },
+    'NAVWAR':  { fullName: 'Naval Information Warfare Systems Command', parent: { tier: 'subtier', name: 'Department of the Navy', toptier_name: 'Department of Defense' } },
+    'SPAWAR':  { fullName: 'Naval Information Warfare Systems Command', parent: { tier: 'subtier', name: 'Department of the Navy', toptier_name: 'Department of Defense' } }, // legacy name
+    'NAVSUP':  { fullName: 'Naval Supply Systems Command', parent: { tier: 'subtier', name: 'Department of the Navy', toptier_name: 'Department of Defense' } },
+    'ONR':     { fullName: 'Office of Naval Research', parent: { tier: 'subtier', name: 'Department of the Navy', toptier_name: 'Department of Defense' } },
+    // Army commands
+    'AMC':     { fullName: 'Army Materiel Command', parent: { tier: 'subtier', name: 'Department of the Army', toptier_name: 'Department of Defense' } },
+    'CECOM':   { fullName: 'Army Communications-Electronics Command', parent: { tier: 'subtier', name: 'Department of the Army', toptier_name: 'Department of Defense' } },
+    'SMDC':    { fullName: 'Army Space and Missile Defense Command', parent: { tier: 'subtier', name: 'Department of the Army', toptier_name: 'Department of Defense' } },
+    'NETCOM':  { fullName: 'Network Enterprise Technology Command', parent: { tier: 'subtier', name: 'Department of the Army', toptier_name: 'Department of Defense' } },
+    'ERDC':    { fullName: 'Army Engineer Research and Development Center', parent: { tier: 'subtier', name: 'Department of the Army', toptier_name: 'Department of Defense' } },
+  },
+
+  // Check keywords for program-office acronyms and expand them. Adds the
+  // full name as an additional keyword and sets the parent agency if the
+  // router didn't already specify one. Non-destructive — preserves any
+  // other keywords and overrides nothing that's already set.
+  _expandProgramOfficeAcronyms(intent) {
+    const keywords = Array.isArray(intent.keywords) ? intent.keywords : [];
+    if (keywords.length === 0) return intent;
+
+    // Look for any keyword that matches a known acronym (case-insensitive,
+    // trimmed). Keep the original acronym in keywords for matches against
+    // descriptions that use the short form, and add the full name so
+    // descriptions that spell it out also match.
+    let matched = null;
+    for (const kw of keywords) {
+      const upper = String(kw || '').trim().toUpperCase();
+      if (this._PROGRAM_OFFICES[upper]) {
+        matched = { acronym: upper, ...this._PROGRAM_OFFICES[upper] };
+        break; // first match wins
+      }
+    }
+    if (!matched) return intent;
+
+    debug('[program-office] expanding', matched.acronym, '→', matched.fullName);
+
+    const expanded = { ...intent };
+    // Add the full name as a keyword if not already present
+    if (!keywords.some(k => String(k || '').toLowerCase() === matched.fullName.toLowerCase())) {
+      expanded.keywords = [...keywords, matched.fullName];
+    }
+    // Only set parent agency if router didn't already specify one —
+    // avoid overriding explicit user intent
+    if (!expanded.agency) {
+      expanded.agency = matched.parent;
+    }
+
+    return expanded;
   },
 
   // Apply simple post-fetch filters that the router may put on a search intent.
