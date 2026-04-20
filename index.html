@@ -1582,16 +1582,67 @@ const API = {
     const useTerritory = intent.territory || territory;
     applySectorFilter(filters, useTerritory);
 
-    const cleanAndSort = data => data.map(award => {
-      if (award['Recipient Name']) award['Recipient Name'] = Utils.normalizeVendorName(award['Recipient Name']);
-      const topAgency = (award['Awarding Agency'] || '').toUpperCase();
-      if (topAgency.includes('DEFENSE') && award['Awarding Sub Agency']) award['Awarding Agency'] = award['Awarding Sub Agency'];
-      award._endTs   = award['End Date']   ? new Date(award['End Date']).getTime()   : 0;
-      award._startTs = award['Start Date'] ? new Date(award['Start Date']).getTime() : 0;
-      return award;
-    }).sort((a,b) => (b['Award Amount'] || 0) - (a['Award Amount'] || 0));
+    const cleanAndSort = data => {
+      // Agency scope enforcement — belt-and-suspenders over USASpending.
+      // When a user asks for a specific subtier agency (Air Force, Navy, DARPA),
+      // USASpending's filter sometimes returns contracts from sibling agencies
+      // under the same toptier. Drop them before we render, otherwise the
+      // treemap shows "Navy $73B at Air Force" which is nonsense.
+      let scoped = data;
+      if (intent.agency && intent.agency.tier === 'subtier' && intent.agency.name) {
+        const wantedSub = intent.agency.name.toLowerCase();
+        const droppedBefore = scoped.length;
+        scoped = scoped.filter(award => {
+          const sub = (award['Awarding Sub Agency'] || '').toLowerCase();
+          const top = (award['Awarding Agency'] || '').toLowerCase();
+          // Match either exact sub name, or fuzzy contains (handles slight
+          // canonical-name drift like "Department of the Air Force" vs "Air Force")
+          return sub === wantedSub
+            || sub.includes(wantedSub.replace(/^department of the /, ''))
+            || top === wantedSub
+            || top.includes(wantedSub.replace(/^department of the /, ''));
+        });
+        const dropped = droppedBefore - scoped.length;
+        if (dropped > 0) {
+          console.debug(`[search] agency scope dropped ${dropped} cross-agency contracts, kept ${scoped.length}`);
+        }
+      }
 
-    let rawData = (await this._post('/search/spending_by_award/', { filters, fields: this.AWARD_FIELDS, limit: 100, sort: 'Award Amount', order: 'desc' })).results || [];
+      return scoped.map(award => {
+        if (award['Recipient Name']) award['Recipient Name'] = Utils.normalizeVendorName(award['Recipient Name']);
+        const topAgency = (award['Awarding Agency'] || '').toUpperCase();
+        if (topAgency.includes('DEFENSE') && award['Awarding Sub Agency']) award['Awarding Agency'] = award['Awarding Sub Agency'];
+        award._endTs   = award['End Date']   ? new Date(award['End Date']).getTime()   : 0;
+        award._startTs = award['Start Date'] ? new Date(award['Start Date']).getTime() : 0;
+        return award;
+      }).sort((a,b) => (b['Award Amount'] || 0) - (a['Award Amount'] || 0));
+    };
+
+    console.debug('[search] filter →', JSON.stringify(filters));
+    let rawData;
+    try {
+      rawData = (await this._post('/search/spending_by_award/', { filters, fields: this.AWARD_FIELDS, limit: 100, sort: 'Award Amount', order: 'desc' })).results || [];
+    } catch (err) {
+      console.warn('[search] primary request failed:', err.message, '— filter was:', JSON.stringify(filters));
+      // On 422 (filter rejection), try a simpler recovery: strip NAICS/PSC
+      // constraints and retry with just keywords + agency + territory. The
+      // router occasionally emits a shape USASpending doesn't honor, and a
+      // looser retry gets the user something rather than an error.
+      if (/API\s*422/i.test(err.message)) {
+        const simpler = { time_period: filters.time_period, award_type_codes: filters.award_type_codes };
+        if (filters.keywords) simpler.keywords = filters.keywords;
+        if (filters.agencies) simpler.agencies = filters.agencies;
+        console.debug('[search] retrying with simplified filter →', JSON.stringify(simpler));
+        try {
+          rawData = (await this._post('/search/spending_by_award/', { filters: simpler, fields: this.AWARD_FIELDS, limit: 100, sort: 'Award Amount', order: 'desc' })).results || [];
+        } catch (retryErr) {
+          console.warn('[search] simplified retry also failed:', retryErr.message);
+          throw err;
+        }
+      } else {
+        throw err;
+      }
+    }
 
     // Keyword fallback: if agency-only search returned nothing, retry with the
     // agency name as a keyword. USASpending sometimes uses different canonical
@@ -3652,6 +3703,16 @@ const App = {
     } else if (/^API\s*429|rate limit/i.test(raw)) {
       friendly = "Hitting a rate limit. Give it a few seconds and try again.";
       retryable = true;
+    } else if (/^API\s*422/i.test(raw)) {
+      // USASpending rejected the filter shape. Usually means the router
+      // built a search with a field combination USASpending doesn't honor.
+      // A retry with the same wording will fail identically, so don't
+      // offer a retry button — instead suggest rephrasing.
+      friendly = "That one didn't translate cleanly to USASpending. Try rephrasing — a vendor name, an agency, or a NAICS code usually works.";
+      retryable = false;
+    } else if (/^API\s*400/i.test(raw)) {
+      friendly = "Mo couldn't build a valid search from that. Try a simpler phrase — like a vendor, agency, or topic word.";
+      retryable = false;
     } else if (/Failed to reach USASpending|Failed to fetch|NetworkError/i.test(raw)) {
       friendly = "Can't reach USASpending at the moment. Check your connection or try again in a minute.";
       retryable = true;
