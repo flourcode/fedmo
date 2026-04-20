@@ -2907,12 +2907,23 @@ const App = {
   },
 
   // ── runSellerPitch: router gave us a parsed product + keywords + competitors
-  // Set the lens, set the territory, then run the search using the same path
-  // as a regular search.
+  // Run a vendor-focused search. Handles single-product case AND the
+  // channel/partner-manager case where the user covers multiple ISVs.
   async runSellerPitch(intent, loadingId) {
-    const product = intent.product || intent.label;
-    if (!product) {
-      this.replaceLoading(loadingId, this.buildErrorTurn('Mo couldn\'t pull a product name out of that.'));
+    // Pull the vendor list. Prefer an explicit "vendors" array (channel
+    // case — user covers multiple ISVs), fall back to "product" (single
+    // vendor case), and finally the label as last resort.
+    let vendors = [];
+    if (Array.isArray(intent.vendors) && intent.vendors.length > 0) {
+      vendors = intent.vendors.filter(v => typeof v === 'string' && v.trim().length > 0);
+    } else if (intent.product) {
+      vendors = [intent.product];
+    } else if (intent.label) {
+      vendors = [intent.label];
+    }
+
+    if (vendors.length === 0) {
+      this.replaceLoading(loadingId, this.buildErrorTurn('Mo couldn\'t pull a vendor name out of that.'));
       return;
     }
 
@@ -2923,15 +2934,26 @@ const App = {
     // router's one-sentence framing through so the card can render it as
     // a warm intro above the verdict. sellerLens travels in the intent
     // object for this one turn only — no persistence.
+    //
+    // For multi-vendor pitches (partner manager covering ISVs), pass the
+    // vendors array to runSearch and let it OR them together as keywords.
+    // Mo will then render primes from either company in the same card.
     const searchIntent = {
-      label: intent.label || product,
+      label: intent.label || vendors.join(' + '),
       keywords: intent.core_keywords || [],
       territory: intent.territory,
       framing: intent.framing || null,
-      sellerLens: product,
+      sellerLens: vendors.length === 1 ? vendors[0] : vendors.join(', '),
+      // Pass the vendor list through so runSearch / searchFromIntent knows
+      // these are vendor names (not topic keywords) and can treat them as
+      // recipient-name targets rather than description keywords.
+      vendors,
     };
-    // If product itself is a known brand, include it as a keyword for vendor-mode detection
-    if (product.length >= 3) searchIntent.keywords = [product, ...(searchIntent.keywords || [])];
+
+    // Include each vendor name as a keyword so USASpending will match
+    // contracts where the company appears in the recipient field.
+    // Keep the order — the first vendor is the primary for verdict voice.
+    searchIntent.keywords = [...vendors, ...(searchIntent.keywords || [])];
 
     return this.runSearch(searchIntent, loadingId);
   },
@@ -2958,6 +2980,26 @@ const App = {
     // Gemini sometimes emits expiring_only, min_amount, etc. at the top level
     // of a search intent. Accept them here so the user gets what they asked for.
     active = this._applyInlineFilters(active, intent);
+
+    // Vendor scope enforcement — when the intent specifies a vendors[]
+    // array (partner-manager covering multiple ISVs), drop contracts whose
+    // Recipient Name doesn't match one of the named vendors. Without this,
+    // a search for "Ethos Systems and Govini" returns the top AWS cloud
+    // contracts because USASpending matches keywords against description
+    // text AND recipient name — and AWS resellers dwarf the ISVs in raw
+    // dollar volume. We want the ISVs' contracts specifically.
+    if (Array.isArray(intent.vendors) && intent.vendors.length > 0) {
+      const vendorNeedles = intent.vendors.map(v => String(v || '').toLowerCase().trim()).filter(Boolean);
+      if (vendorNeedles.length > 0) {
+        const before = active.length;
+        active = active.filter(c => {
+          const recipient = String(c['Recipient Name'] || '').toLowerCase();
+          return vendorNeedles.some(needle => recipient.includes(needle));
+        });
+        const dropped = before - active.length;
+        if (dropped > 0) debug(`[search] vendor scope kept ${active.length} of ${before} contracts matching`, intent.vendors);
+      }
+    }
 
     if (active.length === 0) {
       this._track('empty_state', { query: label.slice(0, 40), has_territory: !!territory });
