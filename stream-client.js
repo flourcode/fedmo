@@ -101,7 +101,33 @@ export function dataAttrsToResolverInput(attrs) {
     const n = Number(attrs.max_amount);
     if (!isNaN(n)) input.max_amount = n;
   }
+  // Competitor mode: if Mo emits competitors="true", the browser will call
+  // mo_competitors first to get a vendor's head-to-head competitors, then
+  // expand input.vendors to include the original vendor + its competitors
+  // before fetching USASpending. The resulting card shows the competitive
+  // landscape in one view.
+  if (attrs.competitors === 'true') input._competitors = true;
   return input;
+}
+
+// Fetch head-to-head federal competitors for a vendor via the Lambda
+// endpoint. Returns { vendor, category, competitors: [...] } or throws.
+// Called by askMo() when a <data> tag has competitors="true".
+export async function fetchCompetitors(vendorName, endpoint) {
+  const res = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      request_type: 'mo_competitors',
+      vendor: vendorName,
+    }),
+  });
+  if (!res.ok) throw new Error(`competitors API ${res.status}`);
+  const body = await res.json();
+  if (!body?.competitors || !Array.isArray(body.competitors)) {
+    throw new Error('competitors response bad shape');
+  }
+  return body;
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -218,12 +244,33 @@ export function summarizePayloadForMo(rows, resolverInput) {
   const top3Sum = [...primeMap.values()].sort((a, b) => b - a).slice(0, 3).reduce((s, v) => s + v, 0);
   const top3Pct = total > 0 ? Math.round((top3Sum / total) * 100) : 0;
 
+  // Build a user-visible query description from the resolver input, but
+  // skip internal plumbing fields (anything starting with underscore) so
+  // they don't leak into Mo's system context as weird key=value noise.
   const queryDesc = Object.entries(resolverInput)
-    .filter(([, v]) => v != null && v !== '')
-    .map(([k, v]) => `${k}=${v}`)
+    .filter(([k, v]) => v != null && v !== '' && !k.startsWith('_'))
+    .map(([k, v]) => `${k}=${Array.isArray(v) ? v.join('|') : v}`)
     .join(', ');
 
-  return `Query: ${queryDesc || '(no filters)'}
+  // Competitor-mode framing: if the caller flagged this as a competitor
+  // cut, tell Mo explicitly. Otherwise Mo's second-pass prose will read
+  // the card as a generic multi-vendor pull and miss the "you vs. them"
+  // framing that's the whole point.
+  let framing = '';
+  if (resolverInput?._competitors && resolverInput?._competitorList) {
+    const sellerName = (resolverInput._competitorList?.length ? null : null);
+    const seller = (resolverInput.vendors && Array.isArray(resolverInput.vendors))
+      ? resolverInput.vendors[0] : '';
+    const category = resolverInput._competitorCategory || '';
+    framing = `
+THIS IS A COMPETITOR CUT.
+Seller: ${seller}
+Category: ${category}
+Competitors in this pull: ${resolverInput._competitorList.join(', ')}
+Your job: tell the seller who's winning and losing in THEIR category. Identify which vendors in the top primes are the seller (${seller}) vs. their competitors. Call out share, positioning, and where each player is strongest. If the seller isn't in the top primes, say so honestly and describe the competitive landscape they're trying to break into.`;
+  }
+
+  return `Query: ${queryDesc || '(no filters)'}${framing}
 Total (top ${rows.length} contracts, last 12mo): $${(total / 1_000_000).toFixed(1)}M
 Unique primes in slice: ${primeMap.size}
 Top 3 concentration: ${top3Pct}%
@@ -383,6 +430,33 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
 
     // ── Data pull + second pass ─────────────────────────────────
     const resolverInput = cardRef._resolverInput;
+
+    // Competitor mode: before fetching USASpending, call mo_competitors to
+    // get the head-to-head competitors of the original vendor, then expand
+    // resolverInput.vendors to [originalVendor, ...competitors]. The card
+    // renders the combined footprint — seller + competitors in one view —
+    // which is what the seller actually wants to see for "who are my
+    // competitors" questions.
+    let competitorInfo = null;
+    if (resolverInput?._competitors && resolverInput?.vendor) {
+      try {
+        competitorInfo = await fetchCompetitors(resolverInput.vendor, endpoint);
+        // Build multi-vendor input: keep the original vendor AND add each
+        // competitor. Drop the singular `vendor` field in favor of the array.
+        const combined = [resolverInput.vendor, ...(competitorInfo.competitors || [])];
+        delete resolverInput.vendor;
+        resolverInput.vendors = combined;
+        // Stash the competitor metadata so the renderer and payload
+        // summarizer can label the card appropriately.
+        resolverInput._competitorCategory = competitorInfo.category;
+        resolverInput._competitorList = competitorInfo.competitors;
+      } catch (compErr) {
+        console.warn('[askMo] competitor lookup failed, falling back to single-vendor card:', compErr.message);
+        // Fall through with the original single-vendor input. The card
+        // will still render, just without competitors.
+      }
+    }
+
     let rows;
     try {
       rows = await fetchUsaspending(resolverInput, endpoint);

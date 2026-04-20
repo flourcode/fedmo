@@ -1735,7 +1735,19 @@ function buildCardSpec(m, query, sellerLens, territory) {
   const queryType = m.queryType;
 
   // Channel detection
-  const KNOWN_VARS = new Set(['CARAHSOFT','CARAHSOFT TECHNOLOGY','GOVPLACE','FCN','THUNDERCAT','OPTIV','CDW','CDWG','SHI','DLT','IRON BOW','RED RIVER','PRESIDIO','WORLD WIDE TECHNOLOGY','WWT','INSIGHT','DELL FEDERAL']);
+  // Known federal resellers/VARs. Used to tell "indirect via reseller"
+  // apart from "indirect via systems integrator" — different verdicts apply.
+  // Entries are uppercase, post-normalization (suffixes stripped).
+  const KNOWN_VARS = new Set([
+    'CARAHSOFT','CARAHSOFT TECHNOLOGY','GOVPLACE','FCN','THUNDERCAT',
+    'THUNDERCAT TECHNOLOGY','OPTIV','CDW','CDWG','SHI','DLT','IRON BOW',
+    'RED RIVER','PRESIDIO','WORLD WIDE TECHNOLOGY','WWT','INSIGHT','DELL FEDERAL',
+    'FOUR POINTS TECHNOLOGY','FOUR POINTS','IMMIXGROUP','IMMIX GROUP',
+    'GOVCIO','SALIENT FEDERAL-SGIS','SALIENT FEDERAL','KADIAK',
+    'STRATEGIC COMMUNICATIONS','PANAMERICA COMPUTERS','NEW TECH SOLUTIONS',
+    'VCLOUD TECH','IT1 SOURCE','ENTERPRISE TECHNOLOGY SOLUTIONS',
+    'SOFTWARE INFORMATION RESOURCE',
+  ]);
   const top5VendorsUpper = vendorSorted.slice(0, 5).map(([n]) => n.toUpperCase());
   const varCount = top5VendorsUpper.filter(v => KNOWN_VARS.has(v)).length;
   const isChannelMarket = varCount >= 2;
@@ -1849,21 +1861,58 @@ function buildCardSpec(m, query, sellerLens, territory) {
     const sellerShare = total > 0 ? Math.round(totalSellerSpend / total * 100) : 0;
     const productInMarket = totalSellerSpend > 0;
 
+    // Is the top indirect prime a reseller/VAR or a systems integrator?
+    // This decides which indirect verdict we use — reseller means the seller
+    // is ALREADY winning through them (defend/expand), integrator means the
+    // seller is embedded in a larger program (partner on recompete).
+    let topIndirectIsReseller = false;
+    if (topIndirectPrime) {
+      const normalized = Utils.normalizeVendorName(topIndirectPrime);
+      topIndirectIsReseller = KNOWN_VARS.has(normalized);
+    }
+
     if (isChannelMarket) {
       const topVar = tc(top5VendorsUpper.filter(v => KNOWN_VARS.has(v))[0] || '');
+      face = 'watch';
+      verdict = `${sellerLens} moves through the channel at this agency.`;
       action = `Get ${sellerLens} listed with ${topVar}. Your product moves through them.`;
     } else if (directSpend > 0 && sellerShare >= 10) {
-      action = `${sellerLens} already holds ${sellerShare}% here. Defend the expiring contracts and expand into adjacent agencies.`;
+      face = 'open';
+      verdict = `${sellerLens} is winning here — ${sellerShare}% of this slice.`;
+      action = `Defend the expiring contracts and expand into adjacent agencies.`;
     } else if (directSpend > 0) {
-      action = `${sellerLens} has a direct footprint here (${Utils.money(directSpend)}). Build on it and chase the indirect volume through resellers and integrators.`;
-    } else if (indirectSpend > 0 && topIndirectPrime) {
-      // No direct presence, but the product IS being sold here through a prime.
+      face = 'watch';
+      verdict = `${sellerLens} has a foothold here (${Utils.money(directSpend)}).`;
+      action = `Build on it and chase the indirect volume through resellers and integrators.`;
+    } else if (indirectSpend > 0 && topIndirectIsReseller && topIndirectPrime) {
+      // Reseller path: the seller's product is moving through a VAR.
+      // They're not "embedded" in anything — they're being purchased via
+      // a distribution partner. Advice: defend the reseller relationship,
+      // expand to parallel resellers.
       const primeShort = tc(Utils.normalizeVendorName(topIndirectPrime));
-      action = `${sellerLens} is moving through ${primeShort} here (${Utils.money(indirectSpend)} in bundled work). Your path is partnering with them on the recompete, not displacing them.`;
+      face = 'watch';
+      verdict = `${sellerLens} is already reselling through ${primeShort} here (${Utils.money(indirectSpend)}).`;
+      action = `Defend that relationship and get listed with parallel resellers to widen the channel.`;
+    } else if (indirectSpend > 0 && topIndirectPrime) {
+      // Integrator path: the seller's product is embedded in a larger
+      // systems integration program. Advice: partner with the integrator
+      // on their recompete, don't try to displace them.
+      const primeShort = tc(Utils.normalizeVendorName(topIndirectPrime));
+      face = 'watch';
+      verdict = `${sellerLens} is embedded in ${primeShort}'s program here (${Utils.money(indirectSpend)}).`;
+      action = `Partner with them on the recompete. You'll lose if you try to displace.`;
     } else if (isConcentrated && exp90Val > 0) {
-      action = `${sellerLens} has no contracts here. Target ${Utils.money(exp90Val)} in expiring work — position as an alternative through a prime or vehicle.`;
+      face = 'watch';
+      verdict = `${sellerLens} has no contracts here yet.`;
+      action = `Target ${Utils.money(exp90Val)} in expiring work — position as an alternative through a prime or vehicle.`;
     } else if (isConcentrated) {
-      action = `${sellerLens} has no contracts here. Partner with ${topVendor} or sub through a prime that holds a vehicle.`;
+      face = 'locked';
+      verdict = `${sellerLens} has no contracts here yet.`;
+      action = `Partner with ${topVendor} or sub through a prime that holds a vehicle.`;
+    } else {
+      face = 'watch';
+      verdict = `${sellerLens}'s footprint here is thin.`;
+      action = `Find the gap the incumbents aren't covering.`;
     }
   }
 
