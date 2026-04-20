@@ -89,6 +89,33 @@ body {
   -webkit-font-smoothing: antialiased;
   min-height: 100%;
   padding-bottom: calc(96px + env(safe-area-inset-bottom));
+  /* Prevent horizontal overflow if a single child sneaks past its container.
+     Chips, long vendor names, contract IDs — anything that could push past
+     viewport width — gets clipped rather than triggering horizontal scroll
+     on the whole page, which feels broken on mobile. */
+  overflow-x: hidden;
+  /* Stop iOS from auto-inflating text when rotating to landscape.
+     Gives us predictable type scale across orientations. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  /* Prevent pull-to-refresh from blowing away a conversation mid-scroll
+     while still allowing normal vertical scroll. */
+  overscroll-behavior-y: contain;
+}
+
+/* Interactive controls never select on tap — that's almost always a mistake
+   in mobile UIs, where a long-press on a button is meant to trigger the
+   button's action, not a text-selection menu. But we DELIBERATELY leave
+   everything else selectable: prose, vendor names, contract IDs, dollar
+   amounts, agencies — federal sellers need to copy these into CRMs,
+   emails, and notes, so blocking selection would be actively hostile. */
+button, .mo-chip, .mo-card-action, .mo-header-action, .mo-followup, .mo-post-stream-chip,
+.mo-tell-more-btn, .mo-show-more, .mo-jump-latest, .mo-modal-btn, .mo-modal-close {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  /* Buttons should respond only to tap, not double-tap-to-zoom */
+  touch-action: manipulation;
 }
 
 button, input { font-family: var(--font); }
@@ -427,6 +454,20 @@ button { cursor: pointer; }
   font-weight: 500;
   color: var(--primary-100);
   white-space: nowrap;
+  /* Prevent chips from pushing past the screen on long text.
+     Falls back gracefully: ellipsis + hover title reveals the full text.
+     Max-width here accommodates the majority of chips; truly long ones
+     still get clamped instead of overflowing. */
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* Buttons shouldn't be selectable when tapped — text selection on a
+     button feels like a bug. But prose, vendor names, and contract IDs
+     elsewhere in the app ARE selectable because users need to copy them. */
+  -webkit-user-select: none;
+  user-select: none;
+  /* Prevent long-press callout menu on iOS buttons */
+  -webkit-touch-callout: none;
   transition: all 120ms;
 }
 .mo-followup:hover {
