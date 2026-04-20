@@ -298,11 +298,14 @@ button { cursor: pointer; }
 .mo-comp-title { font-size: 13px; font-weight: 500; color: var(--text-title); }
 .mo-comp-meta  { font-size: 11px; color: var(--text-faint); }
 
+.mo-treemap-host {
+  width: 100%;
+  height: 220px;
+  display: block;
+}
 .mo-treemap {
   width: 100%;
-  height: auto;
-  aspect-ratio: 480 / 280;
-  max-height: 320px;
+  height: 220px;
   border-radius: 10px;
   overflow: hidden;
   display: block;
@@ -697,6 +700,17 @@ button { cursor: pointer; }
 }
 .mo-view-link:active { background: var(--primary-40); }
 .mo-view-link svg { width: 9px; height: 9px; }
+
+.mo-inline-link {
+  color: var(--primary-100);
+  text-decoration: underline;
+  text-decoration-color: var(--primary-40);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  font-weight: 500;
+}
+.mo-inline-link:hover { text-decoration-color: var(--primary-100); }
+.mo-inline-link:active { color: var(--primary-100); background: var(--primary-20); border-radius: 3px; padding: 0 2px; margin: 0 -2px; }
 
 /* "Tell me more" expander — Mo's prose, on demand only */
 .mo-tell-more {
@@ -1952,6 +1966,76 @@ const App = {
     }
   },
 
+  // Wrap contract IDs in Mo's prose with tappable USASpending links — but
+  // only if the ID appears in the real market metrics (i.e., it's a real
+  // contract we have a USASpending internal ID for). Unverified IDs stay
+  // as plain text; they've already been flagged by the auditor.
+  _linkifyContractIds(proseEl, fullText, metrics) {
+    if (!proseEl || !fullText || !metrics) return;
+
+    // Build a map of contract ID → generated_internal_id for every contract
+    // the user's search pulled back. That's how we construct the correct
+    // USASpending URL.
+    const idToInternal = new Map();
+    Object.values(metrics.vendors || {}).forEach(v => {
+      (v.contracts || []).forEach(c => {
+        const awardId = c['Award ID'];
+        const internal = c['generated_internal_id'];
+        if (awardId && internal) idToInternal.set(awardId, internal);
+      });
+    });
+
+    if (idToInternal.size === 0) return;
+
+    // Replace each matching ID in the prose with an anchor tag. Iterate over
+    // the textContent (not innerHTML) to avoid nested-anchor weirdness.
+    // Walk text nodes and replace in-place so we preserve the streamed
+    // structure (<p>, <strong>, etc.) that Html.streamInto rendered.
+    const walker = document.createTreeWalker(proseEl, NodeFilter.SHOW_TEXT);
+    const toReplace = [];
+    let node;
+    while ((node = walker.nextNode())) {
+      const text = node.nodeValue;
+      if (!text) continue;
+      // Quick filter: does this text node contain anything that looks like an ID?
+      if (!/\b[A-Z][A-Z0-9]{6,19}\b/.test(text)) continue;
+      toReplace.push(node);
+    }
+
+    toReplace.forEach(textNode => {
+      const text = textNode.nodeValue;
+      const frag = document.createDocumentFragment();
+      let lastIdx = 0;
+      const re = /\b([A-Z][A-Z0-9]{6,19})\b/g;
+      let m;
+      while ((m = re.exec(text)) !== null) {
+        const id = m[1];
+        const internal = idToInternal.get(id);
+        if (!internal) continue;  // leave plain; auditor may have already flagged
+        // Push any plain text before this match
+        if (m.index > lastIdx) {
+          frag.appendChild(document.createTextNode(text.slice(lastIdx, m.index)));
+        }
+        const a = document.createElement('a');
+        a.href = `https://www.usaspending.gov/award/${internal}`;
+        a.target = '_blank';
+        a.rel = 'noopener';
+        a.className = 'mo-inline-link';
+        a.textContent = id;
+        frag.appendChild(a);
+        lastIdx = m.index + id.length;
+      }
+      // Tail
+      if (lastIdx < text.length) {
+        frag.appendChild(document.createTextNode(text.slice(lastIdx)));
+      }
+      // Only replace if we actually inserted any links
+      if (frag.childNodes.length > 0 && lastIdx > 0) {
+        textNode.parentNode.replaceChild(frag, textNode);
+      }
+    });
+  },
+
   _loadingMessageFor(intent) {
     switch (intent.intent) {
       case 'search':
@@ -2276,6 +2360,12 @@ const App = {
             // Hallucination check: warn in console if Mo cited dollar amounts
             // or contract IDs that aren't in the payload we sent
             this._auditMoResponse(payload, fullText);
+
+            // Linkify contract IDs that ARE in the payload — turn them into
+            // tappable USASpending links inline in Mo's prose. This closes
+            // the trust gap: if Mo mentions W91RUS19F0174, the user can tap
+            // it and verify on USASpending instantly.
+            this._linkifyContractIds(proseEl, fullText, this.state.lastMarketMetrics);
           }
         },
         (msg) => { if (proseEl) proseEl.innerHTML = `<span style="color:var(--text-faint);">${Html.escapeHtml(msg)}</span>`; }
@@ -2389,6 +2479,10 @@ const App = {
     const ld = document.getElementById(loadingId);
     if (ld) ld.replaceWith(htmlEl);
     requestAnimationFrame(() => {
+      // Render any treemap placeholders inside the freshly inserted turn
+      // using their real container width. Must be deferred until AFTER the
+      // element is in the DOM so clientWidth returns the real value.
+      initTreemaps(document);
       const cards = document.querySelectorAll('.turn-mo');
       const last = cards[cards.length - 1];
       if (last) this.scrollToTurn(last);
@@ -2777,42 +2871,61 @@ function worst(row, sideLength) {
 
 function renderTreemap(items) {
   if (!items || items.length === 0) return '';
-  // Sort largest first — squarify needs this
-  const sorted = items.slice().sort((a, b) => b.value - a.value);
-  // SVG viewBox matches typical card shape. Aspect ratio matches the card too.
-  const W = 480, H = 280;
-  const PADDING = 2;  // gap between cells
-  const laid = squarify(sorted, 0, 0, W, H);
+  // Returns a placeholder div that gets filled in by initTreemaps() after
+  // insertion into the DOM. This lets us compute layout at the real container
+  // width, so the treemap stretches edge-to-edge matching the card's text
+  // margins — no aspect-ratio fiddling, no preserveAspectRatio tradeoffs.
+  const payload = JSON.stringify(items).replace(/"/g, '&quot;');
+  return `<div class="mo-treemap-host" data-treemap="${payload}"></div>`;
+}
 
-  let svg = `<svg class="mo-treemap" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">`;
-  laid.forEach(cell => {
-    // Pad inner rect so there's a subtle gap between tiles
-    const rx = cell.x + PADDING / 2;
-    const ry = cell.y + PADDING / 2;
-    const rw = Math.max(0, cell.w - PADDING);
-    const rh = Math.max(0, cell.h - PADDING);
-    svg += `<rect x="${rx.toFixed(1)}" y="${ry.toFixed(1)}" width="${rw.toFixed(1)}" height="${rh.toFixed(1)}" fill="${cell.color}" rx="3"/>`;
+// Called after a card is rendered. Finds all treemap placeholders, measures
+// their actual width, and injects a properly-sized SVG.
+function initTreemaps(root) {
+  const hosts = (root || document).querySelectorAll('.mo-treemap-host:not([data-rendered])');
+  hosts.forEach(host => {
+    const itemsStr = host.dataset.treemap;
+    if (!itemsStr) return;
+    let items;
+    try { items = JSON.parse(itemsStr.replace(/&quot;/g, '"')); } catch (e) { return; }
+    if (!items || items.length === 0) return;
 
-    // Label only if the cell is big enough to fit text comfortably
-    if (rw > 55 && rh > 30) {
-      // Choose font size based on cell size — bigger cells get bigger labels
-      const area = rw * rh;
-      const nameFont = area > 12000 ? 16 : area > 5000 ? 13 : 11;
-      const valueFont = Math.max(nameFont - 2, 10);
-      // Character budget: ~0.55 * fontSize per char, leave 12px padding
-      const charsFit = Math.max(4, Math.floor((rw - 12) / (nameFont * 0.55)));
-      const name = cell.name.length > charsFit
-        ? cell.name.slice(0, charsFit - 1) + '…'
-        : cell.name;
-      svg += `<text x="${(rx + 6).toFixed(1)}" y="${(ry + nameFont + 4).toFixed(1)}" fill="rgba(255,255,255,0.96)" font-size="${nameFont}" font-weight="600">${Html.escapeHtml(name)}</text>`;
-      // Value line only if cell is tall enough
-      if (rh > nameFont + valueFont + 12) {
-        svg += `<text x="${(rx + 6).toFixed(1)}" y="${(ry + nameFont + valueFont + 10).toFixed(1)}" fill="rgba(255,255,255,0.80)" font-size="${valueFont}" font-weight="500">${Utils.money(cell.value)}</text>`;
+    // Measure the container — this is the REAL render width
+    const W = host.clientWidth || 320;
+    const H = 220;  // matches CSS .mo-treemap height
+
+    // Sort largest-first for squarify
+    const sorted = items.slice().sort((a, b) => b.value - a.value);
+    const laid = squarify(sorted, 0, 0, W, H);
+
+    const PADDING = 2;
+    let svg = `<svg class="mo-treemap" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">`;
+    laid.forEach(cell => {
+      const rx = cell.x + PADDING / 2;
+      const ry = cell.y + PADDING / 2;
+      const rw = Math.max(0, cell.w - PADDING);
+      const rh = Math.max(0, cell.h - PADDING);
+      svg += `<rect x="${rx.toFixed(1)}" y="${ry.toFixed(1)}" width="${rw.toFixed(1)}" height="${rh.toFixed(1)}" fill="${cell.color}" rx="3"/>`;
+
+      // Label only if the cell is big enough
+      if (rw > 55 && rh > 30) {
+        const area = rw * rh;
+        const nameFont = area > 12000 ? 16 : area > 5000 ? 13 : 11;
+        const valueFont = Math.max(nameFont - 2, 10);
+        const charsFit = Math.max(4, Math.floor((rw - 12) / (nameFont * 0.55)));
+        const name = cell.name.length > charsFit
+          ? cell.name.slice(0, charsFit - 1) + '…'
+          : cell.name;
+        svg += `<text x="${(rx + 6).toFixed(1)}" y="${(ry + nameFont + 4).toFixed(1)}" fill="rgba(255,255,255,0.96)" font-size="${nameFont}" font-weight="600">${Html.escapeHtml(name)}</text>`;
+        if (rh > nameFont + valueFont + 12) {
+          svg += `<text x="${(rx + 6).toFixed(1)}" y="${(ry + nameFont + valueFont + 10).toFixed(1)}" fill="rgba(255,255,255,0.80)" font-size="${valueFont}" font-weight="500">${Utils.money(cell.value)}</text>`;
+        }
       }
-    }
+    });
+    svg += `</svg>`;
+    host.innerHTML = svg;
+    host.setAttribute('data-rendered', '1');
   });
-  svg += `</svg>`;
-  return svg;
 }
 
 App.init();
@@ -2822,6 +2935,18 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && document.getElementById('aboutModal').classList.contains('open')) {
     App.closeAbout();
   }
+});
+
+// Re-render treemaps on resize so they match the new container width.
+// Debounced to avoid spam during desktop drag-to-resize.
+let _treemapResizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(_treemapResizeTimer);
+  _treemapResizeTimer = setTimeout(() => {
+    // Strip the rendered flag so initTreemaps redoes them at the new width
+    document.querySelectorAll('.mo-treemap-host[data-rendered]').forEach(h => h.removeAttribute('data-rendered'));
+    initTreemaps(document);
+  }, 150);
 });
 </script>
 
