@@ -155,31 +155,29 @@ button { cursor: pointer; }
 }
 
 .greeting { padding: 32px 4px 16px; }
-.greeting-face { width: 64px; height: 64px; margin-bottom: 16px; }
+.greeting-intro {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.greeting-face {
+  width: 64px;
+  height: 64px;
+  flex-shrink: 0;
+}
+.greeting-intro-text { flex: 1; min-width: 0; }
 .greeting-hi {
   font-size: 22px;
   font-weight: 500;
   color: var(--text-title);
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   letter-spacing: -0.01em;
 }
 .greeting-sub {
   font-size: 15px;
   color: var(--text-body);
-  margin-bottom: 8px;
-  line-height: 1.5;
-}
-.greeting-credit {
-  font-size: 12px;
-  color: var(--text-faint);
-  margin-bottom: 20px;
-  letter-spacing: 0.02em;
-}
-.greeting-sub-2 {
-  font-size: 14px;
-  color: var(--text-muted);
-  margin: 28px 0 12px;
-  line-height: 1.5;
+  line-height: 1.45;
 }
 .greeting-examples { display: flex; flex-wrap: wrap; gap: 8px; }
 
@@ -609,6 +607,16 @@ button { cursor: pointer; }
   justify-content: center;
   pointer-events: none;
 }
+/* Cold-start / empty-thread mode: ask bar sits in-flow right under the
+   greeting instead of floating at the bottom. Flips back to fixed footer
+   as soon as the user creates their first turn. */
+body.thread-empty .mo-ask-bar {
+  position: static;
+  background: transparent;
+  padding: 0 4px;
+  margin-bottom: 16px;
+  justify-content: flex-start;
+}
 .mo-ask-bar-inner {
   max-width: 720px;
   width: 100%;
@@ -848,7 +856,7 @@ button { cursor: pointer; }
     <svg class="mo-modal-face" viewBox="0 0 40 40"><use href="#icon-face-open"/></svg>
     <div>
       <div class="mo-modal-title" id="aboutTitle">Meet Mo.</div>
-      <div class="mo-modal-sub">Your federal sales buddy. Built on USASpending.</div>
+      <div class="mo-modal-sub">Your federal sales buddy. Who's read every federal contract.</div>
     </div>
     <button class="mo-modal-close" onclick="App.closeAbout()" aria-label="Close">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -867,10 +875,13 @@ button { cursor: pointer; }
 
 <div class="thread" id="thread">
   <div class="greeting" id="greeting">
-    <svg class="greeting-face" viewBox="0 0 40 40"><use href="#icon-face-open"/></svg>
-    <div class="greeting-hi">Hi, I'm Mo.</div>
-    <div class="greeting-sub">Tell me what you sell. I'll show you where the money is and how to get in.</div>
-    <div class="greeting-credit">Built on USASpending</div>
+    <div class="greeting-intro">
+      <svg class="greeting-face" viewBox="0 0 40 40"><use href="#icon-face-open"/></svg>
+      <div class="greeting-intro-text">
+        <div class="greeting-hi">Hi, I'm Mo.</div>
+        <div class="greeting-sub">Your federal sales buddy. Who's read every federal contract.</div>
+      </div>
+    </div>
     <div class="greeting-examples">
       <button class="mo-followup" data-ask="I sell cyber to DoD">I sell cyber to DoD</button>
       <button class="mo-followup" data-ask="Who's winning at HHS">Who's winning at HHS</button>
@@ -1748,6 +1759,39 @@ const App = {
       const pin = e.target.closest('.mo-card-action.pinned, .mo-card-action[title="Pin"]');
       if (pin && pin.classList.contains('pinned')) this._track('pin_card');
     }, true);
+
+    // Place the ask bar under the greeting (cold-start layout).
+    this._updateEmptyState();
+  },
+
+  // Manages the cold-start vs active-thread layout. When the thread has no
+  // turns, the ask bar sits in-flow under Mo's greeting (like ChatGPT's
+  // empty-state). When the user creates a turn, the bar flips to its
+  // fixed-footer position so it stays reachable as they scroll.
+  _updateEmptyState() {
+    const thread = document.getElementById('thread');
+    const greeting = document.getElementById('greeting');
+    const askBar = document.querySelector('.mo-ask-bar');
+    const chips = greeting ? greeting.querySelector('.greeting-examples') : null;
+    if (!thread || !greeting || !askBar) return;
+
+    const hasTurns = !!thread.querySelector('.turn-user, .turn-mo, .turn-loading');
+    if (hasTurns) {
+      // Active thread — ensure bar is at its default footer spot.
+      // If currently parked inside the greeting, move it back to body end.
+      if (askBar.parentNode !== document.body) {
+        document.body.appendChild(askBar);
+      }
+      document.body.classList.remove('thread-empty');
+    } else {
+      // Cold start — move the ask bar into the greeting, between intro and chips.
+      document.body.classList.add('thread-empty');
+      if (chips && askBar.parentNode !== greeting) {
+        greeting.insertBefore(askBar, chips);
+      } else if (!chips && askBar.parentNode !== greeting) {
+        greeting.appendChild(askBar);
+      }
+    }
   },
 
   // ── Analytics ────────────────────────────────────────────
@@ -2467,6 +2511,11 @@ const App = {
     div.className = 'turn-user';
     div.innerHTML = `<div class="turn-user-bubble">${Html.escapeHtml(text)}</div>`;
     thread.appendChild(div);
+    // First turn of a thread: hide the greeting and move the ask bar back to
+    // its permanent footer position.
+    const greeting = document.getElementById('greeting');
+    if (greeting) greeting.style.display = 'none';
+    this._updateEmptyState();
   },
 
   appendLoadingTurn(message = 'Reading the data') {
@@ -2778,6 +2827,8 @@ const App = {
     this._askMoHistory = [];
     document.getElementById('jumpLatest').classList.remove('visible');
     window.scrollTo({ top: 0, behavior: 'smooth' });
+    // Re-park the ask bar under the greeting
+    this._updateEmptyState();
     this._track('reset_thread');
   },
 
