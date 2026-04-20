@@ -43,10 +43,10 @@
 
   --black: #2C2933;
   --white: #FFFBF2;
-  --text-title: #393640;
-  --text-body:  #535059;
-  --text-muted: #7572B7;
-  --text-faint: #ACAAD4;
+  --text-title: #2C2933;
+  --text-body:  #2E2C35;
+  --text-muted: #4A475A;
+  --text-faint: #6C6880;
 
   --bg-screen: #FDFCFF;
   --bg-card:   #FFFFFF;
@@ -416,7 +416,7 @@ button { cursor: pointer; }
   height: 36px;
   padding: 0 16px;
   background: var(--primary-20);
-  border: 1.5px solid var(--primary-40);
+  border: 1.5px solid var(--primary-60);
   border-radius: var(--radius-pill);
   font-size: 14px;
   font-weight: 500;
@@ -636,7 +636,7 @@ button { cursor: pointer; }
   color: var(--text-title);
   outline: none;
 }
-.mo-ask-input::placeholder { color: var(--text-faint); }
+.mo-ask-input::placeholder { color: var(--text-muted); opacity: 1; }
 .mo-ask-send {
   width: 44px;
   height: 44px;
@@ -677,7 +677,7 @@ button { cursor: pointer; }
   color: var(--text-faint);
 }
 .mo-row-agency {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-muted);
   margin-top: 2px;
   overflow: hidden;
@@ -872,16 +872,9 @@ button { cursor: pointer; }
     <div class="greeting-sub">Tell me what you sell. I'll show you where the money is and how to get in.</div>
     <div class="greeting-credit">Built on USASpending</div>
     <div class="greeting-examples">
-      <button class="mo-followup" data-ask="I sell cybersecurity to DoD">I sell cybersecurity to DoD</button>
-      <button class="mo-followup" data-ask="What's expiring in HHS cyber?">What's expiring in HHS cyber?</button>
-      <button class="mo-followup" data-ask="Who owns DISA cloud right now">Who owns DISA cloud right now</button>
-      <button class="mo-followup" data-ask="Where is Splunk losing ground">Where is Splunk losing ground</button>
-    </div>
-    <div class="greeting-sub-2">Or working a deal?</div>
-    <div class="greeting-examples">
-      <button class="mo-followup" data-ask="I can't get a meeting with the program office">I can't get a meeting with the program office</button>
-      <button class="mo-followup" data-ask="There's a new CIO who loves my competitor">New CIO loves my competitor</button>
-      <button class="mo-followup" data-ask="Who should I team with in VA">Who should I team with in VA</button>
+      <button class="mo-followup" data-ask="I sell cyber to DoD">I sell cyber to DoD</button>
+      <button class="mo-followup" data-ask="Who's winning at HHS">Who's winning at HHS</button>
+      <button class="mo-followup" data-ask="Who should I team with at VA">Who should I team with at VA</button>
     </div>
   </div>
 </div>
@@ -893,7 +886,7 @@ button { cursor: pointer; }
 
 <div class="mo-ask-bar">
   <div class="mo-ask-bar-inner">
-    <input type="text" class="mo-ask-input" id="askInput" placeholder="What do you sell?" autocomplete="off" enterkeyhint="send">
+    <input type="text" class="mo-ask-input" id="askInput" placeholder="What do you sell or cover?" autocomplete="off" enterkeyhint="send">
     <button class="mo-ask-send" id="askSend" onclick="App.askFromInput()" aria-label="Send">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
     </button>
@@ -2917,6 +2910,21 @@ function initTreemaps(root) {
 
     const PADDING = 2;
     let svg = `<svg class="mo-treemap" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">`;
+
+    // Pick text color (dark or light) based on the cell's background luminance.
+    // Threshold ~0.55 works well for our purple palette: Purple 100/80/60 get
+    // white text, Purple 40/20 and "Other" grey get dark text.
+    const textColorFor = (hex) => {
+      const h = hex.replace('#', '');
+      const r = parseInt(h.slice(0, 2), 16) / 255;
+      const g = parseInt(h.slice(2, 4), 16) / 255;
+      const b = parseInt(h.slice(4, 6), 16) / 255;
+      const toLin = (c) => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+      const L = 0.2126 * toLin(r) + 0.7152 * toLin(g) + 0.0722 * toLin(b);
+      return L > 0.55 ? { name: 'rgba(44,41,51,0.98)', value: 'rgba(44,41,51,0.80)' }
+                      : { name: 'rgba(255,255,255,0.96)', value: 'rgba(255,255,255,0.82)' };
+    };
+
     laid.forEach(cell => {
       const rx = cell.x + PADDING / 2;
       const ry = cell.y + PADDING / 2;
@@ -2933,9 +2941,10 @@ function initTreemaps(root) {
         const name = cell.name.length > charsFit
           ? cell.name.slice(0, charsFit - 1) + '…'
           : cell.name;
-        svg += `<text x="${(rx + 6).toFixed(1)}" y="${(ry + nameFont + 4).toFixed(1)}" fill="rgba(255,255,255,0.96)" font-size="${nameFont}" font-weight="600">${Html.escapeHtml(name)}</text>`;
+        const tc = textColorFor(cell.color);
+        svg += `<text x="${(rx + 6).toFixed(1)}" y="${(ry + nameFont + 4).toFixed(1)}" fill="${tc.name}" font-size="${nameFont}" font-weight="600">${Html.escapeHtml(name)}</text>`;
         if (rh > nameFont + valueFont + 12) {
-          svg += `<text x="${(rx + 6).toFixed(1)}" y="${(ry + nameFont + valueFont + 10).toFixed(1)}" fill="rgba(255,255,255,0.80)" font-size="${valueFont}" font-weight="500">${Utils.money(cell.value)}</text>`;
+          svg += `<text x="${(rx + 6).toFixed(1)}" y="${(ry + nameFont + valueFont + 10).toFixed(1)}" fill="${tc.value}" font-size="${valueFont}" font-weight="500">${Utils.money(cell.value)}</text>`;
         }
       }
     });
