@@ -92,7 +92,6 @@ button { cursor: pointer; }
   top: 0;
   z-index: 50;
   background: var(--bg-screen);
-  border-bottom: 1px solid var(--border);
   padding: 10px 12px;
   padding-top: calc(10px + env(safe-area-inset-top));
 }
@@ -223,7 +222,6 @@ button { cursor: pointer; }
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 18px;
-  box-shadow: var(--shadow-soft);
 }
 
 .mo-card-actions {
@@ -414,7 +412,7 @@ button { cursor: pointer; }
   height: 36px;
   padding: 0 16px;
   background: var(--primary-20);
-  border: 1.5px solid var(--primary-60);
+  border: none;
   border-radius: var(--radius-pill);
   font-size: 14px;
   font-weight: 500;
@@ -424,11 +422,9 @@ button { cursor: pointer; }
 }
 .mo-followup:hover {
   background: #D8D7EB;
-  border-color: var(--primary-100);
 }
 .mo-followup:active {
   background: var(--primary-40);
-  border-color: var(--primary-100);
   color: #FFFFFF;
   transform: scale(0.97);
 }
@@ -601,8 +597,9 @@ button { cursor: pointer; }
   position: fixed;
   left: 0; right: 0; bottom: 0;
   z-index: 60;
-  background: linear-gradient(to bottom, rgba(253,252,255,0) 0%, var(--bg-screen) 30%);
-  padding: 16px 12px calc(12px + env(safe-area-inset-bottom));
+  background: var(--bg-screen);
+  border-top: 1px solid var(--border);
+  padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
   display: flex;
   justify-content: center;
   pointer-events: none;
@@ -613,6 +610,7 @@ button { cursor: pointer; }
 body.thread-empty .mo-ask-bar {
   position: static;
   background: transparent;
+  border-top: none;
   padding: 0 4px;
   margin-bottom: 16px;
   justify-content: flex-start;
@@ -627,12 +625,10 @@ body.thread-empty .mo-ask-bar {
   border: 1px solid var(--border);
   border-radius: var(--radius-pill);
   padding: 6px 6px 6px 18px;
-  box-shadow: var(--shadow-lift);
   pointer-events: auto;
 }
 .mo-ask-bar-inner:focus-within {
-  border-color: var(--primary-40);
-  box-shadow: 0 4px 16px rgba(70,68,110,0.16);
+  border-color: var(--primary-60);
 }
 .mo-ask-input {
   flex: 1;
@@ -834,14 +830,6 @@ body.thread-empty .mo-ask-bar {
 
 <header class="mo-header">
   <div class="mo-header-inner">
-    <button class="mo-chip" id="lensChip" style="display:none;" aria-label="Selling lens">
-      <span id="lensChipValue"></span>
-      <span class="mo-chip-x" onclick="event.stopPropagation(); App.clearLens()">×</span>
-    </button>
-    <button class="mo-chip" id="terrChip" style="display:none;" aria-label="Territory">
-      <span id="terrChipValue"></span>
-      <span class="mo-chip-x" onclick="event.stopPropagation(); App.clearTerritory()">×</span>
-    </button>
     <div class="mo-header-spacer"></div>
     <button class="mo-header-action" onclick="App.openAbout()" aria-label="About Fedmo">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
@@ -901,6 +889,12 @@ body.thread-empty .mo-ask-bar {
 </div>
 
 <script>
+// Always start at the top on reload — disable the browser's default scroll
+// restoration which remembers where the user was before reload. That behavior
+// is fine for articles but wrong for a chat app where the greeting is the
+// intended entry point.
+if ('scrollRestoration' in history) { history.scrollRestoration = 'manual'; }
+
 // ════════════════════════════════════════════════════════════
 // REAL ENGINE — pure data layer over the fedmo-hello Lambda.
 // One Lambda, one Function URL. Everything dispatched by `request_type`:
@@ -1754,9 +1748,9 @@ const App = {
       if (e.key === 'Enter') { e.preventDefault(); this.askFromInput(); }
     });
     window.addEventListener('scroll', () => this._updateJumpVisibility(), { passive: true });
-    // Restore lens from localStorage
-    const savedLens = localStorage.getItem('fedmo_seller_product');
-    if (savedLens) this.setLens(savedLens);
+    // Clear any stale lens from prior deploys — we no longer use persistent
+    // lens/territory. Context comes from the user's words now.
+    try { localStorage.removeItem('fedmo_seller_product'); } catch(e) {}
 
     // Delegated click handling for data-ask buttons + analytics
     document.addEventListener('click', e => {
@@ -1783,6 +1777,11 @@ const App = {
 
     // Place the ask bar under the greeting (cold-start layout).
     this._updateEmptyState();
+
+    // Force scroll to top. Works with scrollRestoration='manual' set above
+    // to ensure the page always opens on Mo's greeting, not wherever the
+    // user happened to be scrolled when they reloaded.
+    window.scrollTo(0, 0);
   },
 
   // Render the cold-start chips from the GREETING_CHIPS constant. Called
@@ -2816,33 +2815,14 @@ const App = {
     return wrap;
   },
 
-  setLens(lens) {
-    this.state.lens = lens;
-    document.getElementById('lensChip').style.display = 'inline-flex';
-    document.getElementById('lensChipValue').textContent = lens;
-    try { localStorage.setItem('fedmo_seller_product', lens); } catch(e) {}
-  },
-  clearLens() {
-    this.state.lens = null;
-    document.getElementById('lensChip').style.display = 'none';
-    try { localStorage.removeItem('fedmo_seller_product'); } catch(e) {}
-  },
-  setTerritory(t) {
-    // Only accept valid sector keys. Rejecting bogus values (like a vendor
-    // name the router mistakenly sent as territory) prevents downstream
-    // crashes like SECTORS[t].label exploding.
-    if (!t || !SECTORS[t]) {
-      console.warn('[setTerritory] ignoring unknown territory:', t);
-      return;
-    }
-    this.state.territory = t;
-    document.getElementById('terrChip').style.display = 'inline-flex';
-    document.getElementById('terrChipValue').textContent = SECTORS[t].label;
-  },
-  clearTerritory() {
-    this.state.territory = null;
-    document.getElementById('terrChip').style.display = 'none';
-  },
+  // Lens and territory are deprecated. Kept as no-op stubs so any call sites
+  // not yet cleaned up won't crash. Context now comes from the user's words
+  // ("I sell cyber to DoD") and Mo asks when context would meaningfully
+  // change her answer.
+  setLens(_lens) {},
+  clearLens() {},
+  setTerritory(_t) {},
+  clearTerritory() {},
   togglePin(btn) { btn.classList.toggle('pinned'); },
 
   // Reset the thread to the greeting. Lens and territory chips persist
