@@ -912,6 +912,18 @@ body.thread-empty .mo-ask-bar {
 .mo-tell-more-prose p { margin: 0 0 12px; }
 .mo-tell-more-prose p:last-child { margin-bottom: 0; }
 .mo-tell-more-prose strong { color: var(--text-title); font-weight: 600; }
+/* When a prose slot has no content — e.g. Mo wrote a coaching response
+   with no <data> tag, so the post-tag slot stays empty — hide it entirely
+   rather than showing a blank tinted bar. */
+.mo-tell-more-prose:empty { display: none; }
+/* Same for the card slot — coaching responses don't render a data card,
+   so the empty wrapper should collapse rather than taking visual space. */
+.mo-card-slot:empty { display: none; }
+/* Non-empty card slot: breathe a bit between Mo's opening prose and the
+   data card. Matches the 12px gap Mo-tell-more-prose uses above itself,
+   so the visual rhythm of a composite turn (prose → card → prose) is
+   consistent top-to-bottom. */
+.mo-card-slot:not(:empty) { margin-top: 12px; }
 
 /* Empty state — Mo can't find anything */
 .mo-empty {
@@ -1497,34 +1509,18 @@ const Utils = {
     return null;
   },
 
-  // USASpending descriptions usually come in SHOUTING ALL CAPS like
-  // "PROFESSIONAL SERVICES TO SUPPORT SBOM OPTIMIZATION". Humanize them:
-  // keep obvious acronyms, sentence-case everything else, clip cleanly.
-  _DESC_ACRONYMS: new Set([
-    'IT','SBOM','RFP','IDIQ','GWAC','OTA','SEWP','CIO-SP','FAR','DFARS','SOW',
-    'DoD','DOD','DHS','HHS','VA','GSA','NASA','USDA','DOJ','DOT','FBI','CIA','NSA','DOE',
-    'CDM','CMMC','EDR','ERP','HRIS','CRM','ITSM','API','SaaS','PaaS','IaaS',
-    'AI','ML','GenAI','LLM','RPA','OCR','SOC','NOC','SIEM','DLP','EDR','MDR','XDR',
-    'JWCC','OASIS','NETCENTS','ENCORE','ITES','SeaPort','POLARIS','CIO-CS','ADCNOMS'
-  ]),
+  // USASpending descriptions come in all-caps ("AWS CLOUD SERVICES", "SBOM
+  // OPTIMIZATION SUPPORT"). Federal prose is acronym-heavy — JWCC, DISA,
+  // CMMC, IDIQ, SBOM — and lowercasing them produces more casualties than
+  // wins. ("JWCC amazon web services" reads worse than the original.)
+  //
+  // Force uppercase for consistent rendering. Matches how USASpending
+  // itself displays these and preserves every acronym without us having
+  // to maintain a whitelist.
   cleanDescription(raw) {
     if (!raw || typeof raw !== 'string') return '';
     const s = raw.trim();
-    if (!s) return '';
-    // If it's already got mixed case, leave it alone — upstream source cared enough to format it
-    const isAllCaps = s === s.toUpperCase() && /[A-Z]/.test(s);
-    if (!isAllCaps) return s.slice(0, 100);
-    // Sentence-case each word, keeping acronyms. First word always capitalized.
-    const words = s.split(/\s+/);
-    const cleaned = words.map((w, i) => {
-      const stripped = w.replace(/[^A-Za-z0-9]/g, '');
-      if (this._DESC_ACRONYMS.has(stripped)) return w;
-      if (i === 0) {
-        return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
-      }
-      return w.toLowerCase();
-    }).join(' ');
-    return cleaned.slice(0, 100);
+    return s.slice(0, 100).toUpperCase();
   },
 };
 
@@ -1792,25 +1788,78 @@ function buildCardSpec(m, query, sellerLens, territory) {
     action = `Find the gap the incumbents aren't covering.`;
   }
 
-  // Seller-aware action override (only for keyword queries)
-  if (sellerLens && queryType !== 'vendor') {
-    const productUpper = sellerLens.toUpperCase();
-    let productInMarket = false, productSpend = 0, productShare = 0;
+  // Seller-aware action override.
+  //
+  // In v2, if the caller passed sellerLens (because the user pitched what
+  // they sell), we always run this block — regardless of queryType. The v1
+  // `queryType !== 'vendor'` guard was from a world where "show me Leidos"
+  // was a vendor query with no seller context; in v2, sellerLens is only
+  // passed when the user IS the seller, so the seller-aware verdict is
+  // always the right call.
+  //
+  // "In market" means two things:
+  //
+  //   1. Direct prime: the seller's name matches a recipient in the data.
+  //      We normalize both sides so "AWS" matches "AMAZON WEB SERVICES, INC."
+  //
+  //   2. Indirect (reseller/integrator): the seller's name appears in a
+  //      contract description even though the recipient is someone else.
+  //      This is the AWS-at-HHS case where GDIT ($260M) is the prime but
+  //      their contract is literally named "AWS cloud services." Mo should
+  //      NOT say AWS has no contracts here when AWS is the product being
+  //      sold; she should say AWS's indirect footprint is $260M and the
+  //      seller needs to partner with GDIT.
+  //
+  // The indirect-footprint sum isn't perfectly clean — a row's full amount
+  // goes to the "indirect" bucket even though only a slice is actually AWS
+  // consumption. But it's directionally honest for the verdict.
+  if (sellerLens) {
+    const sellerNormalized = Utils.normalizeVendorName(sellerLens);
+    const sellerShortUpper = sellerLens.toUpperCase();
+
+    let directSpend = 0;
+    let indirectSpend = 0;
+    let topIndirectPrime = null;
+    let topIndirectSpend = 0;
+
     for (const [vn, vd] of Object.entries(m.vendors)) {
-      if (vn.toUpperCase().includes(productUpper) || productUpper.includes(vn.toUpperCase())) {
-        productInMarket = true;
-        productSpend = vd.spend;
-        productShare = total > 0 ? Math.round(vd.spend / total * 100) : 0;
-        break;
+      const vendorNormalized = Utils.normalizeVendorName(vn);
+      const isDirect = vendorNormalized.includes(sellerNormalized)
+                    || sellerNormalized.includes(vendorNormalized);
+      if (isDirect) {
+        directSpend += vd.spend;
+      } else {
+        // Check if any of this vendor's contract descriptions reference
+        // the seller's product. If so, this vendor is reselling/integrating.
+        const hasProductInDesc = (vd.contracts || []).some(c => {
+          const desc = (c['Description'] || '').toUpperCase();
+          return desc.includes(sellerShortUpper) || desc.includes(sellerNormalized);
+        });
+        if (hasProductInDesc) {
+          indirectSpend += vd.spend;
+          if (vd.spend > topIndirectSpend) {
+            topIndirectSpend = vd.spend;
+            topIndirectPrime = vn;
+          }
+        }
       }
     }
+
+    const totalSellerSpend = directSpend + indirectSpend;
+    const sellerShare = total > 0 ? Math.round(totalSellerSpend / total * 100) : 0;
+    const productInMarket = totalSellerSpend > 0;
+
     if (isChannelMarket) {
       const topVar = tc(top5VendorsUpper.filter(v => KNOWN_VARS.has(v))[0] || '');
       action = `Get ${sellerLens} listed with ${topVar}. Your product moves through them.`;
-    } else if (productInMarket && productShare >= 10) {
-      action = `${sellerLens} already holds ${productShare}% here. Defend the expiring contracts and expand into adjacent agencies.`;
-    } else if (productInMarket) {
-      action = `${sellerLens} has a footprint here (${Utils.money(productSpend)}). Build on it.`;
+    } else if (directSpend > 0 && sellerShare >= 10) {
+      action = `${sellerLens} already holds ${sellerShare}% here. Defend the expiring contracts and expand into adjacent agencies.`;
+    } else if (directSpend > 0) {
+      action = `${sellerLens} has a direct footprint here (${Utils.money(directSpend)}). Build on it and chase the indirect volume through resellers and integrators.`;
+    } else if (indirectSpend > 0 && topIndirectPrime) {
+      // No direct presence, but the product IS being sold here through a prime.
+      const primeShort = tc(Utils.normalizeVendorName(topIndirectPrime));
+      action = `${sellerLens} is moving through ${primeShort} here (${Utils.money(indirectSpend)} in bundled work). Your path is partnering with them on the recompete, not displacing them.`;
     } else if (isConcentrated && exp90Val > 0) {
       action = `${sellerLens} has no contracts here. Target ${Utils.money(exp90Val)} in expiring work — position as an alternative through a prime or vehicle.`;
     } else if (isConcentrated) {
@@ -2354,8 +2403,8 @@ const App = {
         <span class="turn-mo-meta">Mo · just now</span>
       </div>
       <div class="mo-tell-more-prose" id="${turnId}-pre"><span style="color:var(--text-faint);">Mo's thinking…</span></div>
-      <div id="${turnId}-card"></div>
-      <div class="mo-tell-more-prose" id="${turnId}-post" style="margin-top: 12px;"></div>
+      <div class="mo-card-slot" id="${turnId}-card"></div>
+      <div class="mo-tell-more-prose" id="${turnId}-post"></div>
     `;
     thread.appendChild(wrap);
     this._updateEmptyState();
