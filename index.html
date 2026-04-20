@@ -269,10 +269,10 @@ button { cursor: pointer; }
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
-  padding: 14px;
-  background: var(--bg-tint);
-  border-radius: 12px;
-  margin-bottom: 18px;
+  padding: 14px 0;
+  margin: 14px 0 6px;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
 }
 .mo-stat { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .mo-stat-value {
@@ -675,6 +675,14 @@ button { cursor: pointer; }
   gap: 8px;
   font-size: 11px;
   color: var(--text-faint);
+}
+.mo-row-agency {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .mo-row-2line-meta {
   font-variant-numeric: tabular-nums;
@@ -1523,12 +1531,20 @@ function buildCardSpec(m, query, sellerLens, territory) {
   const primes = vendorSorted.slice(0, 5).map(([name, v]) => {
     const biggest = (v.contracts || []).sort((a,b) => (parseFloat(b['Award Amount'])||0) - (parseFloat(a['Award Amount'])||0))[0];
     const vehicle = biggest ? Utils.detectVehicle(biggest) : null;
+    // Agency context for the row's biggest contract. Sellers need this to
+    // know which part of the federal government this vendor's dominant work
+    // is actually in — "Deloitte $249M" means different things at Army vs HHS.
+    const agencyShort = biggest ? Utils.cleanAgency(biggest['Awarding Agency'] || '') : '';
+    const office = biggest && biggest['Awarding Sub Agency'] && biggest['Awarding Sub Agency'] !== biggest['Awarding Agency']
+      ? biggest['Awarding Sub Agency'] : '';
+    const agency = office ? `${agencyShort} · ${office}` : agencyShort;
     return {
       name: tc(name),
       spend: Utils.money(v.spend),
       pct: Math.round(v.spend / top1Spend * 100),
       contractId: biggest ? (biggest['Award ID'] || '') : '',
       vehicle: vehicle,
+      agency: agency,
       link: biggest && biggest['generated_internal_id']
         ? `https://www.usaspending.gov/award/${biggest['generated_internal_id']}`
         : null,
@@ -2531,6 +2547,7 @@ const App = {
             <span class="mo-row-bar"><span class="mo-row-bar-fill" style="width:${p.pct}%"></span></span>
             <span class="mo-row-amount">${Html.escapeHtml(p.spend)}</span>
           </div>
+          ${p.agency ? `<div class="mo-row-agency">${Html.escapeHtml(p.agency)}</div>` : ''}
           ${meta || p.link ? `<div class="mo-row-2line-bottom">
             <span class="mo-row-2line-meta">${Html.escapeHtml(meta)}</span>
             ${p.link ? `<a class="mo-view-link" href="${p.link}" target="_blank" rel="noopener">View<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></a>` : ''}
