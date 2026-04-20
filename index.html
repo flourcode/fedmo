@@ -301,8 +301,8 @@ button { cursor: pointer; }
 .mo-treemap {
   width: 100%;
   height: auto;
-  aspect-ratio: 700 / 180;
-  max-height: 180px;
+  aspect-ratio: 480 / 280;
+  max-height: 320px;
   border-radius: 10px;
   overflow: hidden;
   display: block;
@@ -1486,16 +1486,23 @@ function buildCardSpec(m, query, sellerLens, territory) {
     { label: 'Top 3', value: top3Pct + '%' },
   ];
 
-  // ── Treemap — top 6 vendors + Other ───────────────────────
+  // ── Treemap — top 6 agencies + Other. Agency breakdown tells the seller
+  // where the money is coming from (NASA vs VA vs Air Force), which is more
+  // actionable than vendor breakdown for finding openings.
+  // agencySorted is already computed above.
   const palette = ['#46446E','#5E5B92','#7572B7','#9B98C8','#ACAAD4','#BCB9D8'];
-  const treemap = vendorSorted.slice(0, 6).map(([name, v], i) => ({
-    name: tc(name).slice(0, 22),
-    value: Math.round(v.spend / 1e6),
+  const treemap = agencySorted.slice(0, 6).map(([name, spend], i) => ({
+    name: Utils.cleanAgency(name),
+    value: spend,  // keep as raw dollars; renderer formats for display
     color: palette[i] || '#CDCBE3',
   }));
-  const otherSpend = vendorSorted.slice(6).reduce((s,[,v]) => s + v.spend, 0);
+  const otherSpend = agencySorted.slice(6).reduce((s,[,v]) => s + v, 0);
   if (otherSpend > 0) {
-    treemap.push({ name: `Other (${vendorSorted.length - 6})`, value: Math.round(otherSpend / 1e6), color: '#CDCBE3' });
+    treemap.push({
+      name: `Other (${agencySorted.length - 6})`,
+      value: otherSpend,
+      color: '#CDCBE3',
+    });
   }
 
   // ── Top primes — with biggest contract ID + USASpending link
@@ -2694,28 +2701,115 @@ const App = {
 };
 
 // ── Treemap renderer (slice & dice, single row) ──────────────
-function renderTreemap(items) {
-  const total = items.reduce((s, x) => s + x.value, 0);
-  // Fixed viewBox. preserveAspectRatio defaults to "xMidYMid meet" — the SVG
-  // scales uniformly to fit its container width. Text and rects stretch at the
-  // same rate, so no horizontal squishing on mobile.
-  const w = 700, h = 180;
-  let x = 0;
-  let svg = `<svg class="mo-treemap" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">`;
-  items.forEach(it => {
-    const cellW = (it.value / total) * w;
-    svg += `<rect x="${x}" y="0" width="${cellW}" height="${h}" fill="${it.color}"/>`;
-    if (cellW > 60) {
-      // Truncate long vendor names that won't fit. ~7px per char at font-size 13
-      // with ~20px padding (10 each side).
-      const charsFit = Math.max(4, Math.floor((cellW - 20) / 7));
-      const name = it.name.length > charsFit
-        ? it.name.slice(0, charsFit - 1) + '…'
-        : it.name;
-      svg += `<text x="${x + 10}" y="22" fill="rgba(255,255,255,0.96)" font-size="13" font-weight="500">${Html.escapeHtml(name)}</text>`;
-      svg += `<text x="${x + 10}" y="40" fill="rgba(255,255,255,0.78)" font-size="12">$${it.value}M</text>`;
+// ── 2D treemap: squarify algorithm (Bruls, Huijbregts, van Wijk 2000) ──
+//
+// Produces near-square rectangles sized by value. Unlike the old single-row
+// "bar chart in treemap clothing," this gives the user a real sense of market
+// concentration — one dominant agency shows up as a big square, fragmented
+// markets show up as a tiled grid.
+//
+// Hand-rolled, no d3 dependency. ~90 lines including layout + render.
+// ─────────────────────────────────────────────────────────────────────
+
+function squarify(items, x, y, width, height) {
+  // Returns items with { x, y, w, h } fields added.
+  // items: [{ value, ... }] sorted largest-first
+  const out = [];
+  const remaining = items.slice();
+  let rect = { x, y, w: width, h: height };
+
+  while (remaining.length > 0) {
+    const shortSide = Math.min(rect.w, rect.h);
+    const rectArea = rect.w * rect.h;
+    const totalValue = remaining.reduce((s, it) => s + it.value, 0);
+    // Scale values to area
+    const scaled = remaining.map(it => ({ ...it, area: (it.value / totalValue) * rectArea }));
+
+    // Greedily accumulate a "row" that runs along shortSide. Stop when
+    // adding another item would worsen the worst aspect ratio in the row.
+    const row = [scaled[0]];
+    let i = 1;
+    while (i < scaled.length && worst([...row, scaled[i]], shortSide) <= worst(row, shortSide)) {
+      row.push(scaled[i]);
+      i++;
     }
-    x += cellW;
+
+    // Lay out this row along the short side
+    const rowArea = row.reduce((s, it) => s + it.area, 0);
+    const rowThickness = rowArea / shortSide;
+    let cursor = 0;
+    if (rect.w <= rect.h) {
+      // Row runs horizontally across the top
+      row.forEach(it => {
+        const w = (it.area / rowThickness);
+        out.push({ ...it, x: rect.x + cursor, y: rect.y, w, h: rowThickness });
+        cursor += w;
+      });
+      rect = { x: rect.x, y: rect.y + rowThickness, w: rect.w, h: rect.h - rowThickness };
+    } else {
+      // Row runs vertically down the left
+      row.forEach(it => {
+        const h = (it.area / rowThickness);
+        out.push({ ...it, x: rect.x, y: rect.y + cursor, w: rowThickness, h });
+        cursor += h;
+      });
+      rect = { x: rect.x + rowThickness, y: rect.y, w: rect.w - rowThickness, h: rect.h };
+    }
+
+    remaining.splice(0, row.length);
+  }
+
+  return out;
+}
+
+// Worst aspect ratio in a row, given the length of the side it lies along
+function worst(row, sideLength) {
+  const rowSum = row.reduce((s, it) => s + it.area, 0);
+  const sideSq = sideLength * sideLength;
+  const sumSq = rowSum * rowSum;
+  return Math.max(
+    ...row.map(it => Math.max(
+      (sideSq * it.area) / sumSq,
+      sumSq / (sideSq * it.area)
+    ))
+  );
+}
+
+function renderTreemap(items) {
+  if (!items || items.length === 0) return '';
+  // Sort largest first — squarify needs this
+  const sorted = items.slice().sort((a, b) => b.value - a.value);
+  // SVG viewBox matches typical card shape. Aspect ratio matches the card too.
+  const W = 480, H = 280;
+  const PADDING = 2;  // gap between cells
+  const laid = squarify(sorted, 0, 0, W, H);
+
+  let svg = `<svg class="mo-treemap" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">`;
+  laid.forEach(cell => {
+    // Pad inner rect so there's a subtle gap between tiles
+    const rx = cell.x + PADDING / 2;
+    const ry = cell.y + PADDING / 2;
+    const rw = Math.max(0, cell.w - PADDING);
+    const rh = Math.max(0, cell.h - PADDING);
+    svg += `<rect x="${rx.toFixed(1)}" y="${ry.toFixed(1)}" width="${rw.toFixed(1)}" height="${rh.toFixed(1)}" fill="${cell.color}" rx="3"/>`;
+
+    // Label only if the cell is big enough to fit text comfortably
+    if (rw > 55 && rh > 30) {
+      // Choose font size based on cell size — bigger cells get bigger labels
+      const area = rw * rh;
+      const nameFont = area > 12000 ? 16 : area > 5000 ? 13 : 11;
+      const valueFont = Math.max(nameFont - 2, 10);
+      // Character budget: ~0.55 * fontSize per char, leave 12px padding
+      const charsFit = Math.max(4, Math.floor((rw - 12) / (nameFont * 0.55)));
+      const name = cell.name.length > charsFit
+        ? cell.name.slice(0, charsFit - 1) + '…'
+        : cell.name;
+      svg += `<text x="${(rx + 6).toFixed(1)}" y="${(ry + nameFont + 4).toFixed(1)}" fill="rgba(255,255,255,0.96)" font-size="${nameFont}" font-weight="600">${Html.escapeHtml(name)}</text>`;
+      // Value line only if cell is tall enough
+      if (rh > nameFont + valueFont + 12) {
+        svg += `<text x="${(rx + 6).toFixed(1)}" y="${(ry + nameFont + valueFont + 10).toFixed(1)}" fill="rgba(255,255,255,0.80)" font-size="${valueFont}" font-weight="500">${Utils.money(cell.value)}</text>`;
+      }
+    }
   });
   svg += `</svg>`;
   return svg;
