@@ -707,6 +707,53 @@ body.thread-empty .mo-ask-bar {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Subaward-specific: prime → sub name styling and teaming signal list */
+.mo-sub-prime { color: var(--text-muted); font-weight: 400; }
+.mo-sub-arrow { color: var(--text-faint); margin: 0 6px; font-weight: 400; }
+.mo-signal-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 16px;
+}
+.mo-signal-item {
+  font-size: 14px;
+  color: var(--text-body);
+  line-height: 1.5;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+.mo-signal-item:last-child { border-bottom: none; }
+.mo-subaward-note {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+  line-height: 1.45;
+  margin-top: 16px;
+  padding: 12px 16px;
+  background: var(--bg-tint);
+  border-radius: var(--radius-sm);
+}
+
+/* Tell Me More follow-up chip inserted post-stream when subs exist */
+.mo-post-stream-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  height: 32px;
+  padding: 0 14px;
+  background: var(--primary-20);
+  border: none;
+  border-radius: var(--radius-pill);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--primary-100);
+  font-family: var(--font);
+  cursor: pointer;
+  animation: turnIn 240ms ease;
+}
+.mo-post-stream-chip:active { background: var(--primary-40); color: var(--white); }
 .mo-row-2line-meta {
   font-variant-numeric: tabular-nums;
   overflow: hidden;
@@ -1431,6 +1478,69 @@ const API = {
 
     return cleanAndSort(rawData);
   },
+
+  // Subaward data — prime-to-sub relationships. Not a subset of prime awards,
+  // a separate lens answering "who's actually delivering the work underneath."
+  // Reporting has known gaps (mandatory only >$30k, self-reported, months of lag).
+  // Session-cached by filter hash since users often re-ask in the same thread.
+  _subawardCache: new Map(),
+
+  async fetchSubawards(searchIntent) {
+    const period = Utils.getTrailing12Mo()[0];
+    const filters = { time_period: [period], award_type_codes: this.CONTRACT_TYPES };
+
+    if (Array.isArray(searchIntent.keywords) && searchIntent.keywords.length > 0) {
+      filters.keywords = searchIntent.keywords;
+    }
+    if (Array.isArray(searchIntent.naics) && searchIntent.naics.length > 0) {
+      filters.naics_codes = { require: searchIntent.naics };
+    }
+    if (Array.isArray(searchIntent.psc) && searchIntent.psc.length > 0) {
+      filters.psc_codes = searchIntent.psc.map(p => p.toUpperCase());
+    }
+    if (searchIntent.agency && searchIntent.agency.name) {
+      filters.agencies = [{
+        type: 'awarding',
+        tier: searchIntent.agency.tier || 'toptier',
+        name: searchIntent.agency.name,
+        toptier_name: searchIntent.agency.toptier_name,
+      }];
+    }
+    const useTerritory = searchIntent.territory;
+    applySectorFilter(filters, useTerritory);
+
+    // Session cache — same filter shape means same answer for this session
+    const cacheKey = JSON.stringify(filters);
+    if (this._subawardCache.has(cacheKey)) {
+      console.debug('[subaward] cache hit');
+      return this._subawardCache.get(cacheKey);
+    }
+
+    try {
+      const res = await this._post('/search/spending_by_award/', {
+        subawards: true,
+        filters,
+        fields: [
+          'Sub-Award ID', 'Sub-Awardee Name', 'Sub-Award Amount', 'Sub-Award Date',
+          'Prime Award ID', 'Prime Recipient Name', 'Awarding Agency', 'Awarding Sub Agency',
+          'prime_award_generated_internal_id', 'Description', 'pop_state_code', 'NAICS'
+        ],
+        limit: 100,
+        sort: 'Sub-Award Amount',
+        order: 'desc',
+      });
+      const subs = (res.results || []).map(s => {
+        if (s['Prime Recipient Name']) s['Prime Recipient Name'] = Utils.normalizeVendorName(s['Prime Recipient Name']);
+        if (s['Sub-Awardee Name']) s['Sub-Awardee Name'] = Utils.normalizeVendorName(s['Sub-Awardee Name']);
+        return s;
+      });
+      this._subawardCache.set(cacheKey, subs);
+      return subs;
+    } catch (err) {
+      console.warn('[subaward] fetch failed:', err.message);
+      return [];  // Graceful fallback — empty list, not an error
+    }
+  },
 };
 
 // ── analyzeMarket: build marketMetrics from raw contracts ────
@@ -1484,6 +1594,111 @@ function analyzeMarket(data, currentQuery) {
     m.targetVendorData = vendorMatch[1];
   }
   return m;
+}
+
+// ── analyzeSubawards: turn raw sub records into card-ready signals ──
+// Answers: who's moving the sub work, who's the most-wired sub,
+// which subs have leverage (work with multiple primes), which primes
+// build teams (work with many subs)?
+// Ported from govhoo's _renderSubawardSignals, adapted for the card pipeline.
+function analyzeSubawards(subs, marketLabel) {
+  if (!subs || !subs.length) return null;
+  const tc = s => Utils.titleCase(s);
+
+  const primes = {}, subvendors = {}, agencies = {};
+  let totalSubVal = 0;
+  subs.forEach(s => {
+    const amt = parseFloat(s['Sub-Award Amount']) || 0;
+    const prime = s['Prime Recipient Name'] || 'Unknown';
+    const sub = s['Sub-Awardee Name'] || 'Unknown';
+    const agency = s['Awarding Agency'] || 'Unknown';
+    totalSubVal += amt;
+    if (!primes[prime]) primes[prime] = { spend: 0, count: 0, subs: new Set() };
+    primes[prime].spend += amt; primes[prime].count++; primes[prime].subs.add(sub);
+    if (!subvendors[sub]) subvendors[sub] = { spend: 0, count: 0, primes: new Set() };
+    subvendors[sub].spend += amt; subvendors[sub].count++; subvendors[sub].primes.add(prime);
+    agencies[agency] = (agencies[agency] || 0) + amt;
+  });
+
+  const primeSorted = Object.entries(primes).sort((a, b) => b[1].spend - a[1].spend);
+  const subSorted = Object.entries(subvendors).sort((a, b) => b[1].spend - a[1].spend);
+  const topPrime = tc(primeSorted[0]?.[0] || '');
+  const topPrimeData = primeSorted[0]?.[1] || { spend: 0, count: 0, subs: new Set() };
+  const topPrimePct = totalSubVal > 0 ? Math.round(topPrimeData.spend / totalSubVal * 100) : 0;
+  const topSub = tc(subSorted[0]?.[0] || '');
+  const topSubData = subSorted[0]?.[1] || { spend: 0, count: 0, primes: new Set() };
+  const primeCount = primeSorted.length;
+  const subCount = subSorted.length;
+  const avgSubSize = subs.length > 0 ? totalSubVal / subs.length : 0;
+
+  // Verdict — matches govhoo's logic but in Mo's voice
+  let face, verdict, action;
+  const isConcentrated = topPrimePct >= 50;
+  const hasManyPrimes = primeCount >= 3;
+  const hasManySubs = subCount >= 5;
+
+  if (hasManyPrimes && hasManySubs && !isConcentrated) {
+    face = 'open';
+    verdict = `Active sub market. ${primeCount} primes are spreading work across ${subCount} subs.`;
+    action = `Multiple primes are actively building teams here. Good place to pitch your capabilities.`;
+  } else if (isConcentrated && hasManyPrimes) {
+    face = 'watch';
+    verdict = `${topPrime} controls ${topPrimePct}% of the sub work here. Others are in the mix but smaller.`;
+    action = `Start with ${topPrime}'s capture team. They're moving the most work.`;
+  } else if (isConcentrated) {
+    face = 'locked';
+    verdict = `Most sub work flows through ${topPrime}.`;
+    action = `${topPrime} is your path in. Talk to their team.`;
+  } else {
+    face = 'watch';
+    verdict = `Light sub activity — ${subs.length} reported subawards across ${primeCount} primes.`;
+    action = `Thin data here. Worth a call to any of the primes to understand their teaming.`;
+  }
+
+  // Teaming signals — the useful stuff beyond the verdict
+  const signals = [];
+  if (topPrimeData.subs.size >= 3) {
+    signals.push(`${topPrime} works with ${topPrimeData.subs.size} different subs — they actively build teams. If you have a niche capability, approach their capture team directly.`);
+  }
+  if (topSubData.primes.size >= 2) {
+    signals.push(`${topSub} subs to ${topSubData.primes.size} different primes — the most connected sub in this market. Study what they do or partner with them.`);
+  }
+  const multiPrimeSubs = subSorted.filter(([, d]) => d.primes.size >= 2);
+  if (multiPrimeSubs.length >= 2) {
+    signals.push(`${multiPrimeSubs.length} subs work with multiple primes. That means the primes are competing for the same talent, which gives subs leverage in teaming negotiations.`);
+  }
+
+  // Top prime→sub relationships for the list view
+  const relationships = subs.slice(0, 25).map(s => {
+    const prime = tc(s['Prime Recipient Name'] || 'Unknown');
+    const sub = tc(s['Sub-Awardee Name'] || 'Unknown');
+    const agency = Utils.cleanAgency(s['Awarding Agency'] || s['Awarding Sub Agency'] || '');
+    const amt = parseFloat(s['Sub-Award Amount']) || 0;
+    const date = s['Sub-Award Date'] ? new Date(s['Sub-Award Date']).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : '';
+    const naicsObj = s['NAICS'];
+    const naicsDesc = naicsObj && typeof naicsObj === 'object' && naicsObj.description
+      ? Utils.titleCase(naicsObj.description.split('(')[0].trim().toLowerCase()) : '';
+    const link = s['prime_award_generated_internal_id']
+      ? `https://www.usaspending.gov/award/${s['prime_award_generated_internal_id']}`
+      : null;
+    return { prime, sub, agency, amount: Utils.money(amt), date, naicsDesc, link };
+  });
+
+  return {
+    label: marketLabel,
+    verdict: { face, text: verdict, action },
+    stats: [
+      { value: Utils.money(totalSubVal), label: 'Sub spend' },
+      { value: String(primeCount), label: 'Primes' },
+      { value: String(subCount), label: 'Subs' },
+    ],
+    signals,
+    relationships,
+    totalSubs: subs.length,
+    avgSubSize: Utils.money(avgSubSize),
+    topPrime, topPrimePct,
+    reportingNote: 'Subaward reporting is mandatory only above $30K and often lags the prime award by months. This is a lower-bound picture, not complete.',
+  };
 }
 
 // ── buildCardSpec: turn marketMetrics into card data ────────
@@ -1685,6 +1900,7 @@ function buildCardSpec(m, query, sellerLens, territory) {
     followups.push(`What's expiring next?`);
   }
   if (isChannelMarket) followups.push(`Which VAR has the deepest reach?`);
+  followups.push(`Who's subbing here?`);
   followups.push(`Tell me more`);
 
   return {
@@ -2010,6 +2226,7 @@ const App = {
         case 'ask':          await this.runAskMo(effectiveIntent.question || question, loadingId); break;
         case 'seller_pitch': await this.runSellerPitch(effectiveIntent, loadingId); break;
         case 'compare':      await this.runCompare(effectiveIntent, loadingId); break;
+        case 'subaward_search': await this.runSubawardSearch(loadingId); break;
         case 'reset':        this.replaceLoading(loadingId, document.createDocumentFragment()); this.resetThread(); break;
         case 'clarify':      this.replaceLoading(loadingId, this.buildClarifyTurn(effectiveIntent.question || 'What are you trying to find?')); break;
         default:
@@ -2306,6 +2523,33 @@ const App = {
     });
   },
 
+  // Fire subaward fetch post-stream. If results come back non-empty, append
+  // a "Who's subbing here" chip below the prose. Silent on empty results or
+  // errors — user never sees a failed probe.
+  async _appendSubawardChipIfAvailable(proseEl) {
+    if (!proseEl || !this.state.lastSearchIntent) return;
+    try {
+      const subs = await API.fetchSubawards(this.state.lastSearchIntent);
+      if (!subs || subs.length === 0) return;  // Silent fallback — no chip, no indicator
+      if (!proseEl.isConnected) return;  // User dismissed the card while we were fetching
+
+      const chip = document.createElement('button');
+      chip.className = 'mo-post-stream-chip';
+      chip.setAttribute('data-ask', "Who's subbing here?");
+      chip.innerHTML = `Who's subbing here? <span style="opacity:0.7;font-weight:400;">(${subs.length} found)</span>`;
+      chip.addEventListener('click', () => this.ask("Who's subbing here?"));
+
+      const wrapper = document.createElement('div');
+      wrapper.style.marginTop = '4px';
+      wrapper.appendChild(chip);
+      proseEl.parentElement.insertBefore(wrapper, proseEl.nextSibling);
+      this._track('subaward_chip_shown', { count: subs.length });
+    } catch (err) {
+      console.debug('[subaward] probe failed silently:', err.message);
+      // Intentionally no UI — silent fallback
+    }
+  },
+
   _loadingMessageFor(intent) {
     switch (intent.intent) {
       case 'search':
@@ -2315,6 +2559,7 @@ const App = {
         return intent.label ? `Filtering to ${intent.label}` : 'Refining the data';
       case 'ask':       return 'Mo\'s thinking';
       case 'compare':   return intent.label ? `Pulling ${intent.label}` : 'Running comparison';
+      case 'subaward_search': return 'Pulling subaward data';
       case 'clarify':   return 'One sec';
       default:          return 'Reading the data';
     }
@@ -2497,6 +2742,163 @@ const App = {
     return this.runSearch({ ...intent.second_search, label: intent.label || intent.second_search.label }, loadingId);
   },
 
+  // ── runSubawardSearch: fetch and render sub-relationships ───
+  // Uses the most recent search intent as the filter context so the
+  // subaward view stays scoped to the same market the user's looking at.
+  // Graceful empty state — no sub data disclosed is a real and common
+  // case, not an error.
+  async runSubawardSearch(loadingId) {
+    const searchIntent = this.state.lastSearchIntent;
+    const label = this.state.lastQuery || 'this market';
+
+    if (!searchIntent) {
+      this.replaceLoading(loadingId, this.buildErrorTurn('Run a search first, then Mo can pull the subaward data for it.'));
+      return;
+    }
+
+    let subs;
+    try {
+      subs = await API.fetchSubawards(searchIntent);
+    } catch (err) {
+      console.error('Subaward fetch error:', err);
+      this.replaceLoading(loadingId, this.buildErrorTurn(err.message || 'Something went sideways.', { retry: 'who subs here' }));
+      return;
+    }
+
+    if (!subs || subs.length === 0) {
+      this.replaceLoading(loadingId, this.buildSubawardEmptyTurn(label));
+      return;
+    }
+
+    const subSpec = analyzeSubawards(subs, label);
+    if (!subSpec) {
+      this.replaceLoading(loadingId, this.buildSubawardEmptyTurn(label));
+      return;
+    }
+
+    this.state.lastSubawardSpec = subSpec;
+    this._track('subaward_render', { market: label.slice(0, 40), primes: subSpec.stats[1].value, subs: subSpec.stats[2].value });
+    this._recentTurns.push({ role: 'mo', text: `Showed subaward card: ${label} · ${subSpec.verdict.text}` });
+
+    this.replaceLoading(loadingId, this.buildSubawardTurn(subSpec));
+  },
+
+  // ── buildSubawardTurn — subaward card renderer ──────────────
+  // Same visual DNA as the primary market card: face, verdict, action,
+  // stat row, section heads. Different content underneath: prime→sub
+  // relationships instead of prime awards, teaming signals instead of
+  // expiring contracts. Ends with the reporting-gap note.
+  buildSubawardTurn(spec) {
+    const wrap = document.createElement('div');
+    wrap.className = 'turn-mo';
+    const faceHref = `#icon-face-${spec.verdict.face}`;
+    let html = `
+      <div class="turn-mo-header">
+        <svg viewBox="0 0 40 40"><use href="${faceHref}"/></svg>
+        <span class="turn-mo-meta">Mo · just now</span>
+      </div>
+      <div class="turn-mo-card">
+        <div class="mo-card-actions">
+          <button class="mo-card-action" title="Dismiss" onclick="this.closest('.turn-mo').remove()" aria-label="Dismiss">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="mo-framing">Subaward view: who's actually doing the work underneath the primes on <strong>${Html.escapeHtml(spec.label)}</strong>.</div>
+        <div class="mo-verdict">${Html.escapeHtml(spec.verdict.text)}</div>
+        <div class="mo-action">${Html.escapeHtml(spec.verdict.action)}</div>
+        <div class="mo-stat-row">`;
+    spec.stats.forEach(s => {
+      html += `<div class="mo-stat"><div class="mo-stat-value">${Html.escapeHtml(s.value)}</div><div class="mo-stat-label">${Html.escapeHtml(s.label)}</div></div>`;
+    });
+    html += `</div>`;
+
+    // Teaming signals — the high-value observations
+    if (spec.signals && spec.signals.length > 0) {
+      html += `<div class="mo-comp-head"><div class="mo-comp-title">Teaming signals</div></div>`;
+      html += `<ul class="mo-signal-list">`;
+      spec.signals.forEach(sig => {
+        html += `<li class="mo-signal-item">${Html.escapeHtml(sig)}</li>`;
+      });
+      html += `</ul>`;
+    }
+
+    // Prime → sub relationship list
+    if (spec.relationships && spec.relationships.length > 0) {
+      const shownCount = Math.min(8, spec.relationships.length);
+      const hasMore = spec.relationships.length > shownCount;
+      html += `<div class="mo-comp-head"><div class="mo-comp-title">Prime → Sub</div><div class="mo-comp-meta">${shownCount} of ${spec.totalSubs} shown</div></div><div class="mo-list">`;
+      const renderRelRow = (r) => {
+        const liUrl = `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent('"' + r.sub + '"')}&origin=GLOBAL_SEARCH_HEADER`;
+        return `<div class="mo-row-2line">
+          <div class="mo-row-2line-top">
+            <span class="mo-row-name"><span class="mo-sub-prime">${Html.escapeHtml(r.prime)}</span> <span class="mo-sub-arrow">→</span> ${Html.escapeHtml(r.sub)}</span>
+            <span class="mo-row-amount">${Html.escapeHtml(r.amount)}</span>
+          </div>
+          ${r.agency ? `<div class="mo-row-agency">${Html.escapeHtml(r.agency)}${r.date ? ` · ${Html.escapeHtml(r.date)}` : ''}</div>` : ''}
+          ${r.naicsDesc ? `<div class="mo-row-desc">${Html.escapeHtml(r.naicsDesc)}</div>` : ''}
+          <div class="mo-row-2line-bottom">
+            <span class="mo-row-2line-meta"></span>
+            <span class="mo-row-actions">
+              <a class="mo-action-link" href="${liUrl}" target="_blank" rel="noopener" title="Find ${Html.escapeHtml(r.sub)} employees on LinkedIn" onclick="App._track('linkedin_search', { vendor: '${Html.escapeHtml(r.sub).slice(0,40)}' })">Sub people</a>
+              ${r.link ? `<a class="mo-action-link mo-action-link-primary" href="${r.link}" target="_blank" rel="noopener">View prime</a>` : ''}
+            </span>
+          </div>
+        </div>`;
+      };
+      spec.relationships.slice(0, shownCount).forEach(r => { html += renderRelRow(r); });
+      if (hasMore) {
+        html += `<button class="mo-show-more" onclick="App._expandSubawardRows(this)">Show ${spec.totalSubs - shownCount} more</button>`;
+        html += `<div class="mo-subaward-more-rows" style="display:none;">`;
+        spec.relationships.slice(shownCount).forEach(r => { html += renderRelRow(r); });
+        html += `</div>`;
+      }
+      html += `</div>`;
+    }
+
+    // Reporting gap note — honest, short, earns trust
+    html += `<div class="mo-subaward-note">${Html.escapeHtml(spec.reportingNote)}</div>`;
+
+    // Followups — what else can you ask about this subaward data
+    html += `<div class="mo-followups">
+      <button class="mo-followup" data-ask="Who should I team with first?">Who should I team with first?</button>
+      <button class="mo-followup" data-ask="Draft outreach to the top prime">Draft outreach to the top prime</button>
+    </div>`;
+
+    html += `<div class="mo-source">${spec.totalSubs} subawards · USASpending.gov</div>`;
+    html += `</div>`;
+
+    wrap.innerHTML = html;
+    return wrap;
+  },
+
+  _expandSubawardRows(btn) {
+    const moreRows = btn.parentElement.querySelector('.mo-subaward-more-rows');
+    if (moreRows) moreRows.style.display = 'block';
+    btn.remove();
+  },
+
+  buildSubawardEmptyTurn(label) {
+    const wrap = document.createElement('div');
+    wrap.className = 'turn-mo';
+    wrap.innerHTML = `
+      <div class="turn-mo-header">
+        <svg viewBox="0 0 40 40"><use href="#icon-face-watch"/></svg>
+        <span class="turn-mo-meta">Mo · just now</span>
+      </div>
+      <div class="turn-mo-card">
+        <div class="mo-card-actions">
+          <button class="mo-card-action" title="Dismiss" onclick="this.closest('.turn-mo').remove()" aria-label="Dismiss">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="mo-empty">
+          <div class="mo-empty-msg">No subaward data disclosed for <strong>${Html.escapeHtml(label)}</strong>. That's common — reporting is only mandatory above $30K and many primes disclose late or not at all. The prime awards are where you'd work instead.</div>
+        </div>
+      </div>
+    `;
+    return wrap;
+  },
+
   // ── In-browser contract filter for instant refines ──────────
   _filterContractsInBrowser(m, mods) {
     // Reconstruct a contract list from the metrics' vendor->contracts map
@@ -2650,6 +3052,16 @@ const App = {
             // "Booz Allen is defending the expiring work," tapping Booz
             // Allen opens a LinkedIn search for their employees.
             this._linkifyVendorNames(proseEl, this.state.lastMarketMetrics);
+
+            // Post-stream subaward probe — ONLY on Tell Me More. Fires the
+            // subaward fetch AFTER prose streaming finishes so it never
+            // delays the primary response. If results come back non-empty,
+            // we silently append a "Who's subbing here" chip below the
+            // prose. If empty or errored, nothing appears — user never
+            // knows a probe happened.
+            if (/\btell me more\b/i.test(question) && this.state.lastSearchIntent) {
+              this._appendSubawardChipIfAvailable(proseEl);
+            }
           }
         },
         (msg) => { if (proseEl) proseEl.innerHTML = `<span style="color:var(--text-faint);">${Html.escapeHtml(msg)}</span>`; }
