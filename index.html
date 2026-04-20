@@ -2275,7 +2275,20 @@ const App = {
         }
         const label = this._labelForResolverInput(resolverInput);
         const m = analyzeMarket(rows, label);
-        const spec = buildCardSpec(m, label, null, null);
+        // Pull sellerLens and territory out of resolverInput so buildCardSpec
+        // can write sharper, vendor-aware verdict text. If the user said
+        // "I sell AWS to DoD", we want the verdict to read through the AWS
+        // lens ("AWS has no contracts here — target the $3.1B expiring work")
+        // instead of the generic "This market is concentrated" fallback.
+        let sellerLens = null;
+        if (resolverInput?.vendor) sellerLens = resolverInput.vendor;
+        else if (resolverInput?.vendors) {
+          const vs = Array.isArray(resolverInput.vendors)
+            ? resolverInput.vendors
+            : String(resolverInput.vendors).split(',').map(s => s.trim()).filter(Boolean);
+          sellerLens = vs.join(', ');
+        }
+        const spec = buildCardSpec(m, label, sellerLens, null);
         if (!spec) {
           cardRef.innerHTML = '<div class="mo-empty-msg">Data came back but I couldn\'t shape it. Try rephrasing.</div>';
           return;

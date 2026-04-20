@@ -150,9 +150,19 @@ export async function fetchUsaspending(resolverInput, endpoint) {
   const body = await res.json();
   const raw = Array.isArray(body.results) ? body.results : [];
 
-  // Add _endTs for downstream filters (expiring_only)
+  // Data grooming. Two things happen here that the render path downstream
+  // assumes have already run:
+  //
+  // 1. _endTs for expiring-window filters
+  // 2. For DoD contracts, swap in the sub-agency name as the Awarding Agency
+  //    so the treemap breaks into Navy/Army/Air Force instead of showing one
+  //    undifferentiated "Department of Defense" block. Ported from v1.
   for (const r of raw) {
     r._endTs = r['End Date'] ? new Date(r['End Date']).getTime() : 0;
+    const topAgency = String(r['Awarding Agency'] || '').toUpperCase();
+    if (topAgency.includes('DEFENSE') && r['Awarding Sub Agency']) {
+      r['Awarding Agency'] = r['Awarding Sub Agency'];
+    }
   }
 
   // Apply post-filters (vendor scope, agency scope, amount bounds, expiring)
