@@ -1485,7 +1485,10 @@ const API = {
   // Session-cached by filter hash since users often re-ask in the same thread.
   _subawardCache: new Map(),
 
-  async fetchSubawards(searchIntent) {
+  // Build filter object from intent. Extracted so we can try progressively
+  // looser shapes on empty returns — USASpending's subaward index is known
+  // to be finicky about exact agency shape and tier.
+  _buildSubawardFilters(searchIntent) {
     const period = Utils.getTrailing12Mo()[0];
     const filters = { time_period: [period], award_type_codes: this.CONTRACT_TYPES };
 
@@ -1499,15 +1502,45 @@ const API = {
       filters.psc_codes = searchIntent.psc.map(p => p.toUpperCase());
     }
     if (searchIntent.agency && searchIntent.agency.name) {
-      filters.agencies = [{
+      // Build the agency filter carefully. USASpending is picky about the
+      // shape — stray undefined fields cause silent empty returns on the
+      // subaward endpoint even when prime-award searches succeed.
+      const agencyFilter = {
         type: 'awarding',
         tier: searchIntent.agency.tier || 'toptier',
         name: searchIntent.agency.name,
-        toptier_name: searchIntent.agency.toptier_name,
-      }];
+      };
+      // Only include toptier_name when it's meaningful (subtier agencies).
+      // For toptier agencies, including an undefined/empty toptier_name
+      // can cause the filter to fail. Govhoo avoids this by only setting
+      // toptier_name when the agency object explicitly has one.
+      if (searchIntent.agency.toptier_name && searchIntent.agency.tier === 'subtier') {
+        agencyFilter.toptier_name = searchIntent.agency.toptier_name;
+      }
+      filters.agencies = [agencyFilter];
     }
     const useTerritory = searchIntent.territory;
     applySectorFilter(filters, useTerritory);
+    return filters;
+  },
+
+  async _postSubawards(filters) {
+    return this._post('/search/spending_by_award/', {
+      subawards: true,
+      filters,
+      fields: [
+        'Sub-Award ID', 'Sub-Awardee Name', 'Sub-Award Amount', 'Sub-Award Date',
+        'Prime Award ID', 'Prime Recipient Name', 'Awarding Agency', 'Awarding Sub Agency',
+        'prime_award_generated_internal_id', 'Description', 'pop_state_code', 'NAICS'
+      ],
+      limit: 100,
+      sort: 'Sub-Award Amount',
+      order: 'desc',
+    });
+  },
+
+  async fetchSubawards(searchIntent) {
+    const filters = this._buildSubawardFilters(searchIntent);
 
     // Session cache — same filter shape means same answer for this session
     const cacheKey = JSON.stringify(filters);
@@ -1516,30 +1549,63 @@ const API = {
       return this._subawardCache.get(cacheKey);
     }
 
+    const normalize = (res) => (res.results || []).map(s => {
+      if (s['Prime Recipient Name']) s['Prime Recipient Name'] = Utils.normalizeVendorName(s['Prime Recipient Name']);
+      if (s['Sub-Awardee Name']) s['Sub-Awardee Name'] = Utils.normalizeVendorName(s['Sub-Awardee Name']);
+      return s;
+    });
+
+    console.debug('[subaward] attempt 1 — primary filters:', JSON.stringify(filters));
+    let subs = [];
     try {
-      const res = await this._post('/search/spending_by_award/', {
-        subawards: true,
-        filters,
-        fields: [
-          'Sub-Award ID', 'Sub-Awardee Name', 'Sub-Award Amount', 'Sub-Award Date',
-          'Prime Award ID', 'Prime Recipient Name', 'Awarding Agency', 'Awarding Sub Agency',
-          'prime_award_generated_internal_id', 'Description', 'pop_state_code', 'NAICS'
-        ],
-        limit: 100,
-        sort: 'Sub-Award Amount',
-        order: 'desc',
-      });
-      const subs = (res.results || []).map(s => {
-        if (s['Prime Recipient Name']) s['Prime Recipient Name'] = Utils.normalizeVendorName(s['Prime Recipient Name']);
-        if (s['Sub-Awardee Name']) s['Sub-Awardee Name'] = Utils.normalizeVendorName(s['Sub-Awardee Name']);
-        return s;
-      });
-      this._subawardCache.set(cacheKey, subs);
-      return subs;
+      const res = await this._postSubawards(filters);
+      subs = normalize(res);
+      console.debug('[subaward] attempt 1 returned', subs.length, 'results');
     } catch (err) {
-      console.warn('[subaward] fetch failed:', err.message);
-      return [];  // Graceful fallback — empty list, not an error
+      console.warn('[subaward] attempt 1 failed:', err.message);
     }
+
+    // Retry 1 — if empty AND we had an agency filter, try converting the
+    // agency to a keyword and dropping the agency filter. USASpending's
+    // subaward index sometimes returns empty for valid agency filters
+    // that work fine for prime awards. Keyword match is more permissive.
+    if (subs.length === 0 && filters.agencies && filters.agencies.length > 0) {
+      const agencyNames = filters.agencies.map(a => a.name).filter(Boolean);
+      const retryFilters = { ...filters };
+      delete retryFilters.agencies;
+      retryFilters.keywords = [...(retryFilters.keywords || []), ...agencyNames];
+      console.debug('[subaward] attempt 2 — agency-as-keyword:', JSON.stringify(retryFilters));
+      try {
+        const res = await this._postSubawards(retryFilters);
+        subs = normalize(res);
+        console.debug('[subaward] attempt 2 returned', subs.length, 'results');
+      } catch (err) {
+        console.warn('[subaward] attempt 2 failed:', err.message);
+      }
+    }
+
+    // Retry 2 — if still empty AND we have keywords, try just keywords
+    // with no other filters. Last-ditch permissive match. This mirrors the
+    // fallback logic in the prime-award searchFromIntent function.
+    if (subs.length === 0 && filters.keywords && filters.keywords.length > 0) {
+      const period = Utils.getTrailing12Mo()[0];
+      const retryFilters = {
+        time_period: [period],
+        award_type_codes: this.CONTRACT_TYPES,
+        keywords: filters.keywords,
+      };
+      console.debug('[subaward] attempt 3 — keywords only:', JSON.stringify(retryFilters));
+      try {
+        const res = await this._postSubawards(retryFilters);
+        subs = normalize(res);
+        console.debug('[subaward] attempt 3 returned', subs.length, 'results');
+      } catch (err) {
+        console.warn('[subaward] attempt 3 failed:', err.message);
+      }
+    }
+
+    this._subawardCache.set(cacheKey, subs);
+    return subs;
   },
 };
 
