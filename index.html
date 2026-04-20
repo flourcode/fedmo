@@ -2519,7 +2519,10 @@ const App = {
     const thread = document.getElementById('thread');
     const wrap = document.createElement('div');
     wrap.className = 'turn-user';
-    wrap.innerHTML = `<div class="user-bubble">${Html.escapeHtml(text)}</div>`;
+    // Class is .turn-user-bubble (not .user-bubble) — the existing v1 CSS
+    // rule at the top of the file targets that specific name with the
+    // purple background, white text, and asymmetric border radius.
+    wrap.innerHTML = `<div class="turn-user-bubble">${Html.escapeHtml(text)}</div>`;
     thread.appendChild(wrap);
     this._updateEmptyState();
     // Auto-scroll the user turn into view
