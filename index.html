@@ -1018,11 +1018,11 @@ body.thread-empty .mo-ask-bar {
   <div class="mo-modal-body">
     <p>Tell Mo what you sell or which territory you cover. Mo pulls the data, explains the situation in a few sentences, and tells you what to do Monday morning.</p>
     <p>Every number Mo cites comes from USASpending and you can tap any contract to verify.</p>
+    <p>Ask about any vendor, agency, or topic at any time. Pivot freely — talking about AWS at DoD and want to jump to textile suppliers at NASA? Just ask. Mo treats each question on its own terms and only carries context when you explicitly refer back to something ("what about VA", "just Navy").</p>
     <div class="mo-modal-actions">
-      <button class="mo-modal-btn" onclick="App.closeAbout(); App.resetThread();">Start a new thread</button>
-      <button class="mo-modal-btn mo-modal-btn-ghost" onclick="App.closeAbout(); App.resetEverything();">Reset everything</button>
+      <button class="mo-modal-btn" onclick="App.closeAbout(); App.resetThread();">Clear the thread</button>
     </div>
-    <div class="mo-modal-foot">"Reset everything" clears saved preferences and the current thread. Use it when you want a fully fresh start.</div>
+    <div class="mo-modal-foot">"Clear the thread" wipes the visible conversation. Use it if things feel cluttered — it's not required between topics.</div>
   </div>
 </div>
 
@@ -2270,9 +2270,14 @@ const App = {
 
       this.appendUserTurn(question);
 
-      // Push user turn to history for Mo's context
+      // Push user turn to history for Mo's context. Cap at 4 turns (2 user
+      // + 2 model pairs, approximately). Enough to preserve a genuine
+      // refinement chain ("AWS at DoD" → "what about VA" → "who's subbing")
+      // but short enough that old topics don't bleed into new ones when
+      // the user pivots. Users complained about getting "trapped" in their
+      // last topic — this is the fix.
       this._history.push({ role: 'user', content: question });
-      if (this._history.length > 12) this._history = this._history.slice(-12);
+      if (this._history.length > 4) this._history = this._history.slice(-4);
 
       // Create a composite turn shell. Has three slots:
       //   preProse   — streams Mo's pre-tag text (or whole response if no tag)
@@ -2281,17 +2286,23 @@ const App = {
       const turnEls = this.appendCompositeTurn();
       loadingId = turnEls.turnId;
 
-      // Active card summary — injected into the Lambda's system prompt as
-      // context. Lets Mo handle refines ("just Navy", "above $5M") naturally.
-      const activeCardSummary = this._buildCardSummary();
-
       // Build render callbacks that drive the composite turn shell
       const render = this._buildRenderCallbacks(turnEls);
 
       const result = await askMo({
         question,
         history: this._history.slice(0, -1), // askMo appends the current question itself
-        activeCardSummary,
+        // activeCardSummary is intentionally omitted. We used to inject a
+        // summary of the current card into Mo's system prompt so she could
+        // "refine" ("just Navy", "above $5M") relative to what's on screen.
+        // That turned out to trap users in their last topic — if someone
+        // asked about textiles after AWS, Mo kept bleeding AWS context
+        // into the textile answer. Every question now stands on its own;
+        // history alone is enough for genuine follow-ups where the user
+        // explicitly refers back to something ("what about VA", "that
+        // prime"). The conversational signal in the question itself does
+        // the work without us forcing continuity.
+        activeCardSummary: null,
         endpoint: AI_ENDPOINT,
         render,
       });
