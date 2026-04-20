@@ -245,6 +245,16 @@ button { cursor: pointer; }
 .mo-card-action:active { background: var(--primary-20); color: var(--primary-100); }
 .mo-card-action.pinned { color: var(--primary-100); }
 
+/* Warm one-sentence intro that precedes the verdict on seller_pitch turns.
+   Feels like Mo acknowledging what the user asked before the data drops. */
+.mo-framing {
+  font-size: 15px;
+  color: var(--text-body);
+  line-height: 1.5;
+  margin-bottom: 14px;
+  padding-right: 70px;
+}
+
 .mo-verdict {
   font-size: 17px;
   font-weight: 500;
@@ -1476,17 +1486,17 @@ function buildCardSpec(m, query, sellerLens, territory) {
     action = `You'll usually find a way in through them, not around them.`;
   } else if (isConcentrated) {
     face = 'locked';
-    verdict = `Spend is concentrated and there's not much new activity right now.`;
+    verdict = `This market is concentrated and there's not much new activity right now.`;
     action = `Plan for a longer cycle. Industry days, RFIs, partnerships.`;
   } else if (isActive && isFragmented) {
     face = 'open';
-    verdict = `This one's pretty open. ${vendorCount} vendors, no single dominant incumbent.`;
+    verdict = `This market is pretty open — ${vendorCount} vendors, no single dominant incumbent.`;
     action = exp90Val > 0
       ? `Start with the ${(m.expiring||[]).length} contracts expiring in the next 90 days.`
       : `A good place to start.`;
   } else {
     face = 'watch';
-    verdict = `Active market, but it's competitive. You'll need a clear angle.`;
+    verdict = `This market is active but competitive. You'll need a clear angle.`;
     action = `Find the gap the incumbents aren't covering.`;
   }
 
@@ -2158,11 +2168,14 @@ const App = {
     // Stash competitors for future competitive view
     if (Array.isArray(intent.competitors)) this._sellerCompetitors = intent.competitors;
 
-    // Build a search intent from the seller pitch and run it
+    // Build a search intent from the seller pitch and run it. Carry the
+    // router's one-sentence framing through so the card can render it as
+    // a warm intro above the verdict.
     const searchIntent = {
       label: intent.label || product,
       keywords: intent.core_keywords || [],
       territory: intent.territory,
+      framing: intent.framing || null,
     };
     // If product itself is a known brand, include it as a keyword for vendor-mode detection
     if (product.length >= 3) searchIntent.keywords = [product, ...(searchIntent.keywords || [])];
@@ -2197,6 +2210,11 @@ const App = {
       this.replaceLoading(loadingId, this.buildEmptyTurn(label));
       return;
     }
+
+    // Attach the router's warm framing sentence if we got one. Rendered
+    // above the verdict so the user sees Mo acknowledge what they asked
+    // before the data drops.
+    if (intent.framing) spec.framing = intent.framing;
 
     // Cache for follow-up "ask Mo" turns and refines
     this.state.lastCardSpec = spec;
@@ -2597,6 +2615,7 @@ const App = {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>
+        ${spec.framing ? `<div class="mo-framing">${Html.escapeHtml(spec.framing)}</div>` : ''}
         <div class="mo-verdict">${Html.escapeHtml(spec.verdict.text)}</div>
         <div class="mo-action">${Html.escapeHtml(spec.verdict.action)}</div>
         <div class="mo-stat-row">
