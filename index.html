@@ -988,7 +988,7 @@ body.thread-empty .mo-ask-bar {
       <button class="mo-modal-btn" onclick="App.closeAbout(); App.resetThread();">Start a new thread</button>
       <button class="mo-modal-btn mo-modal-btn-ghost" onclick="App.closeAbout(); App.resetEverything();">Reset everything</button>
     </div>
-    <div class="mo-modal-foot">"Reset everything" clears your lens and territory too. Use it when you want a fully fresh start.</div>
+    <div class="mo-modal-foot">"Reset everything" clears saved preferences and the current thread. Use it when you want a fully fresh start.</div>
   </div>
 </div>
 
@@ -1037,6 +1037,31 @@ if ('scrollRestoration' in history) { history.scrollRestoration = 'manual'; }
 // ════════════════════════════════════════════════════════════
 
 const AI_ENDPOINT = 'https://llonymyskdiakyxhlxlex7ul640hbcke.lambda-url.us-east-1.on.aws/';
+
+// Debug logging flag. Flip to true in dev to see filter payloads, intent
+// routing, audit results, and subaward retry attempts in the console.
+// Keep false in production — users opening DevTools shouldn't see raw
+// internal state in their console.
+//
+// console.warn and console.error are always on regardless of this flag,
+// because those indicate actual problems the user or operator needs to
+// know about.
+const DEBUG = false;
+const debug = (...args) => { if (DEBUG) debug(...args); };
+
+// Shared-secret header. Must match Lambda env var FEDMO_API_SECRET.
+// This is a bearer token that keeps casual scrapers from burning our
+// Gemini credits by hitting the Function URL directly. Not real auth —
+// anyone who inspects this page can grab it. If it leaks broadly,
+// rotate both here and in the Lambda env vars.
+const FEDMO_API_SECRET = 'REPLACE_WITH_GENERATED_SECRET';
+
+// Build the standard request headers including the secret. Use this
+// in every fetch() to AI_ENDPOINT.
+const apiHeaders = () => ({
+  'Content-Type': 'application/json',
+  'x-fedmo-secret': FEDMO_API_SECRET,
+});
 
 // ════════════════════════════════════════════════════════════
 // ✏️  EDIT HERE — starter chips shown on the cold-start greeting
@@ -1546,7 +1571,7 @@ const API = {
   async _post(endpoint, body) {
     const res = await fetch(AI_ENDPOINT, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: apiHeaders(),
       body: JSON.stringify({ request_type: 'usaspending_proxy', endpoint, payload: body }),
     });
     if (!res.ok) throw new Error(`API ${res.status}`);
@@ -1604,7 +1629,7 @@ const API = {
         });
         const dropped = droppedBefore - scoped.length;
         if (dropped > 0) {
-          console.debug(`[search] agency scope dropped ${dropped} cross-agency contracts, kept ${scoped.length}`);
+          debug(`[search] agency scope dropped ${dropped} cross-agency contracts, kept ${scoped.length}`);
         }
       }
 
@@ -1618,7 +1643,7 @@ const API = {
       }).sort((a,b) => (b['Award Amount'] || 0) - (a['Award Amount'] || 0));
     };
 
-    console.debug('[search] filter →', JSON.stringify(filters));
+    debug('[search] filter →', JSON.stringify(filters));
     let rawData;
     try {
       rawData = (await this._post('/search/spending_by_award/', { filters, fields: this.AWARD_FIELDS, limit: 100, sort: 'Award Amount', order: 'desc' })).results || [];
@@ -1632,7 +1657,7 @@ const API = {
         const simpler = { time_period: filters.time_period, award_type_codes: filters.award_type_codes };
         if (filters.keywords) simpler.keywords = filters.keywords;
         if (filters.agencies) simpler.agencies = filters.agencies;
-        console.debug('[search] retrying with simplified filter →', JSON.stringify(simpler));
+        debug('[search] retrying with simplified filter →', JSON.stringify(simpler));
         try {
           rawData = (await this._post('/search/spending_by_award/', { filters: simpler, fields: this.AWARD_FIELDS, limit: 100, sort: 'Award Amount', order: 'desc' })).results || [];
         } catch (retryErr) {
@@ -1722,7 +1747,7 @@ const API = {
     // Session cache — same filter shape means same answer for this session
     const cacheKey = JSON.stringify(filters);
     if (this._subawardCache.has(cacheKey)) {
-      console.debug('[subaward] cache hit');
+      debug('[subaward] cache hit');
       return this._subawardCache.get(cacheKey);
     }
 
@@ -1732,12 +1757,12 @@ const API = {
       return s;
     });
 
-    console.debug('[subaward] attempt 1 — primary filters:', JSON.stringify(filters));
+    debug('[subaward] attempt 1 — primary filters:', JSON.stringify(filters));
     let subs = [];
     try {
       const res = await this._postSubawards(filters);
       subs = normalize(res);
-      console.debug('[subaward] attempt 1 returned', subs.length, 'results');
+      debug('[subaward] attempt 1 returned', subs.length, 'results');
     } catch (err) {
       console.warn('[subaward] attempt 1 failed:', err.message);
     }
@@ -1754,11 +1779,11 @@ const API = {
         award_type_codes: this.CONTRACT_TYPES,
         keywords: agencyNames,
       };
-      console.debug('[subaward] attempt 2 — agency name as keyword only:', JSON.stringify(retryFilters));
+      debug('[subaward] attempt 2 — agency name as keyword only:', JSON.stringify(retryFilters));
       try {
         const res = await this._postSubawards(retryFilters);
         subs = normalize(res);
-        console.debug('[subaward] attempt 2 returned', subs.length, 'results');
+        debug('[subaward] attempt 2 returned', subs.length, 'results');
       } catch (err) {
         console.warn('[subaward] attempt 2 failed:', err.message);
       }
@@ -1775,11 +1800,11 @@ const API = {
         award_type_codes: this.CONTRACT_TYPES,
         keywords: [...filters.keywords, ...agencyNames],
       };
-      console.debug('[subaward] attempt 3 — agency + topic keywords:', JSON.stringify(retryFilters));
+      debug('[subaward] attempt 3 — agency + topic keywords:', JSON.stringify(retryFilters));
       try {
         const res = await this._postSubawards(retryFilters);
         subs = normalize(res);
-        console.debug('[subaward] attempt 3 returned', subs.length, 'results');
+        debug('[subaward] attempt 3 returned', subs.length, 'results');
       } catch (err) {
         console.warn('[subaward] attempt 3 failed:', err.message);
       }
@@ -1795,11 +1820,11 @@ const API = {
         award_type_codes: this.CONTRACT_TYPES,
         keywords: filters.keywords,
       };
-      console.debug('[subaward] attempt 3 — keywords only:', JSON.stringify(retryFilters));
+      debug('[subaward] attempt 3 — keywords only:', JSON.stringify(retryFilters));
       try {
         const res = await this._postSubawards(retryFilters);
         subs = normalize(res);
-        console.debug('[subaward] attempt 3 returned', subs.length, 'results');
+        debug('[subaward] attempt 3 returned', subs.length, 'results');
       } catch (err) {
         console.warn('[subaward] attempt 3 failed:', err.message);
       }
@@ -2285,15 +2310,13 @@ const Html = {
 // ════════════════════════════════════════════════════════════
 
 async function routeIntent(text, context) {
-  // context: { lens, territory, last_query, recent_turns, card_summary }
+  // context: { last_query, recent_turns, card_summary }
   const res = await fetch(AI_ENDPOINT, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: apiHeaders(),
     body: JSON.stringify({
       request_type: 'mo_route',
       text,
-      lens: context.lens || null,
-      territory: context.territory || null,
       last_query: context.last_query || null,
       recent_turns: context.recent_turns || [],
       card_summary: context.card_summary || null,
@@ -2315,13 +2338,13 @@ async function routeIntent(text, context) {
 
 const App = {
   state: {
-    lens: null,
-    territory: null,
     turns: 0,
     // Most-recent successful card spec — used by ask-Mo follow-ups
     lastCardSpec: null,
     lastMarketMetrics: null,
     lastQuery: null,
+    lastSearchIntent: null,
+    lastSubawardSpec: null,
   },
 
   init() {
@@ -2329,8 +2352,8 @@ const App = {
       if (e.key === 'Enter') { e.preventDefault(); this.askFromInput(); }
     });
     window.addEventListener('scroll', () => this._updateJumpVisibility(), { passive: true });
-    // Clear any stale lens from prior deploys — we no longer use persistent
-    // lens/territory. Context comes from the user's words now.
+    // One-time cleanup for users upgrading from the lens/territory era.
+    // Safe to remove this line after a few weeks in production.
     try { localStorage.removeItem('fedmo_seller_product'); } catch(e) {}
 
     // Delegated click handling for data-ask buttons + analytics
@@ -2454,77 +2477,96 @@ const App = {
   _recentTurns: [],
 
   async ask(question) {
-    const greet = document.getElementById('greeting');
-    if (greet) greet.style.display = 'none';
-
-    this.appendUserTurn(question);
-    this._recentTurns.push({ role: 'user', text: question });
-    if (this._recentTurns.length > 6) this._recentTurns = this._recentTurns.slice(-6);
-
-    const loadingId = this.appendLoadingTurn('Thinking');
-
-    // Build router context
-    const ctx = {
-      lens: this.state.lens,
-      territory: this.state.territory,
-      last_query: this.state.lastQuery,
-      recent_turns: this._recentTurns,
-      card_summary: this._buildCardSummary(),
-    };
-
-    let intent;
+    let loadingId = null;
     try {
-      intent = await routeIntent(question, ctx);
-    } catch (err) {
-      console.error('Router error:', err);
-      this.replaceLoading(loadingId, this.buildErrorTurn(err.message || 'Mo had trouble understanding that.', { retry: question }));
-      return;
-    }
+      const greet = document.getElementById('greeting');
+      if (greet) greet.style.display = 'none';
 
-    this._track('intent', { type: intent.intent });
-    console.debug('[Mo intent]', intent);
+      this.appendUserTurn(question);
+      this._recentTurns.push({ role: 'user', text: question });
+      if (this._recentTurns.length > 6) this._recentTurns = this._recentTurns.slice(-6);
 
-    // Update loading message with what we're doing
-    this._updateLoadingMessage(loadingId, this._loadingMessageFor(intent));
+      loadingId = this.appendLoadingTurn('Thinking');
 
-    try {
-      // Safety net: refine needs an active card. If the router sent refine at
-      // cold start, rewrite as a search. (ASK at cold start is coaching mode
-      // — we let it flow through to Mo.)
-      const hasCard = !!this.state.lastCardSpec;
-      let effectiveIntent = intent;
-      if (intent.intent === 'refine' && !hasCard) {
-        console.debug('[dispatch] rewriting refine → search (no active card)');
-        const stripped = question
-          .replace(/^(who|what|when|where|why|how|which|is|are|does|do|show me|tell me|find|search for|look up)\s+(owns?|has|runs?|manages?|is|are|does|do|the|a|an)?\s*/i, '')
-          .replace(/[?.!]+$/, '')
-          .trim();
-        const keywordText = stripped || question;
-        effectiveIntent = {
-          intent: 'search',
-          label: keywordText,
-          keywords: [keywordText],
-        };
+      // Build router context. No persistent lens/territory anymore — the
+      // router reads context from recent_turns + the user's latest message.
+      const ctx = {
+        last_query: this.state.lastQuery,
+        recent_turns: this._recentTurns,
+        card_summary: this._buildCardSummary(),
+      };
+
+      let intent;
+      try {
+        intent = await routeIntent(question, ctx);
+      } catch (err) {
+        console.error('Router error:', err);
+        this.replaceLoading(loadingId, this.buildErrorTurn(err.message || 'Mo had trouble understanding that.', { retry: question }));
+        return;
       }
 
-      switch (effectiveIntent.intent) {
-        case 'search':       await this.runSearch(effectiveIntent, loadingId); break;
-        case 'refine':       await this.runRefine(effectiveIntent, loadingId); break;
-        case 'ask':          await this.runAskMo(effectiveIntent.question || question, loadingId); break;
-        case 'seller_pitch': await this.runSellerPitch(effectiveIntent, loadingId); break;
-        case 'compare':      await this.runCompare(effectiveIntent, loadingId); break;
-        case 'subaward_search': await this.runSubawardSearch(loadingId); break;
-        case 'reset':        this.replaceLoading(loadingId, document.createDocumentFragment()); this.resetThread(); break;
-        case 'clarify':      this.replaceLoading(loadingId, this.buildClarifyTurn(effectiveIntent.question || "Not sure what you're looking for. Try a vendor, agency, or what you sell.")); break;
-        default:
-          this.replaceLoading(loadingId, this.buildErrorTurn('Mo gave an unexpected answer. Try rephrasing.'));
-      }
-    } catch (err) {
-      console.error('Intent dispatch error:', err);
-      this.replaceLoading(loadingId, this.buildErrorTurn(err.message || 'Something went sideways.', { retry: question }));
-    }
+      this._track('intent', { type: intent.intent });
+      debug('[Mo intent]', intent);
 
-    this.state.turns++;
+      // Update loading message with what we're doing
+      this._updateLoadingMessage(loadingId, this._loadingMessageFor(intent));
+
+      try {
+        // Safety net: refine needs an active card. If the router sent refine at
+        // cold start, rewrite as a search. (ASK at cold start is coaching mode
+        // — we let it flow through to Mo.)
+        const hasCard = !!this.state.lastCardSpec;
+        let effectiveIntent = intent;
+        if (intent.intent === 'refine' && !hasCard) {
+          debug('[dispatch] rewriting refine → search (no active card)');
+          const stripped = question
+            .replace(/^(who|what|when|where|why|how|which|is|are|does|do|show me|tell me|find|search for|look up)\s+(owns?|has|runs?|manages?|is|are|does|do|the|a|an)?\s*/i, '')
+            .replace(/[?.!]+$/, '')
+            .trim();
+          const keywordText = stripped || question;
+          effectiveIntent = {
+            intent: 'search',
+            label: keywordText,
+            keywords: [keywordText],
+          };
+        }
+
+        switch (effectiveIntent.intent) {
+          case 'search':       await this.runSearch(effectiveIntent, loadingId); break;
+          case 'refine':       await this.runRefine(effectiveIntent, loadingId); break;
+          case 'ask':          await this.runAskMo(effectiveIntent.question || question, loadingId); break;
+          case 'seller_pitch': await this.runSellerPitch(effectiveIntent, loadingId); break;
+          case 'compare':      await this.runCompare(effectiveIntent, loadingId); break;
+          case 'subaward_search': await this.runSubawardSearch(loadingId); break;
+          case 'reset':        this.replaceLoading(loadingId, document.createDocumentFragment()); this.resetThread(); break;
+          case 'clarify':      this.replaceLoading(loadingId, this.buildClarifyTurn(effectiveIntent.question || "Not sure what you're looking for. Try a vendor, agency, or what you sell.")); break;
+          default:
+            this.replaceLoading(loadingId, this.buildErrorTurn('Mo gave an unexpected answer. Try rephrasing.'));
+        }
+      } catch (err) {
+        console.error('Intent dispatch error:', err);
+        this.replaceLoading(loadingId, this.buildErrorTurn(err.message || 'Something went sideways.', { retry: question }));
+      }
+
+      this.state.turns++;
+    } catch (fatalErr) {
+      // Last-resort error boundary. Catches anything the inner try/catches
+      // missed — a null deref, a parsing crash, a renderer blowup. The
+      // user sees a clear error instead of a forever-spinning loader.
+      console.error('[ask] fatal error:', fatalErr);
+      this._track('ask_fatal_error', {
+        message: String(fatalErr?.message || fatalErr).slice(0, 200),
+        stack: String(fatalErr?.stack || '').slice(0, 500),
+      });
+      try {
+        if (loadingId) {
+          this.replaceLoading(loadingId, this.buildErrorTurn('Something broke on my end. Try rephrasing or reloading the page.', { retry: question, retryable: true }));
+        }
+      } catch (_) {
+        // If even the error turn fails to render, there's nothing we can do
+        // except log. Don't throw from the boundary.
+      }
+    }
   },
 
   // ── Helpers for the router ──────────────────────────────────
@@ -2626,7 +2668,7 @@ const App = {
       console.warn('[mo-audit] Possible hallucinations in Mo\'s response:\n  - ' + warnings.join('\n  - '));
       this._track('mo_audit_warning', { count: warnings.length, sample: warnings[0] });
     } else {
-      console.log('[mo-audit] ✓ all dollars and contract IDs verified against payload');
+      debug('[mo-audit] ✓ all dollars and contract IDs verified against payload');
     }
   },
 
@@ -2832,7 +2874,7 @@ const App = {
       proseEl.parentElement.insertBefore(wrapper, proseEl.nextSibling);
       this._track('subaward_chip_shown', { count: subs.length });
     } catch (err) {
-      console.debug('[subaward] probe failed silently:', err.message);
+      debug('[subaward] probe failed silently:', err.message);
       // Intentionally no UI — silent fallback
     }
   },
@@ -2869,20 +2911,20 @@ const App = {
       this.replaceLoading(loadingId, this.buildErrorTurn('Mo couldn\'t pull a product name out of that.'));
       return;
     }
-    this.setLens(product);
-    if (intent.territory) this.setTerritory(intent.territory);
 
     // Stash competitors for future competitive view
     if (Array.isArray(intent.competitors)) this._sellerCompetitors = intent.competitors;
 
     // Build a search intent from the seller pitch and run it. Carry the
     // router's one-sentence framing through so the card can render it as
-    // a warm intro above the verdict.
+    // a warm intro above the verdict. sellerLens travels in the intent
+    // object for this one turn only — no persistence.
     const searchIntent = {
       label: intent.label || product,
       keywords: intent.core_keywords || [],
       territory: intent.territory,
       framing: intent.framing || null,
+      sellerLens: product,
     };
     // If product itself is a known brand, include it as a keyword for vendor-mode detection
     if (product.length >= 3) searchIntent.keywords = [product, ...(searchIntent.keywords || [])];
@@ -2892,8 +2934,8 @@ const App = {
 
   // ── runSearch: hit USASpending using the structured router intent
   async runSearch(intent, loadingId) {
-    const sellerLens = this.state.lens;
-    const territory = intent.territory || this.state.territory;
+    const sellerLens = intent.sellerLens || null;
+    const territory = intent.territory || null;
     const label = intent.label || (intent.keywords || []).join(', ') || 'this market';
 
     const rawResults = await API.searchFromIntent(intent, territory);
@@ -2993,7 +3035,11 @@ const App = {
       }
       const m = analyzeMarket(filtered, this.state.lastQuery + ' · ' + (intent.label || 'refined'));
       const newLabel = (this.state.lastQuery || 'market') + ' · ' + (intent.label || 'refined');
-      const spec = buildCardSpec(m, newLabel, this.state.lens, this.state.territory);
+      // Carry the previous turn's sellerLens and territory forward so the
+      // refined card still reads under the same seller context.
+      const carriedLens = lastIntent?.sellerLens || null;
+      const carriedTerritory = lastIntent?.territory || null;
+      const spec = buildCardSpec(m, newLabel, carriedLens, carriedTerritory);
       this.state.lastCardSpec = spec;
       this.state.lastMarketMetrics = m;
       this.state.lastQuery = newLabel;
@@ -3011,8 +3057,6 @@ const App = {
     if (Array.isArray(mods.additional_keywords) && mods.additional_keywords.length > 0) {
       newIntent.keywords = [...(newIntent.keywords || []), ...mods.additional_keywords];
     }
-    // Apply territory side-effect to header chip
-    if (mods.territory) this.setTerritory(mods.territory);
 
     newIntent.label = intent.label || lastIntent.label;
     return this.runSearch(newIntent, loadingId);
@@ -3237,16 +3281,21 @@ const App = {
     const spec = this.state.lastCardSpec;
     const hasCard = !!(m && spec);
 
-    // Coaching mode: no card, just a selling-situation question. Build a
-    // minimal payload with lens + territory context (if set) and let Mo
-    // answer from her coaching patterns in the system prompt. No market_data.
+    // Coaching mode: no card, just a selling-situation question. Mo
+    // answers from her coaching patterns in the system prompt. No market_data.
     const payload = hasCard ? this._buildAskMoPayload(m) : null;
 
-    const sectorLabel = this.state.territory && SECTORS[this.state.territory]
-      ? SECTORS[this.state.territory].label
+    // Build the "objective" string from the most recent search intent,
+    // if we have one. Gives Mo a little context about what the user
+    // is working on without requiring persistent lens/territory state.
+    const lastIntent = this.state.lastSearchIntent;
+    const lastLens = lastIntent?.sellerLens || null;
+    const lastTerritory = lastIntent?.territory || null;
+    const sectorLabel = lastTerritory && SECTORS[lastTerritory]
+      ? SECTORS[lastTerritory].label
       : null;
-    const objective = this.state.lens
-      ? `I sell ${this.state.lens}.` + (sectorLabel ? ` Market scoped to ${sectorLabel} agencies.` : '')
+    const objective = lastLens
+      ? `I sell ${lastLens}.` + (sectorLabel ? ` Market scoped to ${sectorLabel} agencies.` : '')
       : null;
 
     // Build the turn shell with a streaming target.
@@ -3286,7 +3335,7 @@ const App = {
 
       const res = await fetch(AI_ENDPOINT, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: apiHeaders(),
         body: JSON.stringify({
           request_type: 'mo_chat', persona: 'mo',
           market_data: payload,
@@ -3367,7 +3416,7 @@ const App = {
       const cardSummary = this._buildCardSummary();
       const res = await fetch(AI_ENDPOINT, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: apiHeaders(),
         body: JSON.stringify({
           request_type: 'mo_suggest_chips',
           card_summary: cardSummary,
@@ -3377,15 +3426,15 @@ const App = {
           // usually enough signal for federal-sales-style follow-ups, and it
           // means chips are ready by the time Mo finishes streaming.
           last_mo_response: null,
-          lens: this.state.lens || null,
-          territory: this.state.territory || null,
+          lens: this.state.lastSearchIntent?.sellerLens || null,
+          territory: this.state.lastSearchIntent?.territory || null,
         }),
       });
       if (!res.ok) return null;
       const data = await res.json();
       return Array.isArray(data.chips) ? data.chips : null;
     } catch (e) {
-      console.debug('[chips] fetch failed, falling back to rules:', e.message);
+      debug('[chips] fetch failed, falling back to rules:', e.message);
       return null;
     }
   },
@@ -3655,7 +3704,8 @@ const App = {
   buildEmptyTurn(query) {
     const wrap = document.createElement('div');
     wrap.className = 'turn-mo';
-    const territoryLabel = this.state.territory && SECTORS[this.state.territory] ? ` in ${SECTORS[this.state.territory].label}` : '';
+    const lastTerr = this.state.lastSearchIntent?.territory || null;
+    const territoryLabel = lastTerr && SECTORS[lastTerr] ? ` in ${SECTORS[lastTerr].label}` : '';
 
     // Different message depending on whether it looks like a real query
     // that just didn't hit, vs. something that was probably misrouted.
@@ -3666,7 +3716,7 @@ const App = {
       ? `No contracts came back for <strong>${Html.escapeHtml(query)}</strong>${territoryLabel}. Either the term's too narrow for USASpending or I'm reading it wrong. Try a product name, vendor, agency, or NAICS code.`
       : `Couldn't find matching contracts for <strong>${Html.escapeHtml(query)}</strong>${territoryLabel}. Try a shorter phrase, a vendor name, or an agency.`;
 
-    const suggestions = this.state.territory && SECTORS[this.state.territory]
+    const suggestions = lastTerr && SECTORS[lastTerr]
       ? ['Cybersecurity', 'Cloud', 'AI', '541512']
       : ['Zero Trust', 'CMMC', 'Cybersecurity', 'NAICS 541512'];
     let chips = suggestions.map(s => `<button class="mo-followup" data-ask="${Html.escapeHtml(s)}">${Html.escapeHtml(s)}</button>`).join('');
@@ -3771,17 +3821,7 @@ const App = {
     return wrap;
   },
 
-  // Lens and territory are deprecated. Kept as no-op stubs so any call sites
-  // not yet cleaned up won't crash. Context now comes from the user's words
-  // ("I sell cyber to DoD") and Mo asks when context would meaningfully
-  // change her answer.
-  setLens(_lens) {},
-  clearLens() {},
-  setTerritory(_t) {},
-  clearTerritory() {},
-
-  // Reset the thread to the greeting. Lens and territory chips persist
-  // (they're identity, not session state). Wipes card cache so next text
+  // Reset the thread to the greeting. Wipes card cache so next text
   // is a search. Invoked from the About modal's "Start a new thread" button.
   resetThread() {
     const thread = document.getElementById('thread');
@@ -3792,7 +3832,10 @@ const App = {
     this.state.lastCardSpec = null;
     this.state.lastMarketMetrics = null;
     this.state.lastQuery = null;
+    this.state.lastSearchIntent = null;
+    this.state.lastSubawardSpec = null;
     this._askMoHistory = [];
+    this._recentTurns = [];
     document.getElementById('jumpLatest').classList.remove('visible');
     window.scrollTo({ top: 0, behavior: 'smooth' });
     // Re-park the ask bar under the greeting
@@ -3800,11 +3843,11 @@ const App = {
     this._track('reset_thread');
   },
 
-  // Full reset: clear conversation AND identity chips. For users who want a
-  // truly blank slate (demoing to a colleague, testing as a different seller).
+  // Full reset. Same as resetThread now since there's no persistent
+  // identity state to clear. Kept as a separate entry point because the
+  // About modal button still calls it, and because we may re-introduce
+  // persistent preferences later.
   resetEverything() {
-    this.clearLens();
-    this.clearTerritory();
     this.resetThread();
     this._track('reset_everything');
   },
