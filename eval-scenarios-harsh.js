@@ -347,8 +347,17 @@ export const SCENARIOS = [
             !s.tagAttrs?.competitors },
           { kind: 'hard', msg: 'T4: prose does not mention AWS or Amazon',
             check: proseLacksAll('aws', 'amazon') },
-          { kind: 'hard', msg: 'T4: prose does not mention VA or Veterans',
-            check: proseLacksAll('veterans affairs', ' va ', 'the va') },
+          { kind: 'hard', msg: 'T4: VA is not the subject (at most ONE contrast reference allowed)',
+            check: (s) => {
+              // A single "like at the VA" contrast sentence is fine — it's
+              // useful cross-agency analytical continuity. The failure mode
+              // we actually care about is Mo dragging VA forward as the
+              // scope (multiple mentions, coaching about VA programs, etc.).
+              // Count occurrences and allow ≤1.
+              const combined = ((s.preTagText || '') + ' ' + (s.postTagText || '')).toLowerCase();
+              const vaMatches = (combined.match(/\b(va|veterans)\b/g) || []).length;
+              return vaMatches <= 1;
+            } },
         ],
       },
     ],

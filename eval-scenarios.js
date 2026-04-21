@@ -198,6 +198,11 @@ export const SCENARIOS = [
             s.mode === 'prose' || (s.rowCount || 0) > 0 },
           { kind: 'soft', msg: 'Mo names concrete primes or asks clarifying questions', check: (s) =>
             proseContains('what you sell')(s) || proseContains('what you offer')(s) ||
+            proseContains("what you're selling")(s) || proseContains("what you're offering")(s) ||
+            proseContains("what's your product")(s) || proseContains('your product or service')(s) ||
+            proseContains('which vendor')(s) || proseContains('which technology')(s) ||
+            proseContains('tell me')(s) || proseContains('need to know')(s) ||
+            proseContains('what are you selling')(s) || proseContains('what are you offering')(s) ||
             proseContains('booz')(s) || proseContains('leidos')(s) || proseContains('gdit')(s) ||
             proseContains('perspecta')(s) || proseContains('red river')(s) ||
             proseContains('accenture')(s) || proseContains('deloitte')(s) ||

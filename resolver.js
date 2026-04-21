@@ -452,6 +452,7 @@ export function resolve(input) {
   // the caller treats this like a no-keyword query (typically falling
   // through to the category-fallback path in stream-client.js).
   const AI_FAMILY = ['artificial intelligence', 'machine learning', 'generative AI'];
+  const FOOD_FAMILY = ['subsistence', 'food service', 'perishable', 'produce', 'fresh fruit', 'fresh vegetable'];
   const TOPIC_EXPANSIONS = {
     'it': ['information technology'],
     'ai': AI_FAMILY,
@@ -471,6 +472,20 @@ export function resolve(input) {
     'xdr': ['XDR', 'extended detection'],
     'cdn': ['content delivery', 'CDN'],
     'apm': ['application performance', 'APM', 'observability'],
+    'fedramp': ['FedRAMP', 'cloud authorization'],
+    'cmmc': ['CMMC', 'cybersecurity maturity'],
+    // Food commodities — federal contracts use DLA's "subsistence" vocabulary,
+    // not the seller's everyday terms. Without this, a "bananas to DoD" pitch
+    // loose-matches "producer" in defense-industrial descriptions and returns
+    // tank ammunition contracts. Map commodity words to federal phrasing.
+    'bananas': FOOD_FAMILY,
+    'banana': FOOD_FAMILY,
+    'produce': FOOD_FAMILY,
+    'fruit': FOOD_FAMILY,
+    'fruits': FOOD_FAMILY,
+    'vegetables': FOOD_FAMILY,
+    'meat': ['subsistence', 'food service', 'meat', 'protein'],
+    'dairy': ['subsistence', 'food service', 'dairy'],
     'hr': ['human resources'],
     'cx': ['customer experience'],
     'rf': ['radio frequency'],
