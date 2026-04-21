@@ -186,20 +186,23 @@ export const SCENARIOS = [
   // ────────────────────────────────────────────────────────────
   {
     name: 'Teaming: who should I team with at VA',
-    description: 'Tests that teaming questions produce useful output — either prose coaching OR a subaward card showing prime/sub relationships. Both are valid answers for "who should I team with" — subawards literally answer the question.',
+    description: 'Tests that teaming questions produce useful output. Three valid answer shapes: (1) prose coaching ("tell me what you sell so I can target recommendations"), (2) subaward card (shows prime/sub relationships directly), (3) agency-wide prime data (shows who the dominant primes are, with coaching about joining their vendor roster). All three legitimately answer the teaming question.',
     turns: [
       {
         question: 'Who should I team with at VA',
         assertions: [
-          { kind: 'hard', msg: 'mode is prose or subaward (both valid)', check: (s) =>
-            s.mode === 'prose' || s.mode === 'subaward' },
-          { kind: 'soft', msg: 'if subaward mode, rows returned', check: (s) =>
-            s.mode !== 'subaward' || (s.rowCount || 0) > 0 },
+          { kind: 'hard', msg: 'mode is prose, subaward, or agency-wide data', check: (s) =>
+            s.mode === 'prose' || s.mode === 'subaward' ||
+            (s.mode === 'data' && s.resolverInput?.agency && !s.resolverInput?.vendor) },
+          { kind: 'soft', msg: 'if data/subaward mode, rows returned', check: (s) =>
+            s.mode === 'prose' || (s.rowCount || 0) > 0 },
           { kind: 'soft', msg: 'Mo names concrete primes or asks clarifying questions', check: (s) =>
             proseContains('what you sell')(s) || proseContains('what you offer')(s) ||
             proseContains('booz')(s) || proseContains('leidos')(s) || proseContains('gdit')(s) ||
             proseContains('perspecta')(s) || proseContains('red river')(s) ||
-            proseContains('accenture')(s) || proseContains('deloitte')(s) },
+            proseContains('accenture')(s) || proseContains('deloitte')(s) ||
+            proseContains('optum')(s) || proseContains('triwest')(s) ||
+            proseContains('mckesson')(s) || proseContains('oracle')(s) },
         ],
       },
     ],
