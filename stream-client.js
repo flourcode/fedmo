@@ -213,7 +213,44 @@ export function dataAttrsToResolverInput(attrs) {
 // Fetch head-to-head federal competitors for a vendor via the Lambda
 // endpoint. Returns { vendor, category, competitors: [...] } or throws.
 // Called by askMo() when a <data> tag has competitors="true".
+// ─────────────────────────────────────────────────────────────────────
+// fetchCompetitors — figure out who competes head-to-head with the seller
+// ─────────────────────────────────────────────────────────────────────
+//
+// Two-tier lookup:
+//
+//  1. FILE FIRST. If the vendor is in vendor_categories.json, return the
+//     curated competitor list directly. No network call. No failure mode.
+//     Deterministic — same vendor always returns same list. This is how
+//     we handle AWS, Microsoft, SentinelOne, Datadog, Akamai, Sonatype,
+//     etc. — all the vendors we've hand-curated for known federal
+//     categories.
+//
+//  2. GEMINI FALLBACK. For unknown vendors (niche products, new entrants,
+//     anything not in the file), call the Lambda's mo_competitors
+//     endpoint, which asks Gemini for a competitor list. This path has
+//     failure modes (Gemini 500, malformed JSON, timeout) and the caller
+//     must handle them — see askMo()'s try/catch around fetchCompetitors.
+//
+// Why file-first matters: Gemini's competitor lookup can silently fail
+// (API error, timeout, malformed response), and when it does, Mo
+// fills the gap with invented competitor names from training data. For
+// known vendors we shouldn't tolerate that risk. File-first eliminates
+// the failure surface for ~70-80% of competitor queries.
+// ─────────────────────────────────────────────────────────────────────
 export async function fetchCompetitors(vendorName, endpoint) {
+  // Tier 1: hand-curated file lookup
+  const catInfo = lookupVendorCategory(vendorName);
+  if (catInfo && Array.isArray(catInfo.competitors) && catInfo.competitors.length > 0) {
+    return {
+      vendor: catInfo.vendorCanonical || vendorName,
+      category: catInfo.category || '',
+      competitors: catInfo.competitors,
+      _source: 'file',
+    };
+  }
+
+  // Tier 2: Gemini fallback for unknown vendors
   const res = await fetch(endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -227,6 +264,7 @@ export async function fetchCompetitors(vendorName, endpoint) {
   if (!body?.competitors || !Array.isArray(body.competitors)) {
     throw new Error('competitors response bad shape');
   }
+  body._source = 'gemini';
   return body;
 }
 

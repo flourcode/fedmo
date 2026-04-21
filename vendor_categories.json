@@ -47,6 +47,18 @@
     "itsm": {
       "display_name": "IT service management",
       "keywords": ["ITSM", "IT SERVICE MANAGEMENT", "WORKFLOW", "SERVICE DESK", "HELPDESK"]
+    },
+    "cdn_and_edge_security": {
+      "display_name": "CDN and edge security",
+      "keywords": ["CDN", "CONTENT DELIVERY", "EDGE", "WAF", "DDOS", "BOT MITIGATION", "WEB APPLICATION FIREWALL"]
+    },
+    "devsecops_and_supply_chain": {
+      "display_name": "DevSecOps and software supply chain",
+      "keywords": ["SBOM", "SOFTWARE SUPPLY CHAIN", "DEPENDENCY", "SAST", "SCA", "DEVSECOPS", "COMPONENT SCAN", "SOFTWARE COMPOSITION", "VULNERABILITY SCANNING"]
+    },
+    "productivity": {
+      "display_name": "productivity and collaboration",
+      "keywords": ["OFFICE 365", "M365", "MICROSOFT 365", "TEAMS", "EMAIL", "COLLABORATION", "PRODUCTIVITY SUITE", "EXCHANGE ONLINE", "SHAREPOINT"]
     }
   },
 
@@ -167,6 +179,62 @@
       "canonical": "ServiceNow",
       "category": "itsm",
       "competitors": ["Jira", "BMC", "Atlassian"]
+    },
+
+    "akamai": {
+      "canonical": "Akamai",
+      "category": "cdn_and_edge_security",
+      "competitors": ["Cloudflare", "Fastly", "Imperva", "F5", "Amazon CloudFront"]
+    },
+    "cloudflare": {
+      "canonical": "Cloudflare",
+      "category": "cdn_and_edge_security",
+      "competitors": ["Akamai", "Fastly", "Imperva", "F5"]
+    },
+
+    "sonatype": {
+      "canonical": "Sonatype",
+      "category": "devsecops_and_supply_chain",
+      "competitors": ["Snyk", "Black Duck", "JFrog", "Checkmarx", "Veracode", "Mend", "Synopsys"]
+    },
+    "snyk": {
+      "canonical": "Snyk",
+      "category": "devsecops_and_supply_chain",
+      "competitors": ["Sonatype", "Black Duck", "JFrog", "Checkmarx", "Veracode"]
+    },
+
+    "microsoft defender": {
+      "canonical": "Microsoft Defender",
+      "category": "endpoint_security",
+      "competitors": ["CrowdStrike", "SentinelOne", "Trellix", "Carbon Black", "Tanium", "Sophos"]
+    },
+    "defender": {
+      "canonical": "Microsoft Defender",
+      "category": "endpoint_security",
+      "competitors": ["CrowdStrike", "SentinelOne", "Trellix", "Carbon Black", "Tanium", "Sophos"]
+    },
+
+    "microsoft 365": {
+      "canonical": "Microsoft 365",
+      "category": "productivity",
+      "competitors": ["Google Workspace"]
+    },
+    "m365": {
+      "canonical": "Microsoft 365",
+      "category": "productivity",
+      "competitors": ["Google Workspace"]
+    },
+    "office 365": {
+      "canonical": "Microsoft 365",
+      "category": "productivity",
+      "competitors": ["Google Workspace"]
+    },
+
+    "microsoft": {
+      "canonical": "Microsoft Azure",
+      "category": "cloud_infrastructure",
+      "competitors": ["Amazon Web Services", "Google Cloud", "Oracle Cloud"],
+      "_note": "Bare 'microsoft' defaults to Azure (most common federal interpretation). Mo's prompt guides toward more specific tags — Microsoft Defender for endpoint questions, Microsoft 365 for productivity."
     }
   }
 }
