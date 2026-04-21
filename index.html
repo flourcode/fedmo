@@ -2244,6 +2244,19 @@ const App = {
     } catch (e) { /* never break the app on analytics */ }
   },
 
+  // Subaward card's "Show N more" button handler. v1 pattern: the extra
+  // rows are pre-rendered in a hidden sibling div; the button flips it
+  // visible and removes itself. Simple toggle, no re-render.
+  _expandSubawardRows(btn) {
+    if (!btn) return;
+    const moreRows = btn.nextElementSibling;
+    if (moreRows && moreRows.classList.contains('mo-subaward-more-rows')) {
+      moreRows.style.display = '';
+    }
+    btn.remove();
+    this._track('subaward_expand');
+  },
+
   // ── Starter chips ───────────────────────────────────────────
   // Render the GREETING_CHIPS array into the #greetingChips container
   // on cold-start. Each chip's label doubles as the question sent to
@@ -2548,7 +2561,15 @@ const App = {
       }
       const topSubName = [...subTotals.entries()].sort((a, b) => b[1] - a[1]).map(e => e[0])[0];
       if (topSubName) {
-        chips.push({ label: `${cleanName(topSubName)}'s other work`, question: `What else is ${cleanName(topSubName)} doing federally?` });
+        // Explicit scope-break phrasing: "across all agencies" is a strong
+        // enough signal to override the sticky agency context Mo carries
+        // from the previous turn. "Show me X federally" isn't, because
+        // Mo's prompt reads "federally" as a modifier and keeps the agency.
+        // This chip WANTS to leave the agency behind, so we say so.
+        chips.push({
+          label: `${cleanName(topSubName)}'s other work`,
+          question: `Show me ${cleanName(topSubName)} across all agencies`
+        });
       }
     }
 
