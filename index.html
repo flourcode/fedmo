@@ -1702,23 +1702,27 @@ function analyzeMarket(data, currentQuery) {
   const exp90Ts = nowTs + 90 * 86400000;
   const rec90Ts = nowTs - 90 * 86400000;
   const m = {
-    total: 0, agencies: {}, subAgencies: {}, vendors: {}, expiring: [], recentAwards: [],
+    total: 0, agencies: {}, subAgencies: {}, offices: {}, vendors: {}, expiring: [], recentAwards: [],
     contractSizes: [], contractCount: 0, vehicles: {}, queryType: 'keyword',
   };
   data.forEach(c => {
     const amt = parseFloat(c['Award Amount']) || 0;
     const agency = c['Awarding Agency'] || 'Unknown';
     const subAgency = c['Awarding Sub Agency'] || agency; // fall back to top-tier
+    const office = c['Awarding Office'] || subAgency;     // fall back to subtier
     const vendor = c['Recipient Name'] || 'Unknown';
     m.total += amt;
     m.contractCount++;
     m.contractSizes.push(amt);
     m.agencies[agency] = (m.agencies[agency] || 0) + amt;
-    // Sub-agency bucketing runs parallel to top-tier bucketing. When the
-    // user filtered to a single top-tier, the treemap renders from this
-    // instead of m.agencies so they see the interesting detail (AFLCMC
-    // vs AFRL vs Space Force) rather than one giant block.
+    // Three-level hierarchy for the treemap: top-tier agency → subtier →
+    // office. The renderer picks the most-interesting level (the one with
+    // >1 bucket) so a user who filtered to Navy sees NAVAIR/NAVSEA/BUMED
+    // instead of a single "Navy" block; a user who filtered to AFLCMC
+    // sees one block (AFLCMC is already at the office level, nothing
+    // deeper to break into).
     m.subAgencies[subAgency] = (m.subAgencies[subAgency] || 0) + amt;
+    m.offices[office] = (m.offices[office] || 0) + amt;
     if (!m.vendors[vendor]) m.vendors[vendor] = { spend: 0, count: 0, agencies: new Set(), contracts: [] };
     m.vendors[vendor].spend += amt;
     m.vendors[vendor].count++;
@@ -2080,18 +2084,24 @@ function buildCardSpec(m, query, sellerLens, territory) {
   // where the money is coming from, which is more actionable than vendor
   // breakdown for finding openings.
   //
-  // When the user's query spans multiple top-tier agencies (e.g. bare
-  // "cybersecurity"), bucket by top-tier (HHS vs DoD vs VA).
-  //
-  // When the user filtered to a single top-tier (e.g. "AWS at Air Force"),
-  // a single-block treemap tells them nothing they don't already know.
-  // Bucket by SUB-agency instead so they see AFLCMC vs AFRL vs Space
-  // Force. Falls back to top-tier if sub-agencies also collapse to one
-  // entry (e.g. direct-awarded contracts where the sub is the same as
-  // the top-tier).
+  // Cascade: pick the deepest level with genuine variation. A query for
+  // "cybersecurity" spans multiple top-tiers → use top-tier. A query for
+  // Navy collapses at top-tier and subtier but varies across NAVAIR /
+  // NAVSEA / BUMED / Fleet Forces → use office. A query already drilled
+  // to AFLCMC → everything collapses → single block (correct: nothing
+  // deeper is available).
   const subAgencySorted = Object.entries(m.subAgencies || {}).sort((a,b) => b[1] - a[1]);
-  const useSubAgencies = agencySorted.length === 1 && subAgencySorted.length > 1;
-  const treemapSource = useSubAgencies ? subAgencySorted : agencySorted;
+  const officeSorted = Object.entries(m.offices || {}).sort((a,b) => b[1] - a[1]);
+  let treemapSource;
+  if (agencySorted.length > 1) {
+    treemapSource = agencySorted;
+  } else if (subAgencySorted.length > 1) {
+    treemapSource = subAgencySorted;
+  } else if (officeSorted.length > 1) {
+    treemapSource = officeSorted;
+  } else {
+    treemapSource = agencySorted; // nothing useful to break into — one block
+  }
   const palette = ['#46446E','#5E5B92','#7572B7','#9B98C8','#ACAAD4','#BCB9D8'];
   const treemap = treemapSource.slice(0, 6).map(([name, spend], i) => ({
     name: Utils.cleanAgency(name),
