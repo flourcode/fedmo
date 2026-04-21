@@ -277,8 +277,14 @@ export const SCENARIOS = [
           { kind: 'soft', msg: 'mode is no_data OR rows are food-service related', check: (s) => {
             if (s.mode === 'no_data') return true;
             if (!s.rows) return false;
-            const combinedDesc = s.rows.map(r => (r['Description'] || '').toLowerCase()).join(' ');
-            return /food|mess|dining|commissary|ration|meal/.test(combinedDesc);
+            // Check both descriptions AND recipient names — the signal we
+            // want ("Norfolk Banana Company", "Coastal Pacific Food
+            // Distributors") often lives in the recipient name, not the
+            // contract description.
+            const haystack = s.rows.map(r =>
+              ((r['Description'] || '') + ' ' + (r['Recipient Name'] || '')).toLowerCase()
+            ).join(' ');
+            return /food|mess|dining|commissary|ration|meal|banana|produce|distribut|subsist|fresh|grocer/.test(haystack);
           }},
           { kind: 'hard', msg: 'rows do NOT include rockets or ammo', check: (s) => {
             if (!s.rows) return true;
