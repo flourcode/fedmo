@@ -435,11 +435,66 @@ export function resolve(input) {
   const postFilters = {};
 
   // ── Keywords (topic) ────────────────────────────────────────────
-  const topics = []
+  //
+  // USASpending's keyword filter appears to reject strings under ~3
+  // characters with a 422 error, and very short strings match too much
+  // noise even when they're accepted. Federal sellers type these short
+  // forms constantly ("IT", "AI", "ML", "HR"), so we expand known
+  // acronyms to their federal-description equivalents before sending.
+  //
+  // Some acronyms expand to MULTIPLE keywords because contract writers
+  // don't agree on one phrasing — USASpending ORs keywords together, so
+  // expanding "GenAI" to all three of artificial intelligence, machine
+  // learning, and generative AI gives the broadest real match against
+  // how the work is actually described in contract text.
+  //
+  // Anything short and unknown gets dropped; if the list ends up empty,
+  // the caller treats this like a no-keyword query (typically falling
+  // through to the category-fallback path in stream-client.js).
+  const AI_FAMILY = ['artificial intelligence', 'machine learning', 'generative AI'];
+  const TOPIC_EXPANSIONS = {
+    'it': ['information technology'],
+    'ai': AI_FAMILY,
+    'ai/ml': AI_FAMILY,
+    'ml': AI_FAMILY,
+    'genai': AI_FAMILY,
+    'gen ai': AI_FAMILY,
+    'generative ai': AI_FAMILY,
+    'llm': AI_FAMILY,
+    'llms': AI_FAMILY,
+    'sbom': ['software bill of materials', 'software supply chain', 'SBOM'],
+    'zt': ['zero trust'],
+    'zta': ['zero trust'],
+    'zero trust': ['zero trust'],
+    'siem': ['SIEM', 'security information', 'log management'],
+    'edr': ['endpoint detection', 'EDR', 'endpoint protection'],
+    'xdr': ['XDR', 'extended detection'],
+    'cdn': ['content delivery', 'CDN'],
+    'apm': ['application performance', 'APM', 'observability'],
+    'hr': ['human resources'],
+    'cx': ['customer experience'],
+    'rf': ['radio frequency'],
+    'ir': ['infrared'],
+    'qa': ['quality assurance'],
+    'qc': ['quality control'],
+    'ot': ['operational technology'],
+  };
+  const rawTopics = []
     .concat(input.topic ? [input.topic] : [])
     .concat(Array.isArray(input.topics) ? input.topics : [])
     .map(t => String(t || '').trim())
     .filter(Boolean);
+
+  const topics = [];
+  for (const t of rawTopics) {
+    const lower = t.toLowerCase();
+    if (TOPIC_EXPANSIONS[lower]) {
+      topics.push(...TOPIC_EXPANSIONS[lower]);
+    } else if (t.length >= 3) {
+      topics.push(t);
+    }
+    // else: silently drop short unknown strings (USASpending would 422 on them)
+  }
 
   // ── Vendor resolution ──────────────────────────────────────────
   // Accept either `vendor` (single) or `vendors` (array or comma-separated).

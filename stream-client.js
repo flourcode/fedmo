@@ -318,7 +318,17 @@ export async function fetchUsaspending(resolverInput, endpoint) {
     }),
   });
 
-  if (!res.ok) throw new Error(`API ${res.status}`);
+  if (!res.ok) {
+    // 4xx responses from USASpending usually mean the filter shape is
+    // invalid — e.g. a keyword that's too short, a mismatched agency
+    // name, or a combination the API rejects. 5xx means USASpending
+    // itself is having trouble. The error surface downstream renders
+    // this message; keep it short and user-readable, not developer-y.
+    if (res.status >= 400 && res.status < 500) {
+      throw new Error("The search terms didn't match USASpending's filter rules. Try rephrasing — be more specific about the vendor, agency, or product.");
+    }
+    throw new Error('USASpending is having trouble right now. Give it a minute and try again.');
+  }
   const body = await res.json();
   const raw = Array.isArray(body.results) ? body.results : [];
 
