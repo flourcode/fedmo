@@ -554,11 +554,41 @@ export function resolve(input) {
   if (input.agency) {
     const agencyTerm = String(input.agency).trim();
     const office = lookupOffice(agencyTerm);
-    const agency = office ? lookupAgency(office.parent) : lookupAgency(agencyTerm);
+    let agency = office ? lookupAgency(office.parent) : lookupAgency(agencyTerm);
+
+    // Fallback: if the full string doesn't match but it contains a known
+    // parent agency (e.g. "DHS Office of Procurement Operations" contains
+    // "DHS"), match to the parent and treat the rest as a keyword hint.
+    // This catches the common pattern where Mo or the user combines a
+    // toptier with a sub-agency label that we don't have in our table.
+    // Without this fallback, the agency filter silently drops and the
+    // query becomes fed-wide — producing a card that's wildly wrong.
+    let agencyResidue = null;
+    if (!agency && !office) {
+      const normTerm = norm(agencyTerm);
+      // Try each known agency alias as a substring. Prefer longer matches
+      // (so "department of defense" beats "defense") to avoid picking up
+      // short-form false-positives like "fa" inside "faa".
+      const aliasKeys = Object.keys(AGENCIES).sort((a, b) => b.length - a.length);
+      for (const alias of aliasKeys) {
+        // Only match at word boundaries to avoid "army" inside "armor".
+        const aliasRegex = new RegExp(`(^|\\s)${alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\s|$)`);
+        if (aliasRegex.test(normTerm)) {
+          agency = AGENCIES[alias];
+          // Residue = everything in the term that's NOT the matched alias.
+          // We'll push it as a keyword so USASpending biases toward the
+          // sub-slice the user named (e.g. "Office of Procurement Operations").
+          const residue = normTerm.replace(aliasRegex, ' ').trim();
+          if (residue.length >= 3) agencyResidue = residue;
+          break;
+        }
+      }
+    }
 
     if (agency) {
       filters.agencies = [{ ...agency, type: 'awarding' }];
       postFilters.agency_scope = agency;
+      if (agencyResidue) topics.push(agencyResidue);
     } else {
       // Unknown agency — fall through to keywords. Better a keyword search
       // than silent no-op. User might have typed a legitimate agency we
