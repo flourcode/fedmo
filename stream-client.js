@@ -666,35 +666,29 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
       return { mode: 'error', error: fetchErr.message };
     }
 
-    // Sanity check: when a vendor was specified, verify the returned rows
-    // actually reference the vendor somewhere — in the recipient name or
-    // the contract description. If zero rows match, the keyword search
-    // returned noise (a user pitch for an unknown vendor like "bananas"
-    // will keyword-hit nothing strongly and USASpending falls back to
-    // returning the biggest agency contracts by amount, which has nothing
-    // to do with what the user asked about).
+    // No rows means applyPostFilters rejected everything — either the
+    // user pitched something that doesn't match a federal product (think
+    // "bananas" as a literal seller pitch, where the keyword search hits
+    // nothing and the vendor_scope post-filter drops all returned rows)
+    // or the agency/keyword combination genuinely has no matching contracts
+    // in the top 100. Either way, show an honest empty state instead of
+    // rendering a card with zero rows.
     //
-    // This ONLY fires for pitches with a specific vendor — not for
-    // agency-only queries or topic-only queries, where the returned top
-    // contracts ARE the answer even without a vendor filter.
-    const sellerName = resolverInput._sellerName
-      || resolverInput.vendor
-      || (Array.isArray(resolverInput.vendors) ? resolverInput.vendors[0] : null);
-    if (sellerName && rows.length > 0) {
-      const sellerUpper = String(sellerName).toUpperCase();
-      const hasVendorMatch = rows.some(r => {
-        const recipient = (r['Recipient Name'] || '').toUpperCase();
-        const desc = (r['Description'] || '').toUpperCase();
-        return recipient.includes(sellerUpper) || desc.includes(sellerUpper);
-      });
-      if (!hasVendorMatch) {
-        // The data doesn't actually contain the vendor the user pitched.
-        // Show a clean "not enough data" message instead of a noisy card
-        // that would mislead the user.
-        console.warn(`[askMo] noise guard tripped: no rows reference "${sellerName}" in recipient or description`);
-        render.renderError(`I couldn't find meaningful federal contract data for ${sellerName}. The search came back with unrelated contracts, which usually means this isn't a federal procurement item, or the product is new or named differently in federal records. Try the parent company name, or tell me more about how the product is sold into government.`);
-        return { mode: 'no_data', sellerName };
-      }
+    // The post-filter already tested description-OR-recipient for every
+    // vendor_scope needle (both the legal name AND the short form). We
+    // trust that result — if rows came back, they match. No secondary
+    // guard needed. The previous guard duplicated the work and broke real
+    // queries where the short form ("AWS") wasn't literally in descriptions
+    // that used the legal name ("AMAZON WEB SERVICES").
+    if (rows.length === 0) {
+      const sellerName = resolverInput._sellerName
+        || resolverInput.vendor
+        || (Array.isArray(resolverInput.vendors) ? resolverInput.vendors[0] : null);
+      const label = sellerName
+        ? `federal contract data for ${sellerName}`
+        : 'matching contracts for that query';
+      render.renderError(`I couldn't find ${label} in the top 100 contracts for this slice. Try broadening the agency, or tell me more about how the product is sold into government.`);
+      return { mode: 'no_data' };
     }
 
     // Render the real card
