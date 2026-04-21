@@ -1702,31 +1702,31 @@ function analyzeMarket(data, currentQuery) {
   const exp90Ts = nowTs + 90 * 86400000;
   const rec90Ts = nowTs - 90 * 86400000;
   const m = {
-    total: 0, agencies: {}, subAgencies: {}, vendors: {}, expiring: [], recentAwards: [],
+    total: 0, agencies: {}, subAgencies: {}, offices: {}, vendors: {}, expiring: [], recentAwards: [],
     contractSizes: [], contractCount: 0, vehicles: {}, queryType: 'keyword',
   };
   data.forEach(c => {
     const amt = parseFloat(c['Award Amount']) || 0;
     const agency = c['Awarding Agency'] || 'Unknown';
-    // Fedhoo pattern (line 4481): when awarding agency and sub-agency
-    // collapse to the same value — which happens when the USASpending
-    // filter narrows to a subtier (filtering to "Navy" makes both
-    // fields say "Department of the Navy" on every row) — fall through
-    // to the Awarding Office. That substitution gives us the real
-    // breakdown layer: NAVSEA / NAVAIR / BUMED / Fleet Forces for
-    // Navy; CBP / ICE / OPO / TSA for DHS; and so on. Without this,
-    // every filtered-to-subtier query renders as one useless block.
-    const rawSub = c['Awarding Sub Agency'] || agency;
-    const agencyUp = agency.toUpperCase().trim();
-    const subUp = rawSub.toUpperCase().trim();
-    const office = c['Awarding Office'] || '';
-    const subAgency = (agencyUp === subUp && office) ? office : rawSub;
+    const subAgency = c['Awarding Sub Agency'] || agency;
+    const office = c['Awarding Office'] || subAgency;
     const vendor = c['Recipient Name'] || 'Unknown';
     m.total += amt;
     m.contractCount++;
     m.contractSizes.push(amt);
+    // Three-level hierarchy bucketed in parallel. The renderer picks the
+    // deepest level with genuine variation. We CANNOT use fedhoo's row-
+    // level substitution (agency === sub → use office) because our
+    // resolver sends subtier filters to USASpending — which makes
+    // Awarding Agency="Department of Defense" (toptier) and Awarding
+    // Sub Agency="Department of the Navy" (subtier). They never match
+    // on a Navy-filtered row, so the substitution never fires. The
+    // collapse only shows up in AGGREGATE: after the whole dataset is
+    // bucketed, subAgencies has one entry (Navy), so we cascade to
+    // offices which has the real variation (NAVSEA, NAVAIR, etc.).
     m.agencies[agency] = (m.agencies[agency] || 0) + amt;
     m.subAgencies[subAgency] = (m.subAgencies[subAgency] || 0) + amt;
+    m.offices[office] = (m.offices[office] || 0) + amt;
     if (!m.vendors[vendor]) m.vendors[vendor] = { spend: 0, count: 0, agencies: new Set(), contracts: [] };
     m.vendors[vendor].spend += amt;
     m.vendors[vendor].count++;
@@ -2084,26 +2084,28 @@ function buildCardSpec(m, query, sellerLens, territory) {
     { label: 'Top 3', value: top3Pct + '%' },
   ];
 
-  // ── Treemap — top 6 buckets + Other. Agency breakdown tells the seller
-  // where the money is coming from, which is more actionable than vendor
-  // breakdown for finding openings.
+  // ── Treemap — top 6 buckets + Other.
   //
-  // Pick top-tier (agencies) when multiple are present — bare "cybersecurity"
-  // spans HHS + DoD + VA. Otherwise pick subAgencies, which already has
-  // the office-substitution applied at row level (fedhoo pattern), so
-  // filtering to Navy gives NAVSEA/NAVAIR/BUMED, filtering to HHS gives
-  // CMS/NIH/FDA, filtering to DHS gives CBP/ICE/OPO. When subAgencies
-  // also collapses to one (rare — happens for already-drilled-in queries
-  // like AFLCMC where nothing deeper is available), fall back to that
-  // single block.
+  // Cascade through three hierarchy levels to find the one with real
+  // variation. For a Navy-filtered query, agencies collapses to one
+  // (DoD) and subAgencies collapses to one (Navy), but offices varies
+  // across NAVSEA/NAVAIR/BUMED — that's the useful breakdown. For
+  // bare "cybersecurity" agencies already varies (DoD/DHS/HHS/VA) →
+  // stop at the top. For "cybersecurity at DHS" agencies collapses
+  // but subAgencies varies (OPO/CBP/ICE) → stop at subtier. For an
+  // already-drilled "AWS at AFLCMC" query everything collapses →
+  // single block, which is correct.
   const subAgencySorted = Object.entries(m.subAgencies || {}).sort((a,b) => b[1] - a[1]);
+  const officeSorted = Object.entries(m.offices || {}).sort((a,b) => b[1] - a[1]);
   let treemapSource;
   if (agencySorted.length > 1) {
     treemapSource = agencySorted;
   } else if (subAgencySorted.length > 1) {
     treemapSource = subAgencySorted;
+  } else if (officeSorted.length > 1) {
+    treemapSource = officeSorted;
   } else {
-    treemapSource = agencySorted; // nothing useful to break into — one block
+    treemapSource = agencySorted;
   }
   const palette = ['#46446E','#5E5B92','#7572B7','#9B98C8','#ACAAD4','#BCB9D8'];
   const treemap = treemapSource.slice(0, 6).map(([name, spend], i) => ({
@@ -2993,6 +2995,14 @@ const App = {
         }
         lines.push('');
       }
+    }
+
+    if (d.sampleRowFields) {
+      lines.push('Sample row (top-spend contract from USASpending):');
+      for (const [k, v] of Object.entries(d.sampleRowFields)) {
+        lines.push(`  ${k} = ${v === null ? '(null)' : v}`);
+      }
+      lines.push('');
     }
 
     if (d.firstPassRaw) {
