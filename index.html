@@ -3054,11 +3054,8 @@ const App = {
     // Reporting gap note — honest, short, earns trust
     html += `<div class="mo-subaward-note">${Html.escapeHtml(spec.reportingNote)}</div>`;
 
-    // Followups — what else can you ask about this subaward data
-    html += `<div class="mo-followups">
-      <button class="mo-followup" data-ask="Who should I team with first?">Who should I team with first?</button>
-      <button class="mo-followup" data-ask="Draft outreach to the top prime">Draft outreach to the top prime</button>
-    </div>`;
+    // Static followups removed in Turn D — dynamic chips render below
+    // the turn via generateFollowupChips + _renderChips.
 
     html += `<div class="mo-source">Top ${spec.totalSubs} subawards · last 12 months · USASpending.gov</div>`;
     html += `</div>`;
@@ -3169,13 +3166,11 @@ const App = {
       html += `<div style="margin-top:16px;font-size:12px;color:var(--text-muted);"><strong style="color:var(--text-title);font-weight:500;">Vehicles:</strong> ${Html.escapeHtml(spec.vehicleLine)}</div>`;
     }
 
-    if (spec.followups && spec.followups.length > 0) {
-      html += `<div class="mo-followups">`;
-      spec.followups.forEach(f => {
-        html += `<button class="mo-followup" data-ask="${Html.escapeHtml(f)}">${Html.escapeHtml(f)}</button>`;
-      });
-      html += `</div>`;
-    }
+    // Card-internal followups from spec.followups were removed in Turn D.
+    // They duplicated the data-derived chips painted below the turn by
+    // generateFollowupChips + _renderChips. One source of truth for chips,
+    // rendered once per turn, below Mo's prose so the natural reading
+    // order is: card → explanation → next moves.
 
     html += `<div class="mo-source">Top ${spec.sourceCount} contracts · last 12 months · USASpending.gov</div>`;
     html += `</div>`;
