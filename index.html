@@ -2362,6 +2362,19 @@ const App = {
   _labelForResolverInput(input) {
     if (!input) return 'this market';
     const parts = [];
+    // Reframed mode: the user pitched a vendor but the pull was
+    // refired without it because the direct query was empty. Label
+    // as the agency market context, with a note that the pitched
+    // vendor isn't directly present.
+    if (input._reframedFromVendor) {
+      if (input.agency) {
+        parts.push(`${input.agency} market`);
+      } else {
+        parts.push('Market view');
+      }
+      parts.push(`· ${input._reframedFromVendor} not directly here`);
+      return parts.join(' ');
+    }
     // Competitor mode: label as "AWS vs. competitors" rather than joining
     // the entire vendor+competitor array into an unreadable comma-soup.
     if (input._sellerName) {
@@ -2435,7 +2448,18 @@ const App = {
         //      Join with "+" so the verdict can read "Ethos + Govini has
         //      a foothold here."
         let sellerLens = null;
-        if (resolverInput?._sellerName) {
+        // Reframed mode: the vendor the user pitched isn't actually in
+        // the data — we fell back to the agency market view. Using the
+        // pitched vendor as sellerLens would produce verdict lines like
+        // "AWS is winning here" for data that has no AWS in it. Wrong.
+        // Leave sellerLens null so buildCardSpec produces a generic
+        // market-shape verdict ("This market is concentrated" / "active
+        // but competitive" / etc.) that honestly describes what's on the
+        // card. Mo's prose separately explains the reframe via the
+        // payload-summary framing.
+        if (resolverInput?._reframedFromVendor) {
+          sellerLens = null;
+        } else if (resolverInput?._sellerName) {
           sellerLens = resolverInput._sellerName;
         } else if (resolverInput?.vendor) {
           sellerLens = resolverInput.vendor;

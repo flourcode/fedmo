@@ -340,7 +340,7 @@ Your job: tell the seller who's REALLY doing the work behind the primes. Call ou
 // total dollars, top 5 primes, agency breakdown, expiring count.
 // ─────────────────────────────────────────────────────────────────────
 
-export function summarizePayloadForMo(rows, resolverInput) {
+export function summarizePayloadForMo(rows, resolverInput, opts = {}) {
   if (!rows || rows.length === 0) {
     return `No contracts matched the query. Tell the user the data came back empty and suggest a different angle.`;
   }
@@ -406,6 +406,27 @@ Seller: ${seller}
 Category: ${category}
 Competitors in this pull: ${resolverInput._competitorList.join(', ')}
 Your job: tell the seller who's winning and losing in THEIR category. Identify which vendors in the top primes are the seller (${seller}) vs. their competitors. Call out share, positioning, and where each player is strongest. If the seller isn't in the top primes, say so honestly and describe the competitive landscape they're trying to break into.`;
+  }
+
+  // Reframed-on-empty framing: the user pitched a vendor+agency combo, but
+  // the direct pull came back empty, so the browser refired the query
+  // without the vendor filter. The card now shows the agency-wide market,
+  // not the seller's literal footprint. Mo MUST explain this — leading
+  // with honesty ("your product isn't here directly") before walking the
+  // market picture. Otherwise she'll read the card as proof of a presence
+  // the seller doesn't actually have, which is a trust disaster.
+  if (opts.reframed && resolverInput?._reframedFromVendor) {
+    const pitched = resolverInput._reframedFromVendor;
+    framing += `
+THIS IS A REFRAMED PULL.
+The user pitched "${pitched}" at this agency, but ${pitched} has no direct footprint in the top 100 contracts here.
+Rather than dead-end the user, the browser pulled the broader agency market so you can tell them what IS here.
+Your job:
+ 1. Lead with honesty: "${pitched} doesn't show up directly at [agency]" — acknowledge the absence in the first sentence.
+ 2. Then pivot: "but here's the market you'd be entering" — describe the agency's actual spending patterns based on the top primes and sub-agencies below.
+ 3. Identify the adjacency: where does ${pitched}'s category fit? Who's holding that work? Is it a greenfield for the seller, or is there an incumbent to displace?
+ 4. End with a concrete Monday-morning action tied to what's actually in the data.
+Do NOT pretend the rows below represent ${pitched}'s presence. They don't. They represent the market context around ${pitched}'s absence.`;
   }
 
   return `Query: ${queryDesc || '(no filters)'}${framing}
@@ -666,36 +687,86 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
       return { mode: 'error', error: fetchErr.message };
     }
 
-    // No rows means applyPostFilters rejected everything — either the
-    // user pitched something that doesn't match a federal product (think
-    // "bananas" as a literal seller pitch, where the keyword search hits
-    // nothing and the vendor_scope post-filter drops all returned rows)
-    // or the agency/keyword combination genuinely has no matching contracts
-    // in the top 100. Either way, show an honest empty state instead of
-    // rendering a card with zero rows.
+    // ── Empty-state recovery ──────────────────────────────────────
     //
-    // The post-filter already tested description-OR-recipient for every
-    // vendor_scope needle (both the legal name AND the short form). We
-    // trust that result — if rows came back, they match. No secondary
-    // guard needed. The previous guard duplicated the work and broke real
-    // queries where the short form ("AWS") wasn't literally in descriptions
-    // that used the legal name ("AMAZON WEB SERVICES").
-    if (rows.length === 0) {
-      const sellerName = resolverInput._sellerName
+    // When the pull returns zero rows, the seller's specific query didn't
+    // land. Don't dead-end them. If they pitched a vendor+agency combo
+    // (e.g., "AWS to TRANSCOM"), their real question is about the MARKET
+    // at that agency — the cloud/IT work they'd be entering — not whether
+    // their product is literally named in top-100 contracts. TRANSCOM has
+    // no direct AWS footprint, but lots of cloud-adjacent IT work.
+    //
+    // So: if we had a vendor filter and it caused the empty result, retry
+    // ONCE with the vendor dropped. Keep everything else (agency, topic,
+    // NAICS, expiring). Flag the result so Mo's interpretation reframes
+    // it honestly: "your product isn't here directly, but here's the
+    // market you'd be entering."
+    //
+    // This only fires when the user genuinely scoped by vendor. Pure
+    // agency-only or topic-only queries that return zero get the honest
+    // "I couldn't find anything" — they weren't scoped in a way the
+    // fallback would help.
+    //
+    // One retry, not a chain. If the fallback also returns zero, that
+    // really IS a dead end and we should say so plainly.
+    let reframed = false;
+    const hadVendorFilter = !!(resolverInput._sellerName
+      || resolverInput.vendor
+      || (Array.isArray(resolverInput.vendors) && resolverInput.vendors.length));
+
+    if (rows.length === 0 && hadVendorFilter && resolverInput.agency) {
+      // Build a relaxed resolver input for the retry: strip vendor fields
+      // and the vendor_scope post-filter, keep everything else intact.
+      // We also preserve the original seller name in _reframedFromVendor
+      // so Mo's prompt knows what product the user pitched even though
+      // the pull no longer filters by it.
+      const originalSeller = resolverInput._sellerName
         || resolverInput.vendor
-        || (Array.isArray(resolverInput.vendors) ? resolverInput.vendors[0] : null);
-      const label = sellerName
-        ? `federal contract data for ${sellerName}`
-        : 'matching contracts for that query';
-      render.renderError(`I couldn't find ${label} in the top 100 contracts for this slice. Try broadening the agency, or tell me more about how the product is sold into government.`);
+        || (Array.isArray(resolverInput.vendors) ? resolverInput.vendors[0] : '');
+
+      const relaxedInput = { ...resolverInput };
+      delete relaxedInput.vendor;
+      delete relaxedInput.vendors;
+      delete relaxedInput._sellerName;
+      delete relaxedInput._competitorCategory;
+      delete relaxedInput._competitorList;
+      relaxedInput._reframedFromVendor = originalSeller;
+
+      try {
+        const retryRows = await fetchUsaspending(relaxedInput, endpoint);
+        if (retryRows.length > 0) {
+          rows = retryRows;
+          reframed = true;
+          // Mutate resolverInput in place so the downstream renderers and
+          // payload summary see the relaxed shape. This is the one place
+          // we deliberately rewrite the query the user asked for — and we
+          // flag it prominently so Mo knows to explain it.
+          Object.assign(resolverInput, relaxedInput);
+        }
+      } catch (retryErr) {
+        // Retry blew up. Fall through to the no-data path below. Log
+        // because this shouldn't happen — if the original fetch worked,
+        // the relaxed retry should work too.
+        console.warn('[askMo] fallback retry failed:', retryErr.message);
+      }
+    }
+
+    if (rows.length === 0) {
+      // Truly empty — no vendor filter to drop, or the fallback also
+      // returned nothing. Tell the user plainly.
+      render.renderError(`I couldn't find anything matching that. Try a different agency, or tell me more about what you're looking for.`);
       return { mode: 'no_data' };
     }
 
     // Render the real card
     render.renderDataCard(cardRef, rows, resolverInput);
 
-    // Build a payload summary for Mo's grounded interpretation
-    const summary = summarizePayloadForMo(rows, resolverInput);
+    // Build a payload summary for Mo's grounded interpretation. The
+    // `reframed` flag tells Mo that the pull she's about to interpret
+    // isn't the literal vendor pull the user asked for — it's the
+    // agency-wide fallback. She reads _reframedFromVendor to know what
+    // the user originally pitched.
+    const summary = summarizePayloadForMo(rows, resolverInput, { reframed });
 
     // Build history for second call: include Mo's first-pass prose so
     // conversational continuity is preserved. We truncate to the part
