@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<!--
+  ═══════════════════════════════════════════════════════════════════
+  Mo eval runner — regression tests in a browser
+  ═══════════════════════════════════════════════════════════════════
+
+  Drop this in the same folder as mo_mock.html, resolver.js, and
+  stream-client.js. Open it in a browser. Click "Run all" to execute
+  the ten scripted scenarios against the live Lambda.
+
+  Override the endpoint via ?endpoint=... for testing a dev Lambda.
+
+  No styling polish — this page is for Mark and whoever's debugging.
+  ═══════════════════════════════════════════════════════════════════
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mo harsh evals</title>
+<style>
+  :root {
+    --bg: #fdfcff;
+    --card: #ffffff;
+    --border: #e6e4ed;
+    --text: #1a1625;
+    --muted: #6b6879;
+    --primary: #5b5bd6;
+    --pass: #1a8a4b;
+    --warn: #d98b1a;
+    --fail: #c4372e;
+    --mono: 'SF Mono', 'Monaco', 'Consolas', 'Liberation Mono', monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 24px;
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    max-width: 1080px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .subtitle { color: var(--muted); margin-bottom: 20px; font-size: 13px; }
+  .controls {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  button {
+    background: var(--primary);
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+  }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  button.ghost {
+    background: white;
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .endpoint {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+    padding: 4px 8px;
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    max-width: 480px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .summary {
+    display: flex;
+    gap: 16px;
+    padding: 12px 16px;
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 20px;
+    font-size: 13px;
+    flex-wrap: wrap;
+  }
+  .summary .count { font-weight: 600; font-family: var(--mono); }
+  .summary .pass { color: var(--pass); }
+  .summary .warn { color: var(--warn); }
+  .summary .fail { color: var(--fail); }
+  .scenario {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 12px;
+    overflow: hidden;
+  }
+  .scenario-head {
+    padding: 14px 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    user-select: none;
+  }
+  .scenario-head:hover { background: #faf9fc; }
+  .status-dot {
+    width: 12px; height: 12px; border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .status-dot.pending { background: #d4d2dc; }
+  .status-dot.running { background: var(--primary); animation: pulse 1s infinite; }
+  .status-dot.pass { background: var(--pass); }
+  .status-dot.warn { background: var(--warn); }
+  .status-dot.fail { background: var(--fail); }
+  @keyframes pulse { 50% { opacity: 0.4; } }
+  .scenario-name { font-weight: 600; flex: 1; }
+  .scenario-count { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .scenario-body {
+    padding: 0 16px 16px;
+    border-top: 1px solid var(--border);
+    display: none;
+  }
+  .scenario.expanded .scenario-body { display: block; }
+  .scenario-desc { color: var(--muted); font-size: 13px; margin: 12px 0 16px; font-style: italic; }
+  .turn {
+    border-left: 3px solid var(--border);
+    padding: 8px 12px;
+    margin-bottom: 12px;
+    background: #faf9fc;
+    border-radius: 0 6px 6px 0;
+  }
+  .turn-question {
+    font-weight: 600;
+    font-family: var(--mono);
+    font-size: 13px;
+    margin-bottom: 6px;
+  }
+  .turn-meta {
+    color: var(--muted);
+    font-size: 12px;
+    margin-bottom: 10px;
+  }
+  .assertion {
+    display: flex;
+    align-items: start;
+    gap: 8px;
+    padding: 4px 0;
+    font-size: 13px;
+  }
+  .assertion-mark {
+    font-family: var(--mono);
+    flex-shrink: 0;
+    width: 14px;
+    font-weight: 600;
+  }
+  .assertion.pass .assertion-mark { color: var(--pass); }
+  .assertion.fail.hard .assertion-mark { color: var(--fail); }
+  .assertion.fail.soft .assertion-mark { color: var(--warn); }
+  .assertion-kind {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    padding: 1px 6px;
+    background: #eceaf2;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+  .assertion-msg { flex: 1; }
+  .assertion-err {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--fail);
+    margin-left: 28px;
+    margin-top: 2px;
+  }
+  .snapshot-toggle {
+    font-size: 12px;
+    color: var(--primary);
+    cursor: pointer;
+    margin-top: 8px;
+    display: inline-block;
+    user-select: none;
+  }
+  .snapshot {
+    font-family: var(--mono);
+    font-size: 11px;
+    background: #22202b;
+    color: #e8e6f0;
+    padding: 12px;
+    border-radius: 6px;
+    margin-top: 8px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    display: none;
+    max-height: 400px;
+    overflow: auto;
+  }
+  .snapshot.open { display: block; }
+  .intro {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 20px;
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+  .intro strong { color: var(--text); }
+</style>
+</head>
+<body>
+  <h1>Mo harsh evals</h1>
+  <div class="subtitle">Twelve corner-case scenarios. Adversarial input, ambiguity, beta-vendor depth, multi-turn state, data edge cases. Slower than the main suite — run before a release or beta push.</div>
+
+  <div class="intro">
+    <strong>How to read this:</strong> Each scenario plays one or more user messages through the real askMo() pipeline and runs assertions against what happened. <strong style="color: var(--pass);">Green</strong> = all hard assertions pass. <strong style="color: var(--warn);">Yellow</strong> = hard passes, some soft checks fail (Gemini non-determinism, usually safe). <strong style="color: var(--fail);">Red</strong> = a hard assertion failed — product bug, worth investigating. Click any scenario to expand turn-by-turn details. Click "Show snapshot" under any turn to see the raw data Mo returned.
+  </div>
+
+  <div class="controls">
+    <button id="runAllBtn">Run all</button>
+    <button id="clearBtn" class="ghost">Clear results</button>
+    <div class="endpoint" id="endpointDisplay">endpoint: loading...</div>
+  </div>
+
+  <div class="summary" id="summary" style="display: none;">
+    <div><span class="count pass" id="passCount">0</span> passed</div>
+    <div><span class="count warn" id="warnCount">0</span> warning</div>
+    <div><span class="count fail" id="failCount">0</span> failed</div>
+    <div><span class="count" id="runTime">0s</span> elapsed</div>
+  </div>
+
+  <div id="scenarios"></div>
+
+<script type="module">
+import { SCENARIOS } from './eval-scenarios-harsh.js';
+import { runScenario } from './eval-runner.js';
+
+// Endpoint resolution — same default as mo_mock.html, overridable via ?endpoint=
+const DEFAULT_ENDPOINT = 'https://llonymyskdiakyxhlxlex7ul640hbcke.lambda-url.us-east-1.on.aws/';
+const params = new URLSearchParams(window.location.search);
+const ENDPOINT = params.get('endpoint') || DEFAULT_ENDPOINT;
+
+document.getElementById('endpointDisplay').textContent = 'endpoint: ' + ENDPOINT;
+
+// ── Render scenario skeleton ──────────────────────────────────
+function renderScenarioSkeletons() {
+  const host = document.getElementById('scenarios');
+  host.innerHTML = SCENARIOS.map((s, i) => `
+    <div class="scenario" data-idx="${i}" id="scenario-${i}">
+      <div class="scenario-head">
+        <div class="status-dot pending" id="dot-${i}"></div>
+        <div class="scenario-name">${escapeHtml(s.name)}</div>
+        <div class="scenario-count" id="count-${i}">— / —</div>
+      </div>
+      <div class="scenario-body">
+        <div class="scenario-desc">${escapeHtml(s.description || '')}</div>
+        <div id="body-${i}"><em>Click "Run all" to start.</em></div>
+      </div>
+    </div>
+  `).join('');
+  // Wire expand/collapse
+  document.querySelectorAll('.scenario-head').forEach(head => {
+    head.addEventListener('click', () => {
+      head.parentElement.classList.toggle('expanded');
+    });
+  });
+}
+
+function escapeHtml(s) {
+  return String(s || '').replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
+function renderTurnResults(scenarioIdx, scenarioResult) {
+  const body = document.getElementById('body-' + scenarioIdx);
+  body.innerHTML = scenarioResult.turns.map((t, ti) => {
+    const snapshotStr = JSON.stringify(
+      {
+        mode: t.snapshot.mode,
+        tagAttrs: t.snapshot.tagAttrs,
+        resolverInput: t.snapshot.resolverInput,
+        rowCount: t.snapshot.rowCount,
+        preTagText: (t.snapshot.preTagText || '').slice(0, 500),
+        postTagText: (t.snapshot.postTagText || '').slice(0, 500),
+        error: t.snapshot.error,
+        durationMs: t.durationMs,
+      },
+      null, 2
+    );
+    return `
+      <div class="turn">
+        <div class="turn-question">▸ ${escapeHtml(t.question)}</div>
+        <div class="turn-meta">${t.snapshot.mode || 'unknown mode'} · ${t.durationMs}ms · ${t.snapshot.rowCount || 0} rows</div>
+        ${t.assertions.map(a => `
+          <div class="assertion ${a.pass ? 'pass' : 'fail'} ${a.kind}">
+            <span class="assertion-mark">${a.pass ? '✓' : '✗'}</span>
+            <span class="assertion-kind">${a.kind}</span>
+            <span class="assertion-msg">${escapeHtml(a.msg)}</span>
+          </div>
+          ${a.errMsg ? `<div class="assertion-err">${escapeHtml(a.errMsg)}</div>` : ''}
+        `).join('')}
+        <div class="snapshot-toggle" data-snapshot="${scenarioIdx}-${ti}">Show snapshot</div>
+        <div class="snapshot" id="snap-${scenarioIdx}-${ti}">${escapeHtml(snapshotStr)}</div>
+      </div>
+    `;
+  }).join('');
+
+  // Wire snapshot toggles
+  body.querySelectorAll('.snapshot-toggle').forEach(tog => {
+    tog.addEventListener('click', () => {
+      const id = tog.getAttribute('data-snapshot');
+      const snap = document.getElementById('snap-' + id);
+      snap.classList.toggle('open');
+      tog.textContent = snap.classList.contains('open') ? 'Hide snapshot' : 'Show snapshot';
+    });
+  });
+
+  // Update status dot + count
+  const dot = document.getElementById('dot-' + scenarioIdx);
+  dot.className = 'status-dot ' + scenarioResult.status;
+  const count = document.getElementById('count-' + scenarioIdx);
+  const total = scenarioResult.hardPassed + scenarioResult.hardFailed + scenarioResult.softPassed + scenarioResult.softFailed;
+  const passed = scenarioResult.hardPassed + scenarioResult.softPassed;
+  count.textContent = `${passed} / ${total}`;
+
+  // Auto-expand failures so user sees them immediately
+  if (scenarioResult.status === 'fail') {
+    document.getElementById('scenario-' + scenarioIdx).classList.add('expanded');
+  }
+}
+
+function updateSummary(results, elapsedMs) {
+  let pass = 0, warn = 0, fail = 0;
+  for (const r of results) {
+    if (r.status === 'pass') pass++;
+    else if (r.status === 'warn') warn++;
+    else if (r.status === 'fail') fail++;
+  }
+  document.getElementById('passCount').textContent = pass;
+  document.getElementById('warnCount').textContent = warn;
+  document.getElementById('failCount').textContent = fail;
+  document.getElementById('runTime').textContent = (elapsedMs / 1000).toFixed(1) + 's';
+  document.getElementById('summary').style.display = 'flex';
+}
+
+async function runAll() {
+  const btn = document.getElementById('runAllBtn');
+  btn.disabled = true;
+  btn.textContent = 'Running...';
+  const t0 = Date.now();
+  const results = [];
+
+  for (let i = 0; i < SCENARIOS.length; i++) {
+    // Mark as running
+    const dot = document.getElementById('dot-' + i);
+    dot.className = 'status-dot running';
+
+    try {
+      const result = await runScenario(SCENARIOS[i], ENDPOINT);
+      results.push(result);
+      renderTurnResults(i, result);
+    } catch (err) {
+      console.error('Scenario', i, 'errored:', err);
+      dot.className = 'status-dot fail';
+      document.getElementById('body-' + i).innerHTML = `<div class="assertion fail hard"><span class="assertion-mark">✗</span><span class="assertion-msg">Scenario crashed: ${escapeHtml(err.message || String(err))}</span></div>`;
+      document.getElementById('scenario-' + i).classList.add('expanded');
+    }
+
+    updateSummary(results, Date.now() - t0);
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Run all';
+}
+
+function clearResults() {
+  renderScenarioSkeletons();
+  document.getElementById('summary').style.display = 'none';
+}
+
+document.getElementById('runAllBtn').addEventListener('click', runAll);
+document.getElementById('clearBtn').addEventListener('click', clearResults);
+
+// Init
+renderScenarioSkeletons();
+</script>
+</body>
+</html>
