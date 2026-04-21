@@ -2343,6 +2343,15 @@ const App = {
       } else if (result.mode === 'prose' && result.text) {
         this._history.push({ role: 'model', content: result.text });
         this._track('turn_prose', { length: result.text.length });
+      } else if ((result.mode === 'no_data' || result.mode === 'no_subaward_data') && result.resolverInput) {
+        // Data pull succeeded but came back empty. Mo already rendered an
+        // honest "no data" message via renderError. Now we paint escape-
+        // hatch chips so the user isn't stuck — they can tap to broaden,
+        // pivot, or slice differently. Without these chips the turn is a
+        // dead-end that forces the user to type their way out.
+        const chips = this.generateFollowupChips('no_data', [], result.resolverInput);
+        this._renderChips(turnEls.chipsEl, chips);
+        this._track('turn_no_data', { mode: result.mode });
       }
       // On error, we don't push to history — the user will retry
 
@@ -2442,8 +2451,74 @@ const App = {
   // Returns [] for coaching/no-data turns so chips disappear entirely
   // when the card is missing. The row's :empty CSS collapses it.
   generateFollowupChips(mode, rows, resolverInput) {
-    if (!rows || rows.length === 0) return [];
     if (!mode) return [];
+
+    // Helper to trim legal suffixes — "Amazon Web Services, INC." →
+    // "Amazon Web Services". Used for vendor names in chip labels so
+    // they read naturally. Defined early because no_data mode may need
+    // it before we get to the main-mode code below.
+    const cleanName = (name) => {
+      return String(name || '')
+        .replace(/,?\s*(?:INC\.?|INCORPORATED|LLC|L\.?L\.?C\.?|LTD\.?|CORP\.?|CORPORATION|COMPANY|CO\.?)\s*$/i, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+    };
+
+    const agency = resolverInput?.agency || '';
+    const vendorLabel = resolverInput?.vendor
+      || (Array.isArray(resolverInput?.vendors) && resolverInput.vendors.length > 0 ? resolverInput.vendors[0] : '');
+
+    // ── No-data escape hatches ────────────────────────────────────
+    // The pull came back empty — either the main data query or the
+    // subaward query — and Mo rendered an honest "I don't see data"
+    // message. Without chips the user is stuck. These chips give them
+    // three concrete next moves derived from what they originally asked.
+    //
+    // The questions are phrased as explicit scope-breakers ("across all
+    // agencies", "at the agency") to override whatever sticky context
+    // Mo's prompt might try to carry from the empty turn.
+    if (mode === 'no_data') {
+      const chips = [];
+      // If they asked for vendor+agency, give them three ways out:
+      //   1. See the agency market (drop vendor)
+      //   2. See the vendor federally (drop agency)
+      //   3. See what's expiring at the agency (different slice, still useful)
+      if (vendorLabel && agency) {
+        chips.push({
+          label: `${agency} market`,
+          question: `Show me the ${agency} market`,
+        });
+        chips.push({
+          label: `${vendorLabel} across all agencies`,
+          question: `Show me ${vendorLabel} across all agencies`,
+        });
+        chips.push({
+          label: `Expiring at ${agency}`,
+          question: `Show only expiring contracts at ${agency}`,
+        });
+      }
+      // Vendor only, no agency — user asked a federal vendor question
+      // and got nothing. Not much to offer; a competitor slice is the
+      // one useful move.
+      else if (vendorLabel) {
+        chips.push({
+          label: `Who competes with ${vendorLabel}`,
+          question: `Who are ${vendorLabel}'s competitors?`,
+        });
+      }
+      // Agency only — just broaden to "what's expiring here" as a
+      // useful default slice.
+      else if (agency) {
+        chips.push({
+          label: `Expiring at ${agency}`,
+          question: `Show only expiring contracts at ${agency}`,
+        });
+      }
+      return chips.slice(0, 3);
+    }
+
+    // Everything below needs actual rows.
+    if (!rows || rows.length === 0) return [];
 
     // Top prime / top sub-agency — used by most chip rules below. Derived
     // from the rows the card is actually showing, not from a separate
@@ -2462,18 +2537,7 @@ const App = {
     const topPrime = topPrimes[0] || '';
     const topSub = topSubs[0] || '';
 
-    // Clean a prime name for display — "Amazon Web Services, INC." →
-    // "Amazon Web Services". Chips need to read naturally as questions,
-    // so stripping the legal suffix makes them shorter and friendlier.
-    const cleanName = (name) => {
-      return String(name || '')
-        .replace(/,?\s*(?:INC\.?|INCORPORATED|LLC|L\.?L\.?C\.?|LTD\.?|CORP\.?|CORPORATION|COMPANY|CO\.?)\s*$/i, '')
-        .replace(/\s+/g, ' ')
-        .trim();
-    };
-
     const chips = [];
-    const agency = resolverInput?.agency || '';
 
     // ── Seller pitch with real data ─────────────────────────────────
     // User said "I sell X to Y" AND the pull was NOT a competitor cut,
@@ -2481,8 +2545,7 @@ const App = {
     // follow-ups after seeing your own footprint.
     if (mode === 'data' && !resolverInput?._reframedFromVendor &&
         !resolverInput?._sellerName && (resolverInput?.vendor || resolverInput?.vendors)) {
-      const vendorLabel = resolverInput.vendor
-        || (Array.isArray(resolverInput.vendors) ? resolverInput.vendors[0] : '');
+      // vendorLabel was captured at the top of the function
       if (agency) {
         chips.push({ label: 'Who are my competitors here', question: `Who are ${vendorLabel}'s competitors at ${agency}?` });
       } else {

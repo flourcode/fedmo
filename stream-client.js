@@ -642,7 +642,7 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
         // contract has visible sub-tier reporting. Tell the user honestly
         // instead of rendering an empty card.
         render.renderError(`I don't see subaward data for that slice. Federal subaward reporting is patchy — smaller task orders and some vehicles don't require it. Try a different agency or a broader vendor filter.`);
-        return { mode: 'no_subaward_data' };
+        return { mode: 'no_subaward_data', resolverInput };
       }
 
       // Render the subaward card
@@ -755,7 +755,7 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
       // Truly empty — no vendor filter to drop, or the fallback also
       // returned nothing. Tell the user plainly.
       render.renderError(`I couldn't find anything matching that. Try a different agency, or tell me more about what you're looking for.`);
-      return { mode: 'no_data' };
+      return { mode: 'no_data', resolverInput };
     }
 
     // Render the real card
