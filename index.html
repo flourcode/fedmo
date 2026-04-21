@@ -236,6 +236,7 @@ button { cursor: pointer; }
   line-height: 1.45;
 }
 .greeting-examples { display: flex; flex-wrap: wrap; gap: 8px; }
+.greeting-hint { font-size: 13px; color: var(--text-muted); margin-top: 14px; line-height: 1.5; }
 
 .turn-user {
   display: flex;
@@ -1173,6 +1174,7 @@ body.thread-empty .mo-ask-bar {
       </div>
     </div>
     <div class="greeting-examples" id="greetingChips"></div>
+    <div class="greeting-hint">Or type anything — a vendor, agency, topic, or full question.</div>
   </div>
 </div>
 
@@ -1249,9 +1251,9 @@ const debug = (...args) => { if (DEBUG) console.debug(...args); };
 // Add a 4th only if they all stay short (≤ 25 chars each).
 //
 const GREETING_CHIPS = [
-  'I sell AWS to DoD',
+  'I sell cloud to DoD',
   "Who's winning at HHS",
-  'Who should I team with at VA',
+  'I sell cybersecurity to DHS',
 ];
 // ════════════════════════════════════════════════════════════
 

@@ -474,6 +474,7 @@ export function resolve(input) {
     'apm': ['application performance', 'APM', 'observability'],
     'fedramp': ['FedRAMP', 'cloud authorization'],
     'cmmc': ['CMMC', 'cybersecurity maturity'],
+    'cyber': ['cybersecurity', 'cyber security', 'cyber'],
     // Food commodities — federal contracts use DLA's "subsistence" vocabulary,
     // not the seller's everyday terms. Without this, a "bananas to DoD" pitch
     // loose-matches "producer" in defense-industrial descriptions and returns
