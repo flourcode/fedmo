@@ -1702,17 +1702,23 @@ function analyzeMarket(data, currentQuery) {
   const exp90Ts = nowTs + 90 * 86400000;
   const rec90Ts = nowTs - 90 * 86400000;
   const m = {
-    total: 0, agencies: {}, vendors: {}, expiring: [], recentAwards: [],
+    total: 0, agencies: {}, subAgencies: {}, vendors: {}, expiring: [], recentAwards: [],
     contractSizes: [], contractCount: 0, vehicles: {}, queryType: 'keyword',
   };
   data.forEach(c => {
     const amt = parseFloat(c['Award Amount']) || 0;
     const agency = c['Awarding Agency'] || 'Unknown';
+    const subAgency = c['Awarding Sub Agency'] || agency; // fall back to top-tier
     const vendor = c['Recipient Name'] || 'Unknown';
     m.total += amt;
     m.contractCount++;
     m.contractSizes.push(amt);
     m.agencies[agency] = (m.agencies[agency] || 0) + amt;
+    // Sub-agency bucketing runs parallel to top-tier bucketing. When the
+    // user filtered to a single top-tier, the treemap renders from this
+    // instead of m.agencies so they see the interesting detail (AFLCMC
+    // vs AFRL vs Space Force) rather than one giant block.
+    m.subAgencies[subAgency] = (m.subAgencies[subAgency] || 0) + amt;
     if (!m.vendors[vendor]) m.vendors[vendor] = { spend: 0, count: 0, agencies: new Set(), contracts: [] };
     m.vendors[vendor].spend += amt;
     m.vendors[vendor].count++;
@@ -2070,20 +2076,32 @@ function buildCardSpec(m, query, sellerLens, territory) {
     { label: 'Top 3', value: top3Pct + '%' },
   ];
 
-  // ── Treemap — top 6 agencies + Other. Agency breakdown tells the seller
-  // where the money is coming from (NASA vs VA vs Air Force), which is more
-  // actionable than vendor breakdown for finding openings.
-  // agencySorted is already computed above.
+  // ── Treemap — top 6 buckets + Other. Agency breakdown tells the seller
+  // where the money is coming from, which is more actionable than vendor
+  // breakdown for finding openings.
+  //
+  // When the user's query spans multiple top-tier agencies (e.g. bare
+  // "cybersecurity"), bucket by top-tier (HHS vs DoD vs VA).
+  //
+  // When the user filtered to a single top-tier (e.g. "AWS at Air Force"),
+  // a single-block treemap tells them nothing they don't already know.
+  // Bucket by SUB-agency instead so they see AFLCMC vs AFRL vs Space
+  // Force. Falls back to top-tier if sub-agencies also collapse to one
+  // entry (e.g. direct-awarded contracts where the sub is the same as
+  // the top-tier).
+  const subAgencySorted = Object.entries(m.subAgencies || {}).sort((a,b) => b[1] - a[1]);
+  const useSubAgencies = agencySorted.length === 1 && subAgencySorted.length > 1;
+  const treemapSource = useSubAgencies ? subAgencySorted : agencySorted;
   const palette = ['#46446E','#5E5B92','#7572B7','#9B98C8','#ACAAD4','#BCB9D8'];
-  const treemap = agencySorted.slice(0, 6).map(([name, spend], i) => ({
+  const treemap = treemapSource.slice(0, 6).map(([name, spend], i) => ({
     name: Utils.cleanAgency(name),
     value: spend,  // keep as raw dollars; renderer formats for display
     color: palette[i] || '#CDCBE3',
   }));
-  const otherSpend = agencySorted.slice(6).reduce((s,[,v]) => s + v, 0);
+  const otherSpend = treemapSource.slice(6).reduce((s,[,v]) => s + v, 0);
   if (otherSpend > 0) {
     treemap.push({
-      name: `Other (${agencySorted.length - 6})`,
+      name: `Other (${treemapSource.length - 6})`,
       value: otherSpend,
       color: '#CDCBE3',
     });
