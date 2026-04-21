@@ -743,6 +743,11 @@ button { cursor: pointer; }
   font-size: 15px;
   font-weight: 600;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  box-sizing: border-box;
 }
 .mo-modal-btn:active { background: #3A385A; transform: scale(0.99); }
 .mo-modal-btn-ghost {
@@ -1125,7 +1130,10 @@ body.thread-empty .mo-ask-bar {
 <header class="mo-header">
   <div class="mo-header-inner">
     <div class="mo-header-spacer"></div>
-    <button class="mo-header-action" onclick="App.openAbout()" aria-label="About Fedmo">
+    <button class="mo-header-action" onclick="App.resetThread()" aria-label="New conversation" title="New conversation">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+    </button>
+    <button class="mo-header-action" onclick="App.openAbout()" aria-label="About Fedmo" title="About Fedmo">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
     </button>
   </div>
@@ -1149,9 +1157,9 @@ body.thread-empty .mo-ask-bar {
     <p>Every number Mo cites comes from USASpending and you can tap any contract to verify.</p>
     <p>Ask about any vendor, agency, or topic at any time. Pivot freely — talking about AWS at DoD and want to jump to textile suppliers at NASA? Just ask. Mo treats each question on its own terms and only carries context when you explicitly refer back to something ("what about VA", "just Navy").</p>
     <div class="mo-modal-actions">
-      <button class="mo-modal-btn" onclick="App.closeAbout(); App.resetThread();">Clear the thread</button>
+      <a class="mo-modal-btn" href="https://calendly.com/markflournoy/chat-with-mark" target="_blank" rel="noopener" onclick="App.closeAbout()">Chat with Mark</a>
     </div>
-    <div class="mo-modal-foot">"Clear the thread" wipes the visible conversation. Use it if things feel cluttered — it's not required between topics.</div>
+    <div class="mo-modal-foot">Feedback, feature requests, or just want to talk federal sales? Book time with Mark, the builder of Fedmo.</div>
   </div>
 </div>
 
@@ -2295,6 +2303,13 @@ const App = {
     lastQuery: null,
     // Last resolved input that produced the card. Used for subaward probes.
     lastResolverInput: null,
+    // Debug panel visibility. Hidden by default for beta users (they don't
+    // need to see internal traces). Toggled by Ctrl+Shift+D — when a beta
+    // tester reports surprising behavior, they can press the shortcut and
+    // paste the trace back to us for diagnosis. The trace is ALWAYS
+    // collected by askMo regardless of this flag; this only controls
+    // render visibility.
+    debugVisible: false,
   },
 
   // Conversation history for Mo. Each entry: { role: 'user'|'model', content: '...' }
@@ -2309,6 +2324,34 @@ const App = {
     window.addEventListener('scroll', () => this._updateJumpVisibility(), { passive: true });
     // One-time cleanup for users upgrading from the lens/territory era.
     try { localStorage.removeItem('fedmo_seller_product'); } catch(e) {}
+
+    // Ctrl+Shift+D / Cmd+Shift+D toggles the debug panel.
+    // Hidden from beta users unless we tell them to press it. Uses the
+    // 'D' keycode check rather than e.key to avoid keyboard layout
+    // sensitivity. When toggled ON, retroactively renders debug for any
+    // turns that already ran — we stash debug data on each turn element
+    // at ask-time for exactly this purpose. When toggled OFF, we clear
+    // the existing slots.
+    document.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'D' || e.key === 'd')) {
+        e.preventDefault();
+        this.state.debugVisible = !this.state.debugVisible;
+        console.log('[debug] visibility:', this.state.debugVisible ? 'ON' : 'OFF');
+        if (this.state.debugVisible) {
+          // Retro-render any turns with stashed debug
+          document.querySelectorAll('.mo-debug-slot').forEach(slot => {
+            if (slot.childElementCount === 0 && slot._stashedDebug) {
+              this._renderDebugPanel(slot, slot._stashedDebug);
+            }
+          });
+        } else {
+          // Hide all currently-rendered debug
+          document.querySelectorAll('.mo-debug-slot').forEach(slot => {
+            slot.innerHTML = '';
+          });
+        }
+      }
+    });
 
     // Render starter chips into the greeting. Uses the same .mo-followup
     // class and data-ask wiring as inline followups, so the existing
@@ -2484,8 +2527,18 @@ const App = {
       // diagnosing surprise behavior. Collapsed by default so it doesn't
       // clutter normal use; expand to see Mo's raw output + tag + the
       // resolver input that fired against USASpending.
+      //
+      // In beta, hidden by default. Toggle with Ctrl+Shift+D when a
+      // tester reports something surprising — we can have them reproduce
+      // the turn, copy the debug trace, and paste it back for diagnosis.
+      // We ALWAYS stash the debug data on the slot (for retro-render if
+      // the user toggles debug on later), but only render it immediately
+      // if debugVisible is already true.
       if (result && result.debug && turnEls.debugEl) {
-        this._renderDebugPanel(turnEls.debugEl, result.debug);
+        turnEls.debugEl._stashedDebug = result.debug;
+        if (this.state.debugVisible) {
+          this._renderDebugPanel(turnEls.debugEl, result.debug);
+        }
       }
 
       this.state.turns++;
