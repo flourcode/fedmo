@@ -502,6 +502,21 @@ button { cursor: pointer; }
 }
 .greeting-examples .mo-followup { height: 40px; padding: 0 20px; font-size: 15px; }
 
+/* Post-response followup chips — sit under Mo's prose after a data-backed
+   turn. Designed to feel like a continuation of the conversation, not a
+   separate UI. No header, no label, no border above. Chips only render
+   when generateFollowupChips returned any — empty row collapses to 0px
+   via :empty so there's no phantom whitespace on coaching/error turns. */
+.mo-followup-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+.mo-followup-row:empty {
+  display: none;
+}
+
 .mo-show-more {
   display: block;
   width: 100%;
@@ -670,7 +685,9 @@ button { cursor: pointer; }
   left: 0; right: 0; bottom: 0;
   z-index: 60;
   background: var(--bg-screen);
-  border-top: 1px solid var(--border);
+  /* No top border — the pill-shaped ask-bar-inner below has enough visual
+     definition on its own, and the extra horizontal rule was chopping the
+     thread into two pieces. This is a chat, not a form. */
   padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
   display: flex;
   justify-content: center;
@@ -2392,8 +2409,171 @@ const App = {
   },
 
   // ── Render callbacks — wire stream-client to the DOM ────────
+  // ── Followup chips — derived from what the card just showed ─────
+  //
+  // Called right after a data card renders (and right after Mo's post-tag
+  // prose finishes streaming). Returns a small array of { label, question }
+  // objects that render as tappable chips under the response. Tapping a
+  // chip sends the question as the next user turn — same delegated-click
+  // machinery as starter chips (`.mo-followup[data-ask]`).
+  //
+  // Design principle: chips are SURVEY MOVES. They help the seller
+  // navigate from "here's what I saw" to "here's the natural next slice
+  // to look at" without having to think about what to type. Every chip
+  // should be a question the seller is likely to ask anyway, phrased
+  // exactly as they'd type it.
+  //
+  // No Gemini call, no async. Pure derivation from rendered data. Keeps
+  // the latency invisible and the suggestions deterministic.
+  //
+  // Returns [] for coaching/no-data turns so chips disappear entirely
+  // when the card is missing. The row's :empty CSS collapses it.
+  generateFollowupChips(mode, rows, resolverInput) {
+    if (!rows || rows.length === 0) return [];
+    if (!mode) return [];
+
+    // Top prime / top sub-agency — used by most chip rules below. Derived
+    // from the rows the card is actually showing, not from a separate
+    // analyzer, so the chips always match what the user sees.
+    const primeTotals = new Map();
+    const subAgencyTotals = new Map();
+    for (const r of rows) {
+      const p = (r['Recipient Name'] || '').trim();
+      const amt = parseFloat(r['Award Amount']) || 0;
+      if (p) primeTotals.set(p, (primeTotals.get(p) || 0) + amt);
+      const sa = (r['Awarding Sub Agency'] || r['Awarding Agency'] || '').trim();
+      if (sa) subAgencyTotals.set(sa, (subAgencyTotals.get(sa) || 0) + amt);
+    }
+    const topPrimes = [...primeTotals.entries()].sort((a, b) => b[1] - a[1]).map(e => e[0]);
+    const topSubs = [...subAgencyTotals.entries()].sort((a, b) => b[1] - a[1]).map(e => e[0]);
+    const topPrime = topPrimes[0] || '';
+    const topSub = topSubs[0] || '';
+
+    // Clean a prime name for display — "Amazon Web Services, INC." →
+    // "Amazon Web Services". Chips need to read naturally as questions,
+    // so stripping the legal suffix makes them shorter and friendlier.
+    const cleanName = (name) => {
+      return String(name || '')
+        .replace(/,?\s*(?:INC\.?|INCORPORATED|LLC|L\.?L\.?C\.?|LTD\.?|CORP\.?|CORPORATION|COMPANY|CO\.?)\s*$/i, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+    };
+
+    const chips = [];
+    const agency = resolverInput?.agency || '';
+
+    // ── Seller pitch with real data ─────────────────────────────────
+    // User said "I sell X to Y" AND the pull was NOT a competitor cut,
+    // NOT a reframe, and not subaward-mode. These are the natural sales
+    // follow-ups after seeing your own footprint.
+    if (mode === 'data' && !resolverInput?._reframedFromVendor &&
+        !resolverInput?._sellerName && (resolverInput?.vendor || resolverInput?.vendors)) {
+      const vendorLabel = resolverInput.vendor
+        || (Array.isArray(resolverInput.vendors) ? resolverInput.vendors[0] : '');
+      if (agency) {
+        chips.push({ label: 'Who are my competitors here', question: `Who are ${vendorLabel}'s competitors at ${agency}?` });
+      } else {
+        chips.push({ label: 'Who are my competitors', question: `Who are ${vendorLabel}'s competitors?` });
+      }
+      if (topPrime && cleanName(topPrime).toLowerCase() !== vendorLabel.toLowerCase()) {
+        chips.push({ label: `Who's subbing on ${cleanName(topPrime)}`, question: `Who's subbing on ${cleanName(topPrime)}'s work${agency ? ' at ' + agency : ''}?` });
+      } else if (topPrime) {
+        chips.push({ label: `Who's subbing on ${cleanName(topPrime)}`, question: `Who's ${cleanName(topPrime)} subbing to${agency ? ' at ' + agency : ''}?` });
+      }
+      chips.push({ label: 'Show only expiring', question: `Show only expiring ${vendorLabel} contracts${agency ? ' at ' + agency : ''}` });
+    }
+
+    // ── Reframed card (vendor pitched, no direct data, market shown) ─
+    // The user pitched a product that isn't in the slice — we showed the
+    // agency market instead. Chips let them survey that market: drill
+    // into the top incumbent, explore subs, narrow to expiring.
+    else if (mode === 'data' && resolverInput?._reframedFromVendor) {
+      if (topPrime) {
+        chips.push({ label: `${cleanName(topPrime)}`, question: `What is ${cleanName(topPrime)} doing${agency ? ' at ' + agency : ' federally'}?` });
+      }
+      if (agency) {
+        chips.push({ label: `Who's subbing at ${agency}`, question: `Who's subbing at ${agency}?` });
+        chips.push({ label: `Only expiring at ${agency}`, question: `Show only expiring contracts at ${agency}` });
+      }
+    }
+
+    // ── Competitor card ─────────────────────────────────────────────
+    // User asked "who are my competitors" or similar. Each competitor in
+    // the top primes becomes a tappable chip — drill into one at a time.
+    else if (mode === 'data' && resolverInput?._sellerName && Array.isArray(resolverInput?._competitorList)) {
+      const seller = resolverInput._sellerName;
+      // Take top 3 primes that aren't the seller
+      const competitors = topPrimes
+        .map(cleanName)
+        .filter(n => n && n.toLowerCase() !== seller.toLowerCase())
+        .slice(0, 3);
+      for (const c of competitors) {
+        chips.push({ label: c, question: `${c}${agency ? ' at ' + agency : ''}` });
+      }
+    }
+
+    // ── Agency-only (no vendor specified) ──────────────────────────
+    // User asked about an agency or topic without naming a vendor. Chips
+    // surface the top prime, top sub-agency, and expiring as natural
+    // next slices.
+    else if (mode === 'data' && !resolverInput?.vendor && !resolverInput?.vendors) {
+      if (topPrime) {
+        chips.push({ label: `Top prime: ${cleanName(topPrime)}`, question: `What is ${cleanName(topPrime)} doing${agency ? ' at ' + agency : ' federally'}?` });
+      }
+      if (topSub && topSub.toLowerCase() !== (agency || '').toLowerCase()) {
+        chips.push({ label: topSub, question: `Show me ${topSub}${resolverInput?.topic ? ' ' + resolverInput.topic : ''}` });
+      }
+      if (agency) {
+        chips.push({ label: 'Show only expiring', question: `Show only expiring contracts at ${agency}` });
+      }
+    }
+
+    // ── Subaward card ──────────────────────────────────────────────
+    // User pulled a subaward slice. Chips let them flip back to the
+    // prime's main work, or drill into a specific sub.
+    else if (mode === 'subaward') {
+      if (topPrime) {
+        chips.push({ label: `${cleanName(topPrime)}'s prime contracts`, question: `What is ${cleanName(topPrime)} doing as a prime${agency ? ' at ' + agency : ' federally'}?` });
+      }
+      // For subaward rows, 'Recipient Name' was the PRIME — we need the
+      // sub names. Stream-client shaped them into `_subs` on the rows?
+      // Actually the rows coming through renderSubawardCard have been
+      // remapped and our generateFollowupChips is called with the remapped
+      // shape via `rows`. The sub names live in 'Sub-Awardee Name'.
+      const subTotals = new Map();
+      for (const r of rows) {
+        const s = (r['Sub-Awardee Name'] || '').trim();
+        const amt = parseFloat(r['Sub-Award Amount']) || 0;
+        if (s) subTotals.set(s, (subTotals.get(s) || 0) + amt);
+      }
+      const topSubName = [...subTotals.entries()].sort((a, b) => b[1] - a[1]).map(e => e[0])[0];
+      if (topSubName) {
+        chips.push({ label: `${cleanName(topSubName)}'s other work`, question: `What else is ${cleanName(topSubName)} doing federally?` });
+      }
+    }
+
+    // Cap at 3 chips — any more creates visual noise and choice paralysis.
+    return chips.slice(0, 3);
+  },
+
+  // Render chip specs into the turn's chip slot. Each chip is a button
+  // with the same class + data-ask wiring as starter chips, so the
+  // existing global click delegation fires them as user messages.
+  _renderChips(chipsEl, chipSpecs) {
+    if (!chipsEl) return;
+    if (!Array.isArray(chipSpecs) || chipSpecs.length === 0) {
+      chipsEl.innerHTML = '';
+      return;
+    }
+    chipsEl.innerHTML = chipSpecs.map(c =>
+      `<button class="mo-followup" data-ask="${Html.escapeHtml(c.question)}">${Html.escapeHtml(c.label)}</button>`
+    ).join('');
+  },
+
+
+  // ── Render callbacks — wire stream-client to the DOM ────────
   _buildRenderCallbacks(turnEls) {
-    const { preProseEl, cardSlotEl, postProseEl } = turnEls;
+    const { preProseEl, cardSlotEl, postProseEl, chipsEl } = turnEls;
 
     return {
       // Stream Mo's pre-tag prose (or whole response if no <data> tag).
@@ -2487,6 +2667,11 @@ const App = {
         }
         // Render treemaps inside the new card
         initTreemaps(cardRef);
+        // Stash chip context for the complete() callback. We don't render
+        // chips now — they render after Mo's post-tag prose finishes so
+        // they appear in their natural reading order (data → explanation
+        // → next moves). This data is what generateFollowupChips needs.
+        turnEls.chipData = { mode: 'data', rows, resolverInput };
         // Track
         this._track('card_render', {
           face: spec.verdict?.face,
@@ -2536,6 +2721,11 @@ const App = {
         cardRef.innerHTML = '';
         if (cardBody) cardRef.appendChild(cardBody);
         else cardRef.appendChild(fullTurn);
+        // Chips for subaward mode read the REMAPPED rows above (with
+        // 'Sub-Awardee Name' and 'Sub-Award Amount' fields), not the
+        // original subs array, so generateFollowupChips can find sub
+        // names the same way it finds prime names in data mode.
+        turnEls.chipData = { mode: 'subaward', rows, resolverInput };
         this._track('subaward_card_render', { rows: subs.length });
       },
 
@@ -2550,9 +2740,21 @@ const App = {
         this._track('error_shown', { msg: (msg || '').slice(0, 80) });
       },
 
-      // Final cleanup after the whole turn is done. Unused for now but kept
-      // for future hooks (auto-scroll, analytics, chip generation, etc.).
+      // Called after Mo's whole turn is done — pre-tag prose, data card,
+      // and post-tag prose have all rendered. This is where followup chips
+      // get painted, so they appear as the natural last element of the
+      // turn (data → explanation → next moves).
+      //
+      // Chips only render if the turn actually had a data card. Coaching
+      // replies, clarifying questions, and errors intentionally skip chips
+      // because the seller's next question is already in their head —
+      // suggestions would just get in the way.
       complete: () => {
+        if (chipsEl && turnEls.chipData) {
+          const { mode, rows, resolverInput } = turnEls.chipData;
+          const chips = this.generateFollowupChips(mode, rows, resolverInput);
+          this._renderChips(chipsEl, chips);
+        }
         this._updateEmptyState();
         this._updateJumpVisibility();
       },
@@ -2576,6 +2778,7 @@ const App = {
       <div class="mo-tell-more-prose" id="${turnId}-pre"><span style="color:var(--text-faint);">Mo's thinking…</span></div>
       <div class="mo-card-slot" id="${turnId}-card"></div>
       <div class="mo-tell-more-prose" id="${turnId}-post"></div>
+      <div class="mo-followup-row" id="${turnId}-chips"></div>
     `;
     thread.appendChild(wrap);
     this._updateEmptyState();
@@ -2586,6 +2789,7 @@ const App = {
       preProseEl: document.getElementById(turnId + '-pre'),
       cardSlotEl: document.getElementById(turnId + '-card'),
       postProseEl: document.getElementById(turnId + '-post'),
+      chipsEl: document.getElementById(turnId + '-chips'),
     };
   },
 
