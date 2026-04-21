@@ -113,12 +113,32 @@ export async function runScenario(scenario, endpoint, { onTurn = null } = {}) {
 
     if (result) {
       snapshot.mode = result.mode;
+
+      // Prefer the final resolver input from the debug trace — this
+      // reflects what ACTUALLY went to USASpending after competitor
+      // expansion (file-first lookup adds _sellerName, _competitorList,
+      // replaces vendor with vendors array) and any subaward mutations.
+      // The onDataTag snapshot captures the input from the parsed tag,
+      // BEFORE those mutations run, which made assertions checking for
+      // _sellerName etc. fail even when the product was working.
+      //
+      // Keep resolverInputInitial available for assertions that want to
+      // see the tag-derived state specifically.
+      if (result.debug?.resolverInputFinal) {
+        snapshot.resolverInputInitial = snapshot.resolverInput;
+        snapshot.resolverInput = result.debug.resolverInputFinal;
+      }
+
       // tagAttrs isn't directly on result; we can derive it from what
       // onDataTag captured into resolverInput. Store a cleaned view for
       // assertion ergonomics — strip internal underscore fields.
-      if (snapshot.resolverInput) {
+      // NOTE: derive from the INITIAL input (tag-derived), not the final
+      // (post-expansion) — tagAttrs should reflect what Mo emitted in her
+      // tag, not what the browser did with it after.
+      const tagSource = snapshot.resolverInputInitial || snapshot.resolverInput;
+      if (tagSource) {
         snapshot.tagAttrs = {};
-        for (const [k, v] of Object.entries(snapshot.resolverInput)) {
+        for (const [k, v] of Object.entries(tagSource)) {
           if (!k.startsWith('_')) snapshot.tagAttrs[k] = v;
         }
       }

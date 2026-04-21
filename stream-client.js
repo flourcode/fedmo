@@ -863,13 +863,18 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
   // logger panel in mo_mock.html reads it for per-turn inspection.
   const debug = {
     question,
-    firstPassRaw: '',      // full raw text from Mo's first stream
-    tagMatch: null,        // { raw: '<data ... />', attrs: {...} } once parsed
-    resolverInput: null,   // what we passed to the USASpending filter
-    rowCountDirect: null,  // rows returned from the direct pull (before any fallback)
-    fallbackType: null,    // 'category' | 'needs_qualifier' | 'no_data' | null
-    rowCountFinal: null,   // rows after any fallback
-    mode: null,            // final returned mode
+    firstPassRaw: '',        // full raw text from Mo's first stream
+    tagMatch: null,          // { raw: '<data ... />', attrs: {...} } once parsed
+    resolverInput: null,     // INITIAL resolver input from the tag (before mutations)
+    resolverInputFinal: null, // FINAL resolver input that actually queried USASpending
+                             // (competitor expansion adds _sellerName, _competitorList,
+                             // replaces vendor with vendors array; subaward path sets
+                             // _subawards). This is what lets you verify that the
+                             // file-first fetchCompetitors ran successfully.
+    rowCountDirect: null,    // rows returned from the direct pull (before any fallback)
+    fallbackType: null,      // 'category' | 'needs_qualifier' | 'no_data' | null
+    rowCountFinal: null,     // rows after any fallback
+    mode: null,              // final returned mode
   };
 
   // History must include the user's current question at the end
@@ -974,6 +979,7 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
         // summarizer can label the card appropriately.
         resolverInput._competitorCategory = competitorInfo.category;
         resolverInput._competitorList = competitorInfo.competitors;
+        resolverInput._competitorSource = competitorInfo._source || 'unknown';
       } catch (compErr) {
         console.warn('[askMo] competitor lookup failed, falling back to single-vendor card:', compErr.message);
         // Fall through with the original single-vendor input + _sellerName
@@ -983,6 +989,13 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
         resolverInput._competitorFetchFailed = true;
       }
     }
+
+    // Snapshot the resolver input AFTER competitor expansion and any
+    // other mutations. This is the shape that actually went to
+    // USASpending, so it's what developers need to see in the debug
+    // panel to verify the right path fired (file-first vs Gemini,
+    // competitor expansion successful vs degraded, etc.).
+    debug.resolverInputFinal = JSON.parse(JSON.stringify(resolverInput));
 
     // ── Subaward branch ───────────────────────────────────────────
     // If Mo emitted subawards="true", we short-circuit the normal prime

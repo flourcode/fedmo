@@ -2880,13 +2880,33 @@ const App = {
     }
 
     if (d.resolverInput) {
-      lines.push('Resolver input:');
+      lines.push('Resolver input (from tag):');
       for (const [k, v] of Object.entries(d.resolverInput)) {
         if (k.startsWith('_') && v === undefined) continue;
         const val = typeof v === 'object' ? JSON.stringify(v) : String(v);
         lines.push(`  ${k} = ${val}`);
       }
       lines.push('');
+    }
+
+    // If mutations happened (competitor expansion, subaward path adjustments),
+    // the final resolver input that actually queried USASpending differs
+    // from the one parsed from the tag. Show it separately so developers
+    // can verify the file-first fetchCompetitors populated the right fields.
+    if (d.resolverInputFinal) {
+      const initialKeys = JSON.stringify(Object.keys(d.resolverInput || {}).sort());
+      const finalKeys = JSON.stringify(Object.keys(d.resolverInputFinal).sort());
+      const initialVals = JSON.stringify(d.resolverInput || {});
+      const finalVals = JSON.stringify(d.resolverInputFinal);
+      if (initialKeys !== finalKeys || initialVals !== finalVals) {
+        lines.push('Resolver input (after expansion → sent to USASpending):');
+        for (const [k, v] of Object.entries(d.resolverInputFinal)) {
+          if (k.startsWith('_') && v === undefined) continue;
+          const val = typeof v === 'object' ? JSON.stringify(v) : String(v);
+          lines.push(`  ${k} = ${val}`);
+        }
+        lines.push('');
+      }
     }
 
     if (d.firstPassRaw) {
