@@ -100,6 +100,60 @@ export const vendorCategoriesReady = (async () => {
   }
 })();
 
+// ─────────────────────────────────────────────────────────────────────
+// offices.json — award-ID-prefix → office-name lookup
+// ─────────────────────────────────────────────────────────────────────
+//
+// USASpending's spending_by_award endpoint does not reliably return the
+// Awarding Office field — for many large DoD contracts, that field is
+// null. But the Award ID itself encodes the office as a prefix (N00024,
+// N00019, W52P1J, etc.). This file maps those prefixes to human names
+// so we can enrich rows post-fetch and get a real command-level
+// breakdown (NAVSEA / NAVAIR / NIWC / etc.) in the card treemap.
+//
+// Best-effort load. If offices.json is missing or malformed, we skip
+// the enrichment and the treemap falls back to subtier-level data
+// (one block for Navy, which is visually underwhelming but correct).
+// ─────────────────────────────────────────────────────────────────────
+
+let _offices = {};            // prefix → "OFFICE NAME"
+let _officesLoaded = false;
+
+export const officesReady = (async () => {
+  try {
+    const url = new URL('./offices.json', import.meta.url);
+    const res = await fetch(url);
+    if (!res.ok) {
+      console.warn(`[stream-client] offices.json fetch failed: HTTP ${res.status}. Office enrichment disabled.`);
+      _officesLoaded = true;
+      return;
+    }
+    const data = await res.json();
+    if (data && typeof data === 'object') {
+      _offices = data;
+      _officesLoaded = true;
+    } else {
+      console.warn('[stream-client] offices.json has unexpected shape. Office enrichment disabled.');
+      _officesLoaded = true;
+    }
+  } catch (err) {
+    console.warn('[stream-client] offices.json load error:', err.message);
+    _officesLoaded = true;
+  }
+})();
+
+// Try progressive prefix matching — 6 chars first, then 5, then 4.
+// Returns the decoded office name, or null if no match. Takes the
+// full Award ID string. Defensive on null/undefined.
+function officeFromAwardId(awardId) {
+  if (!awardId || typeof awardId !== 'string') return null;
+  const id = awardId.toUpperCase();
+  return _offices[id.substring(0, 6)]
+    || _offices[id.substring(0, 5)]
+    || _offices[id.substring(0, 4)]
+    || null;
+}
+
 // Normalize a vendor name for category lookup. Same rules as the file
 // keys — lowercase, trimmed, punctuation stripped, legal suffixes removed.
 // Not the same as the resolver's norm() because we want "AWS, Inc." and
@@ -344,6 +398,15 @@ export async function fetchUsaspending(resolverInput, endpoint) {
     const topAgency = String(r['Awarding Agency'] || '').toUpperCase();
     if (topAgency.includes('DEFENSE') && r['Awarding Sub Agency']) {
       r['Awarding Agency'] = r['Awarding Sub Agency'];
+    }
+    // USASpending often returns null Awarding Office even when the data
+    // exists — the office is encoded in the Award ID prefix. Decode it
+    // from offices.json so analyzeMarket's treemap bucketing gets real
+    // command-level variation (NAVSEA vs NAVAIR vs NIWC) instead of
+    // everything collapsing to "Department of the Navy".
+    if (!r['Awarding Office']) {
+      const decoded = officeFromAwardId(r['Award ID']);
+      if (decoded) r['Awarding Office'] = decoded;
     }
   }
 
