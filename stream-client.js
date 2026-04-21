@@ -612,6 +612,22 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
   let dataTagSeen = false;
   let preTagText = ''; // text before the <data> tag (final, clean)
 
+  // Debug trace — captured progressively through the turn so callers can
+  // inspect exactly what Mo emitted, what attrs came out, what resolver
+  // input was built, what USASpending returned, and which fallbacks fired.
+  // Attached to every return shape. Turns no-op in production UI but the
+  // logger panel in mo_mock.html reads it for per-turn inspection.
+  const debug = {
+    question,
+    firstPassRaw: '',      // full raw text from Mo's first stream
+    tagMatch: null,        // { raw: '<data ... />', attrs: {...} } once parsed
+    resolverInput: null,   // what we passed to the USASpending filter
+    rowCountDirect: null,  // rows returned from the direct pull (before any fallback)
+    fallbackType: null,    // 'category' | 'needs_qualifier' | 'no_data' | null
+    rowCountFinal: null,   // rows after any fallback
+    mode: null,            // final returned mode
+  };
+
   // History must include the user's current question at the end
   const fullHistory = [...history, { role: 'user', content: question }];
 
@@ -624,6 +640,11 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
       payloadSummary: null,
       abortController: abort,
       onChunk: (accumulated) => {
+        // Always keep the latest accumulated text in debug so even if
+        // Mo never emits a tag (coaching response), we still have the
+        // full raw output.
+        debug.firstPassRaw = accumulated;
+
         if (dataTagSeen) return; // already handled, ignore further chunks
 
         const tagInfo = findDataTag(accumulated);
@@ -636,9 +657,18 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
           // Render everything up to the tag as final prose
           render.streamPreTagProse(preTagText);
 
+          // Stash the exact tag text + parsed attrs for debug inspection.
+          // The raw field lets us diff "what Mo emitted" vs "what we
+          // interpreted" when something weird happens.
+          debug.tagMatch = {
+            raw: tagInfo.match,
+            attrs: { ...tagInfo.attrs },
+          };
+
           // Kick off the data fetch asynchronously; we'll await it below
           // after aborting the first stream
           const resolverInput = dataAttrsToResolverInput(tagInfo.attrs);
+          debug.resolverInput = { ...resolverInput };
           cardRef = render.onDataTag(resolverInput);
 
           // Abort the first stream — we don't want Mo's speculative
@@ -667,7 +697,9 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
       // firstPassFull is the final text; render.streamPreTagProse already
       // got the cumulative version as it arrived
       render.complete();
-      return { mode: 'prose', text: firstPassFull || preTagText };
+      debug.firstPassRaw = firstPassFull || preTagText;
+      debug.mode = 'prose';
+      return { mode: 'prose', text: firstPassFull || preTagText, debug };
     }
 
     // ── Data pull + second pass ─────────────────────────────────
@@ -717,19 +749,26 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
       } catch (subErr) {
         console.error('[askMo] subaward fetch failed:', subErr);
         render.renderError(`Couldn't pull subaward data. ${subErr.message || ''}`.trim());
-        return { mode: 'error', error: subErr.message };
+        debug.mode = 'error';
+        return { mode: 'error', error: subErr.message, debug };
       }
+
+      debug.rowCountDirect = subs ? subs.length : 0;
 
       if (!subs || subs.length === 0) {
         // Subaward data is legitimately sparse in federal. Not every
         // contract has visible sub-tier reporting. Tell the user honestly
         // instead of rendering an empty card.
         render.renderError(`I don't see subaward data for that slice. Federal subaward reporting is patchy — smaller task orders and some vehicles don't require it. Try a different agency or a broader vendor filter.`);
-        return { mode: 'no_subaward_data', resolverInput };
+        debug.mode = 'no_subaward_data';
+        debug.fallbackType = 'no_data';
+        debug.rowCountFinal = 0;
+        return { mode: 'no_subaward_data', resolverInput, debug };
       }
 
       // Render the subaward card
       render.renderSubawardCard(cardRef, subs, resolverInput);
+      debug.rowCountFinal = subs.length;
 
       // Build subaward-specific payload summary
       const subSummary = summarizeSubawardsForMo(subs, resolverInput);
@@ -752,12 +791,14 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
       });
 
       render.complete();
+      debug.mode = 'subaward';
       return {
         mode: 'subaward',
         preTagText,
         subs,
         resolverInput,
         postTagText: secondPassFull,
+        debug,
       };
     }
 
@@ -767,8 +808,11 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
     } catch (fetchErr) {
       console.error('[askMo] USASpending fetch failed:', fetchErr);
       render.renderError(`Couldn't pull that data. ${fetchErr.message || ''}`.trim());
-      return { mode: 'error', error: fetchErr.message };
+      debug.mode = 'error';
+      return { mode: 'error', error: fetchErr.message, debug };
     }
+
+    debug.rowCountDirect = rows.length;
 
     // ── Empty-state recovery: category-aware fallback + qualifier ──
     //
@@ -835,6 +879,7 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
             rows = retryRows;
             reframed = true;
             Object.assign(resolverInput, categoryInput);
+            debug.fallbackType = 'category';
           }
         } catch (retryErr) {
           console.warn('[askMo] category fallback retry failed:', retryErr.message);
@@ -848,12 +893,16 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
       // Return needs_qualifier so the UI can prompt Mo to ask the user
       // what their product does.
       if (!reframed) {
+        debug.mode = 'needs_qualifier';
+        debug.fallbackType = 'needs_qualifier';
+        debug.rowCountFinal = 0;
         return {
           mode: 'needs_qualifier',
           resolverInput,
           originalSeller,
           agency: resolverInput.agency,
           vendorWasKnown: !!categoryInfo,
+          debug,
         };
       }
     }
@@ -862,8 +911,13 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
       // Path (c): no vendor filter to fall back from, or the pitch was
       // federal-wide. Tell the user plainly and hand them escape chips.
       render.renderError(`I couldn't find anything matching that. Try a different agency, or tell me more about what you're looking for.`);
-      return { mode: 'no_data', resolverInput };
+      debug.mode = 'no_data';
+      debug.fallbackType = 'no_data';
+      debug.rowCountFinal = 0;
+      return { mode: 'no_data', resolverInput, debug };
     }
+
+    debug.rowCountFinal = rows.length;
 
     // Render the real card
     render.renderDataCard(cardRef, rows, resolverInput);
@@ -897,16 +951,19 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
     });
 
     render.complete();
+    debug.mode = 'data';
     return {
       mode: 'data',
       preTagText,
       rows,
       resolverInput,
       postTagText: secondPassFull,
+      debug,
     };
   } catch (err) {
     console.error('[askMo] fatal:', err);
     render.renderError(err.message || 'Something went sideways.');
-    return { mode: 'error', error: err.message };
+    debug.mode = 'error';
+    return { mode: 'error', error: err.message, debug };
   }
 }

@@ -539,6 +539,96 @@ button { cursor: pointer; }
   color: var(--text);
 }
 
+/* Debug panel — collapsed developer trace, one per turn. Designed to
+   disappear into the background during normal use but expose complete
+   ground truth when diagnostics are needed. Uses <details>/<summary>
+   for native collapse behavior — no JS state to manage. */
+.mo-debug-slot {
+  margin-top: 14px;
+}
+.mo-debug-slot:empty {
+  display: none;
+}
+.mo-debug {
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: transparent;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.mo-debug > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 6px 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.mo-debug > summary::-webkit-details-marker {
+  display: none;
+}
+.mo-debug > summary::before {
+  content: '▸';
+  font-size: 10px;
+  color: var(--text-faint);
+  transition: transform 120ms;
+}
+.mo-debug[open] > summary::before {
+  transform: rotate(90deg);
+  display: inline-block;
+}
+.mo-debug-label {
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 10px;
+  color: var(--text-faint);
+}
+.mo-debug-summary-meta {
+  color: var(--text-muted);
+  font-family: 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mo-debug-body {
+  padding: 8px 10px 10px;
+  border-top: 1px solid var(--border-soft);
+}
+.mo-debug-pre {
+  font-family: 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text);
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0 0 8px 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 360px;
+  overflow-y: auto;
+  /* Let users select/copy raw */
+  -webkit-user-select: text;
+  user-select: text;
+}
+.mo-debug-copy {
+  padding: 4px 10px;
+  font-size: 11px;
+  background: transparent;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.mo-debug-copy:hover {
+  background: var(--border-soft);
+  color: var(--text);
+}
+
 .mo-show-more {
   display: block;
   width: 100%;
@@ -2389,6 +2479,15 @@ const App = {
       }
       // On error, we don't push to history — the user will retry
 
+      // Debug panel: render for EVERY turn mode (data, prose, qualifier,
+      // no_data, error). This is the single source of ground truth for
+      // diagnosing surprise behavior. Collapsed by default so it doesn't
+      // clutter normal use; expand to see Mo's raw output + tag + the
+      // resolver input that fired against USASpending.
+      if (result && result.debug && turnEls.debugEl) {
+        this._renderDebugPanel(turnEls.debugEl, result.debug);
+      }
+
       this.state.turns++;
     } catch (fatalErr) {
       // Last-resort boundary. Shouldn't fire because askMo() has its own
@@ -2694,6 +2793,141 @@ const App = {
     ).join('');
   },
 
+  // ── Debug panel ─────────────────────────────────────────────
+  //
+  // Renders a compact, collapsed-by-default trace of everything that
+  // happened this turn: Mo's raw first-pass text (including any <data>
+  // tag), the parsed attrs, the resolver input, the USASpending row
+  // counts, and which fallback (if any) fired.
+  //
+  // The primary purpose is diagnostics. When Mo emits a surprising tag
+  // or the fallback picks an unexpected path, this panel is the one
+  // place with ground truth — no guessing about what happened under
+  // the hood.
+  //
+  // The "Copy trace" button packages the whole record as plain text so
+  // it can be pasted into a conversation with Claude for debugging
+  // without needing screenshots or transcript scraping.
+
+  _renderDebugPanel(debugEl, debug) {
+    if (!debugEl || !debug) return;
+    // Build the readable text trace — same format as the clipboard
+    // payload, but rendered inside a <pre> so indentation survives.
+    const trace = this._buildDebugTextTrace(debug);
+    // Stash the trace on the element as a data attr so the Copy button
+    // handler can read it without re-generating. We use a dataset rather
+    // than a closure because the button is rendered via innerHTML, and
+    // closures don't survive that.
+    debugEl.dataset.debugTrace = trace;
+    debugEl.innerHTML = `
+      <details class="mo-debug">
+        <summary>
+          <span class="mo-debug-label">debug</span>
+          <span class="mo-debug-summary-meta">${Html.escapeHtml(this._summarizeDebug(debug))}</span>
+        </summary>
+        <div class="mo-debug-body">
+          <pre class="mo-debug-pre">${Html.escapeHtml(trace)}</pre>
+          <button class="mo-debug-copy" onclick="App._copyDebugTrace(this)">Copy trace</button>
+        </div>
+      </details>
+    `;
+  },
+
+  // One-line summary for the collapsed summary row. Shows the user the
+  // most useful at-a-glance fact about this turn without expanding.
+  _summarizeDebug(d) {
+    const bits = [];
+    if (d.mode) bits.push(d.mode);
+    if (d.tagMatch?.attrs) {
+      const a = d.tagMatch.attrs;
+      if (a.vendor) bits.push(`vendor=${a.vendor}`);
+      if (a.agency) bits.push(`agency=${a.agency}`);
+      if (a.topic) bits.push(`topic=${a.topic}`);
+      if (a.subawards === 'true') bits.push('subawards');
+      if (a.competitors === 'true') bits.push('competitors');
+    }
+    if (d.fallbackType) bits.push(`fallback=${d.fallbackType}`);
+    if (typeof d.rowCountDirect === 'number') {
+      bits.push(`${d.rowCountDirect}→${d.rowCountFinal ?? d.rowCountDirect} rows`);
+    }
+    return bits.join(' · ');
+  },
+
+  // Build the paste-ready text trace. Keep formatting simple and
+  // deterministic so pasted traces are easy to read in any editor.
+  _buildDebugTextTrace(d) {
+    const lines = [];
+    lines.push('── Mo turn trace ──');
+    if (d.question) lines.push(`Q: ${d.question}`);
+    lines.push('');
+    lines.push(`mode: ${d.mode || '(unknown)'}`);
+    if (d.fallbackType) lines.push(`fallback: ${d.fallbackType}`);
+    lines.push(`rows: ${d.rowCountDirect ?? '—'} direct → ${d.rowCountFinal ?? '—'} final`);
+    lines.push('');
+
+    if (d.tagMatch) {
+      lines.push('Mo emitted tag:');
+      lines.push(`  ${d.tagMatch.raw}`);
+      lines.push('');
+      lines.push('Parsed attrs:');
+      for (const [k, v] of Object.entries(d.tagMatch.attrs || {})) {
+        lines.push(`  ${k} = ${v}`);
+      }
+      lines.push('');
+    } else {
+      lines.push('(no <data> tag — coaching/prose response)');
+      lines.push('');
+    }
+
+    if (d.resolverInput) {
+      lines.push('Resolver input:');
+      for (const [k, v] of Object.entries(d.resolverInput)) {
+        if (k.startsWith('_') && v === undefined) continue;
+        const val = typeof v === 'object' ? JSON.stringify(v) : String(v);
+        lines.push(`  ${k} = ${val}`);
+      }
+      lines.push('');
+    }
+
+    if (d.firstPassRaw) {
+      lines.push('Mo first-pass raw output:');
+      // Indent every line by 2 spaces for readability when pasted
+      const indented = d.firstPassRaw.split('\n').map(ln => '  ' + ln).join('\n');
+      lines.push(indented);
+      lines.push('');
+    }
+
+    return lines.join('\n');
+  },
+
+  // Called by the inline onclick handler on the Copy button. Reads the
+  // trace from the element's data attribute, copies it to the clipboard,
+  // and briefly swaps the button label so the user sees confirmation.
+  _copyDebugTrace(btn) {
+    try {
+      const debugEl = btn.closest('.mo-debug-slot');
+      const trace = debugEl?.dataset?.debugTrace || '';
+      if (!trace) return;
+      navigator.clipboard.writeText(trace).then(() => {
+        const orig = btn.textContent;
+        btn.textContent = 'Copied ✓';
+        setTimeout(() => { btn.textContent = orig; }, 1400);
+      }).catch(() => {
+        // Clipboard API can fail in non-secure contexts. Fallback: select
+        // the <pre> so the user can copy manually.
+        const pre = debugEl.querySelector('.mo-debug-pre');
+        if (pre) {
+          const range = document.createRange();
+          range.selectNodeContents(pre);
+          const sel = window.getSelection();
+          sel.removeAllRanges();
+          sel.addRange(range);
+        }
+      });
+    } catch (e) { /* non-fatal */ }
+  },
+
+
   // Qualifier turn — render Mo asking what the product actually does when
   // we can't confidently fall back. The direct pull was empty and the
   // vendor isn't in vendor_categories.json, so we don't know what
@@ -2944,6 +3178,7 @@ const App = {
       <div class="mo-card-slot" id="${turnId}-card"></div>
       <div class="mo-tell-more-prose" id="${turnId}-post"></div>
       <div class="mo-followup-row" id="${turnId}-chips"></div>
+      <div class="mo-debug-slot" id="${turnId}-debug"></div>
     `;
     thread.appendChild(wrap);
     this._updateEmptyState();
@@ -2955,6 +3190,7 @@ const App = {
       cardSlotEl: document.getElementById(turnId + '-card'),
       postProseEl: document.getElementById(turnId + '-post'),
       chipsEl: document.getElementById(turnId + '-chips'),
+      debugEl: document.getElementById(turnId + '-debug'),
     };
   },
 
