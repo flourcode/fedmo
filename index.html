@@ -517,6 +517,28 @@ button { cursor: pointer; }
   display: none;
 }
 
+/* Qualifier message — when Mo can't confidently answer a vendor pitch,
+   she asks "what does this product do?" instead of rendering wrong data.
+   Visual language should feel like Mo talking, not a form or error.
+   Indents slightly from the card rail so it's recognizable as a
+   conversational aside. */
+.mo-qualifier-msg {
+  padding: 14px 0 0;
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.55;
+}
+.mo-qualifier-msg p {
+  margin: 0 0 10px 0;
+}
+.mo-qualifier-msg p:last-child {
+  margin-bottom: 0;
+}
+.mo-qualifier-msg strong {
+  font-weight: 600;
+  color: var(--text);
+}
+
 .mo-show-more {
   display: block;
   width: 100%;
@@ -2343,6 +2365,18 @@ const App = {
       } else if (result.mode === 'prose' && result.text) {
         this._history.push({ role: 'model', content: result.text });
         this._track('turn_prose', { length: result.text.length });
+      } else if (result.mode === 'needs_qualifier') {
+        // Vendor pitched at agency, direct pull empty, vendor NOT in
+        // categories file. Instead of rendering wrong data (the old Turn A
+        // fallback that showed border walls for SentinelOne), paint a
+        // concise "tell me more" prompt and let the user clarify. This
+        // turns an empty-data moment into a conversation, which is what a
+        // real capture consultant would do.
+        this._renderQualifierTurn(turnEls, result.originalSeller, result.agency);
+        this._track('turn_needs_qualifier', {
+          vendor: (result.originalSeller || '').slice(0, 40),
+          agency: (result.agency || '').slice(0, 40),
+        });
       } else if ((result.mode === 'no_data' || result.mode === 'no_subaward_data') && result.resolverInput) {
         // Data pull succeeded but came back empty. Mo already rendered an
         // honest "no data" message via renderError. Now we paint escape-
@@ -2401,12 +2435,18 @@ const App = {
   _labelForResolverInput(input) {
     if (!input) return 'this market';
     const parts = [];
-    // Reframed mode: the user pitched a vendor but the pull was
-    // refired without it because the direct query was empty. Label
-    // as the agency market context, with a note that the pitched
-    // vendor isn't directly present.
+    // Reframed mode: the user pitched a vendor but the pull was refired
+    // because the direct query was empty. Two flavors:
+    //   - Category reframe (we knew the vendor's category): label names
+    //     the category so the seller sees exactly what slice they're in
+    //     ("DHS endpoint security market · SentinelOne not directly here")
+    //   - Generic reframe (unknown category, agency-wide fallback):
+    //     labels as the agency market
     if (input._reframedFromVendor) {
-      if (input.agency) {
+      const cat = input._categoryName;
+      if (cat && input.agency) {
+        parts.push(`${input.agency} ${cat} market`);
+      } else if (input.agency) {
         parts.push(`${input.agency} market`);
       } else {
         parts.push('Market view');
@@ -2652,6 +2692,47 @@ const App = {
     chipsEl.innerHTML = chipSpecs.map(c =>
       `<button class="mo-followup" data-ask="${Html.escapeHtml(c.question)}">${Html.escapeHtml(c.label)}</button>`
     ).join('');
+  },
+
+  // Qualifier turn — render Mo asking what the product actually does when
+  // we can't confidently fall back. The direct pull was empty and the
+  // vendor isn't in vendor_categories.json, so we don't know what
+  // category keywords to search. Instead of guessing (which got us the
+  // SentinelOne → border-wall disaster), we ask.
+  //
+  // Clears the loading placeholder and any streamed pre-tag prose, then
+  // paints a single focused message. Chips suggest the two most likely
+  // resolutions: describe the product, or pivot to agency-wide view as
+  // a last resort if the seller just wants "what's going on here."
+  _renderQualifierTurn(turnEls, originalSeller, agency) {
+    const { preProseEl, cardSlotEl, postProseEl, chipsEl } = turnEls;
+    const vendor = originalSeller || 'that product';
+    const agencyLabel = agency || 'this agency';
+
+    // Clear the loading placeholder — no card is coming
+    if (cardSlotEl) cardSlotEl.innerHTML = '';
+    // Keep Mo's pre-tag prose if she wrote any (she usually writes a
+    // one-liner before the <data> tag); it's a natural lead-in to the
+    // clarifier.
+    // Replace post-tag prose with the clarifier message.
+    if (postProseEl) {
+      postProseEl.innerHTML = `
+        <div class="mo-qualifier-msg">
+          <p>I don't see direct contracts for <strong>${Html.escapeHtml(vendor)}</strong> at ${Html.escapeHtml(agencyLabel)}. That could mean the product flows through resellers, or that ${Html.escapeHtml(agencyLabel)} buys it under a category label I'm not matching.</p>
+          <p>Tell me a bit about what ${Html.escapeHtml(vendor)} does — or tap one of these to pivot:</p>
+        </div>`;
+    }
+
+    // Two helpful escape hatches:
+    //   1. Show the agency market anyway (seller wants a lay of the land)
+    //   2. Let me describe it (user types a category or description)
+    // The "describe" chip is a conversational prompt — the user will
+    // type their answer into the composer, not hit a chip.
+    const chips = [
+      { label: `Just show me ${agencyLabel}`, question: `Show me the ${agencyLabel} market` },
+      { label: `${vendor} across all agencies`, question: `Show me ${vendor} across all agencies` },
+    ];
+    this._renderChips(chipsEl, chips);
   },
 
 

@@ -44,6 +44,75 @@
 import { resolve, applyPostFilters } from './resolver.js';
 
 // ─────────────────────────────────────────────────────────────────────
+// vendor_categories.json — category-aware fallback dictionary
+// ─────────────────────────────────────────────────────────────────────
+//
+// When a user pitches a vendor at an agency and the direct pull comes
+// back empty, the browser checks this file to decide how to fall back.
+//
+//   - Vendor IS in the file (e.g., "sentinelone" → endpoint security)
+//     → refire at the SAME agency using the category's keyword set,
+//       so the seller sees their actual competitive market (CrowdStrike,
+//       Defender, Trellix) rather than unrelated agency top-100 data
+//       (border walls, ship construction, border wall).
+//
+//   - Vendor is NOT in the file → DON'T refire automatically. Return
+//     'needs_qualifier' mode so Mo can ask the user what the product
+//     does. A MyPillow or niche-vendor pitch deserves a conversation,
+//     not a blind agency-wide fallback.
+//
+// Best-effort load — if the file is missing or malformed, we skip the
+// category branch entirely and fall through to the "needs qualifier"
+// path. That's a clean degradation: the tool asks more questions
+// instead of showing wrong data.
+// ─────────────────────────────────────────────────────────────────────
+
+let _vendorCategories = {};
+let _vendorCategoriesLoaded = false;
+
+export const vendorCategoriesReady = (async () => {
+  try {
+    const url = new URL('./vendor_categories.json', import.meta.url);
+    const res = await fetch(url);
+    if (!res.ok) {
+      console.warn(`[stream-client] vendor_categories.json fetch failed: HTTP ${res.status}. Category-aware fallback disabled.`);
+      _vendorCategoriesLoaded = true;
+      return;
+    }
+    const data = await res.json();
+    if (data && typeof data.vendors === 'object' && data.vendors !== null) {
+      _vendorCategories = data.vendors;
+      _vendorCategoriesLoaded = true;
+    } else {
+      console.warn('[stream-client] vendor_categories.json has unexpected shape. Category-aware fallback disabled.');
+      _vendorCategoriesLoaded = true;
+    }
+  } catch (err) {
+    console.warn('[stream-client] vendor_categories.json load error:', err.message);
+    _vendorCategoriesLoaded = true;
+  }
+})();
+
+// Normalize a vendor name for category lookup. Same rules as the file
+// keys — lowercase, trimmed, punctuation stripped. Not the same as
+// the resolver's norm() because we want to catch "AWS, Inc." and
+// "Amazon Web Services" as the same key.
+function normalizeVendorForCategory(name) {
+  return String(name || '')
+    .toLowerCase()
+    .replace(/[.,]/g, '')
+    .replace(/\b(inc|incorporated|llc|corp|corporation|co|ltd|company)\b/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function lookupVendorCategory(vendorName) {
+  if (!_vendorCategoriesLoaded || !_vendorCategories) return null;
+  const key = normalizeVendorForCategory(vendorName);
+  return _vendorCategories[key] || null;
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // <data> tag parser
 // ─────────────────────────────────────────────────────────────────────
 
@@ -417,7 +486,20 @@ Your job: tell the seller who's winning and losing in THEIR category. Identify w
   // the seller doesn't actually have, which is a trust disaster.
   if (opts.reframed && resolverInput?._reframedFromVendor) {
     const pitched = resolverInput._reframedFromVendor;
-    framing += `
+    const category = resolverInput?._categoryName || null;
+    if (category) {
+      framing += `
+THIS IS A CATEGORY-REFRAMED PULL.
+The user pitched "${pitched}" at this agency, but ${pitched} has no direct top-100 footprint here.
+Rather than dead-end, the browser refired the query using keywords for ${pitched}'s CATEGORY (${category}). The rows below show the actual competitive landscape for ${category} at this agency — where the seller's real opportunity is.
+Your job:
+ 1. Lead with honesty: "${pitched} doesn't show up directly at [agency]" — first sentence.
+ 2. Pivot to the category view: "but here's the ${category} market at [agency]" — the rows below ARE the seller's competitive landscape.
+ 3. Identify where ${pitched} fits: which competitors hold the work, where the gaps are, which expiring contracts are targets.
+ 4. End with a Monday-morning action grounded in specific rows.
+Do NOT pretend the rows represent ${pitched}'s presence. They represent the CATEGORY competition — that's what a seller wants to see.`;
+    } else {
+      framing += `
 THIS IS A REFRAMED PULL.
 The user pitched "${pitched}" at this agency, but ${pitched} has no direct footprint in the top 100 contracts here.
 Rather than dead-end the user, the browser pulled the broader agency market so you can tell them what IS here.
@@ -427,6 +509,7 @@ Your job:
  3. Identify the adjacency: where does ${pitched}'s category fit? Who's holding that work? Is it a greenfield for the seller, or is there an incumbent to displace?
  4. End with a concrete Monday-morning action tied to what's actually in the data.
 Do NOT pretend the rows below represent ${pitched}'s presence. They don't. They represent the market context around ${pitched}'s absence.`;
+    }
   }
 
   return `Query: ${queryDesc || '(no filters)'}${framing}
@@ -687,73 +770,97 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
       return { mode: 'error', error: fetchErr.message };
     }
 
-    // ── Empty-state recovery ──────────────────────────────────────
+    // ── Empty-state recovery: category-aware fallback + qualifier ──
     //
-    // When the pull returns zero rows, the seller's specific query didn't
-    // land. Don't dead-end them. If they pitched a vendor+agency combo
-    // (e.g., "AWS to TRANSCOM"), their real question is about the MARKET
-    // at that agency — the cloud/IT work they'd be entering — not whether
-    // their product is literally named in top-100 contracts. TRANSCOM has
-    // no direct AWS footprint, but lots of cloud-adjacent IT work.
+    // The direct vendor-scoped pull came back empty. The seller pitched
+    // their product at an agency where it has no top-100 footprint.
     //
-    // So: if we had a vendor filter and it caused the empty result, retry
-    // ONCE with the vendor dropped. Keep everything else (agency, topic,
-    // NAICS, expiring). Flag the result so Mo's interpretation reframes
-    // it honestly: "your product isn't here directly, but here's the
-    // market you'd be entering."
+    // Strategy depends on WHAT they pitched:
     //
-    // This only fires when the user genuinely scoped by vendor. Pure
-    // agency-only or topic-only queries that return zero get the honest
-    // "I couldn't find anything" — they weren't scoped in a way the
-    // fallback would help.
+    //   (a) Known tech vendor in vendor_categories.json (AWS, SentinelOne,
+    //       Splunk, etc.) → we know the category. Refire the pull at the
+    //       SAME agency using category keywords. Seller sees the real
+    //       competitive market they're trying to enter.
     //
-    // One retry, not a chain. If the fallback also returns zero, that
-    // really IS a dead end and we should say so plainly.
+    //   (b) Unknown vendor (niche product, commodity, zinger like "MyPillow
+    //       to DoD" or "mules to Army") → we CAN'T guess the category. The
+    //       right move is not a blind agency-wide fallback — that got us
+    //       the SentinelOne/border-wall embarrassment. Instead, bail out
+    //       with mode='needs_qualifier' so Mo can ask the user what their
+    //       product actually does. Better a useful question than wrong data.
+    //
+    //   (c) No vendor pitched, or vendor pitched federally (no agency) →
+    //       current "truly empty" path. Nothing to fall back to.
+    //
+    // One retry max. If the category refire also returns empty, we fall
+    // through to the qualifier path — can't recover further.
     let reframed = false;
-    const hadVendorFilter = !!(resolverInput._sellerName
+    let categoryInfo = null;
+    const originalSeller = resolverInput._sellerName
       || resolverInput.vendor
-      || (Array.isArray(resolverInput.vendors) && resolverInput.vendors.length));
+      || (Array.isArray(resolverInput.vendors) ? resolverInput.vendors[0] : '');
+    const hadVendorFilter = !!originalSeller;
 
     if (rows.length === 0 && hadVendorFilter && resolverInput.agency) {
-      // Build a relaxed resolver input for the retry: strip vendor fields
-      // and the vendor_scope post-filter, keep everything else intact.
-      // We also preserve the original seller name in _reframedFromVendor
-      // so Mo's prompt knows what product the user pitched even though
-      // the pull no longer filters by it.
-      const originalSeller = resolverInput._sellerName
-        || resolverInput.vendor
-        || (Array.isArray(resolverInput.vendors) ? resolverInput.vendors[0] : '');
+      categoryInfo = lookupVendorCategory(originalSeller);
 
-      const relaxedInput = { ...resolverInput };
-      delete relaxedInput.vendor;
-      delete relaxedInput.vendors;
-      delete relaxedInput._sellerName;
-      delete relaxedInput._competitorCategory;
-      delete relaxedInput._competitorList;
-      relaxedInput._reframedFromVendor = originalSeller;
+      if (categoryInfo) {
+        // ── Path (a): Category-aware refire ─────────────────────
+        // Keep the agency. Drop the vendor. Inject category keywords so
+        // the pull targets the seller's real competitive market at this
+        // agency. Mark the input so the card and Mo's prompt know this
+        // is a category reframe, not a generic one.
+        const categoryInput = { ...resolverInput };
+        delete categoryInput.vendor;
+        delete categoryInput.vendors;
+        delete categoryInput._sellerName;
+        delete categoryInput._competitorCategory;
+        delete categoryInput._competitorList;
+        categoryInput._reframedFromVendor = originalSeller;
+        categoryInput._categoryName = categoryInfo.category;
+        categoryInput._categoryKeywords = categoryInfo.keywords;
+        // Merge the category's keywords into the query's keyword set.
+        // USASpending's keyword filter OR's these together, so we're
+        // asking "any contract whose description mentions ANY of these
+        // category terms at this agency."
+        const existingKeywords = Array.isArray(categoryInput.keywords)
+          ? categoryInput.keywords
+          : (categoryInput.topic ? [categoryInput.topic] : []);
+        categoryInput.keywords = [...new Set([...existingKeywords, ...categoryInfo.keywords])];
+        delete categoryInput.topic; // consolidated into keywords
 
-      try {
-        const retryRows = await fetchUsaspending(relaxedInput, endpoint);
-        if (retryRows.length > 0) {
-          rows = retryRows;
-          reframed = true;
-          // Mutate resolverInput in place so the downstream renderers and
-          // payload summary see the relaxed shape. This is the one place
-          // we deliberately rewrite the query the user asked for — and we
-          // flag it prominently so Mo knows to explain it.
-          Object.assign(resolverInput, relaxedInput);
+        try {
+          const retryRows = await fetchUsaspending(categoryInput, endpoint);
+          if (retryRows.length > 0) {
+            rows = retryRows;
+            reframed = true;
+            Object.assign(resolverInput, categoryInput);
+          }
+        } catch (retryErr) {
+          console.warn('[askMo] category fallback retry failed:', retryErr.message);
+          // Fall through to needs_qualifier below
         }
-      } catch (retryErr) {
-        // Retry blew up. Fall through to the no-data path below. Log
-        // because this shouldn't happen — if the original fetch worked,
-        // the relaxed retry should work too.
-        console.warn('[askMo] fallback retry failed:', retryErr.message);
+      }
+
+      // ── Path (b): Unknown vendor → ask a qualifier ───────────
+      // If the vendor wasn't in the categories file, OR the category
+      // retry also came back empty, don't render a misleading card.
+      // Return needs_qualifier so the UI can prompt Mo to ask the user
+      // what their product does.
+      if (!reframed) {
+        return {
+          mode: 'needs_qualifier',
+          resolverInput,
+          originalSeller,
+          agency: resolverInput.agency,
+          vendorWasKnown: !!categoryInfo,
+        };
       }
     }
 
     if (rows.length === 0) {
-      // Truly empty — no vendor filter to drop, or the fallback also
-      // returned nothing. Tell the user plainly.
+      // Path (c): no vendor filter to fall back from, or the pitch was
+      // federal-wide. Tell the user plainly and hand them escape chips.
       render.renderError(`I couldn't find anything matching that. Try a different agency, or tell me more about what you're looking for.`);
       return { mode: 'no_data', resolverInput };
     }

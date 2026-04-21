@@ -1,0 +1,133 @@
+{
+  "_meta": {
+    "version": "starter",
+    "last_updated": "2026-04-21",
+    "purpose": "Vendor-to-category map used by v2's category-aware fallback. When a user pitches a vendor at an agency and the direct pull returns zero rows, this file tells the fallback WHICH category keywords to search for at that agency. Without it, the fallback would drop to agency-wide data (e.g., border-wall construction for a SentinelOne query at DHS) — which is wrong. Keys are lowercased vendor names. Values carry category (for display), keywords (what to search USASpending for), and competitors (for future competitor-chip generation). Keywords should match USASpending's actual description vocabulary — what contracts ACTUALLY say, not marketing terms. For example: USASpending descriptions use 'ENDPOINT DETECTION' and 'EDR', not 'endpoint security'."
+  },
+  "vendors": {
+    "aws": {
+      "canonical": "Amazon Web Services",
+      "category": "cloud infrastructure",
+      "keywords": ["CLOUD", "AWS", "AMAZON WEB SERVICES", "IAAS", "CLOUD COMPUTING", "CLOUD HOSTING"],
+      "competitors": ["Microsoft Azure", "Google Cloud", "Oracle Cloud", "IBM Cloud"]
+    },
+    "amazon web services": {
+      "canonical": "Amazon Web Services",
+      "category": "cloud infrastructure",
+      "keywords": ["CLOUD", "AWS", "AMAZON WEB SERVICES", "IAAS", "CLOUD COMPUTING", "CLOUD HOSTING"],
+      "competitors": ["Microsoft Azure", "Google Cloud", "Oracle Cloud", "IBM Cloud"]
+    },
+    "azure": {
+      "canonical": "Microsoft Azure",
+      "category": "cloud infrastructure",
+      "keywords": ["AZURE", "MICROSOFT CLOUD", "M365", "CLOUD", "IAAS"],
+      "competitors": ["Amazon Web Services", "Google Cloud", "Oracle Cloud"]
+    },
+    "gcp": {
+      "canonical": "Google Cloud",
+      "category": "cloud infrastructure",
+      "keywords": ["GOOGLE CLOUD", "GCP", "CLOUD", "IAAS"],
+      "competitors": ["Amazon Web Services", "Microsoft Azure", "Oracle Cloud"]
+    },
+    "google cloud": {
+      "canonical": "Google Cloud",
+      "category": "cloud infrastructure",
+      "keywords": ["GOOGLE CLOUD", "GCP", "CLOUD", "IAAS"],
+      "competitors": ["Amazon Web Services", "Microsoft Azure", "Oracle Cloud"]
+    },
+    "oracle cloud": {
+      "canonical": "Oracle Cloud",
+      "category": "cloud infrastructure",
+      "keywords": ["ORACLE CLOUD", "OCI", "CLOUD"],
+      "competitors": ["Amazon Web Services", "Microsoft Azure", "Google Cloud"]
+    },
+
+    "sentinelone": {
+      "canonical": "SentinelOne",
+      "category": "endpoint security",
+      "keywords": ["ENDPOINT", "EDR", "ENDPOINT DETECTION", "ENDPOINT PROTECTION", "XDR"],
+      "competitors": ["CrowdStrike", "Microsoft Defender", "Trellix", "Carbon Black", "Tanium", "Sophos"]
+    },
+    "crowdstrike": {
+      "canonical": "CrowdStrike",
+      "category": "endpoint security",
+      "keywords": ["ENDPOINT", "EDR", "CROWDSTRIKE", "FALCON", "XDR", "ENDPOINT DETECTION"],
+      "competitors": ["SentinelOne", "Microsoft Defender", "Carbon Black", "Tanium", "Trellix"]
+    },
+    "tanium": {
+      "canonical": "Tanium",
+      "category": "endpoint security",
+      "keywords": ["ENDPOINT", "TANIUM", "ASSET MANAGEMENT", "CMDB"],
+      "competitors": ["SentinelOne", "CrowdStrike", "Microsoft Defender"]
+    },
+    "palo alto": {
+      "canonical": "Palo Alto Networks",
+      "category": "network security",
+      "keywords": ["FIREWALL", "PALO ALTO", "NGFW", "NETWORK SECURITY", "ZERO TRUST"],
+      "competitors": ["Fortinet", "Cisco", "Check Point", "Zscaler"]
+    },
+    "zscaler": {
+      "canonical": "Zscaler",
+      "category": "network security",
+      "keywords": ["ZSCALER", "ZERO TRUST", "SASE", "SSE", "CLOUD SECURITY"],
+      "competitors": ["Palo Alto Networks", "Netskope", "Cisco"]
+    },
+
+    "splunk": {
+      "canonical": "Splunk",
+      "category": "SIEM and observability",
+      "keywords": ["SPLUNK", "SIEM", "LOG", "OBSERVABILITY", "SECURITY OPERATIONS"],
+      "competitors": ["Elastic", "Microsoft Sentinel", "Datadog", "Sumo Logic"]
+    },
+    "elastic": {
+      "canonical": "Elastic",
+      "category": "SIEM and observability",
+      "keywords": ["ELASTIC", "ELASTICSEARCH", "SIEM", "LOG", "OBSERVABILITY"],
+      "competitors": ["Splunk", "Datadog", "Microsoft Sentinel"]
+    },
+    "datadog": {
+      "canonical": "Datadog",
+      "category": "observability",
+      "keywords": ["DATADOG", "OBSERVABILITY", "APM", "MONITORING"],
+      "competitors": ["Splunk", "New Relic", "Dynatrace"]
+    },
+
+    "snowflake": {
+      "canonical": "Snowflake",
+      "category": "data platform",
+      "keywords": ["SNOWFLAKE", "DATA WAREHOUSE", "DATA PLATFORM", "DATA LAKE", "ANALYTICS"],
+      "competitors": ["Databricks", "Google BigQuery", "Amazon Redshift"]
+    },
+    "databricks": {
+      "canonical": "Databricks",
+      "category": "data platform",
+      "keywords": ["DATABRICKS", "DATA LAKE", "DATA PLATFORM", "SPARK", "ANALYTICS", "MACHINE LEARNING"],
+      "competitors": ["Snowflake", "Google BigQuery", "Cloudera"]
+    },
+    "palantir": {
+      "canonical": "Palantir",
+      "category": "data platform",
+      "keywords": ["PALANTIR", "FOUNDRY", "GOTHAM", "DATA PLATFORM", "DATA INTEGRATION"],
+      "competitors": ["Databricks", "Snowflake"]
+    },
+
+    "okta": {
+      "canonical": "Okta",
+      "category": "identity",
+      "keywords": ["OKTA", "IDENTITY", "IAM", "SSO", "IDENTITY MANAGEMENT"],
+      "competitors": ["Microsoft Entra", "Ping Identity", "SailPoint"]
+    },
+    "salesforce": {
+      "canonical": "Salesforce",
+      "category": "CRM and business applications",
+      "keywords": ["SALESFORCE", "CRM", "CUSTOMER RELATIONSHIP"],
+      "competitors": ["Microsoft Dynamics", "Oracle", "SAP"]
+    },
+    "servicenow": {
+      "canonical": "ServiceNow",
+      "category": "IT service management",
+      "keywords": ["SERVICENOW", "ITSM", "IT SERVICE MANAGEMENT", "WORKFLOW"],
+      "competitors": ["Jira", "BMC", "Atlassian"]
+    }
+  }
+}
