@@ -660,16 +660,27 @@ export function summarizePayloadForMo(rows, resolverInput, opts = {}) {
   if (resolverInput?._competitors && resolverInput?._competitorList) {
     // Use _sellerName stashed during competitor expansion. Falls back to
     // the first entry in vendors[] if somehow that wasn't set.
-    const seller = resolverInput._sellerName
+    const sellerLabel = resolverInput._sellerName
       || (Array.isArray(resolverInput.vendors) ? resolverInput.vendors[0] : '')
       || '';
     const category = resolverInput._competitorCategory || '';
     framing = `
 THIS IS A COMPETITOR CUT.
-Seller: ${seller}
+Seller: ${sellerLabel}
 Category: ${category}
 Competitors in this pull: ${resolverInput._competitorList.join(', ')}
-Your job: tell the seller who's winning and losing in THEIR category. Identify which vendors in the top primes are the seller (${seller}) vs. their competitors. Call out share, positioning, and where each player is strongest. If the seller isn't in the top primes, say so honestly and describe the competitive landscape they're trying to break into.`;
+Your job: tell the seller who's winning and losing in THEIR category. Identify which vendors in the top primes are the seller (${sellerLabel}) vs. their competitors. Call out share, positioning, and where each player is strongest. If the seller isn't in the top primes, say so honestly and describe the competitive landscape they're trying to break into.`;
+  } else if (resolverInput?._competitors && resolverInput?._competitorFetchFailed) {
+    // Degraded path: the user asked for competitors, but the lookup
+    // service errored out, so we're rendering the seller's own footprint
+    // instead of a real competitor view. Tell Mo the truth — don't let
+    // her hallucinate competitor names from training data when the data
+    // in the card is just the seller's own contracts.
+    const sellerLabel = resolverInput._sellerName || '';
+    framing = `
+COMPETITOR LOOKUP FAILED.
+The user asked about ${sellerLabel}'s competitors, but the competitor expansion service returned an error. The rows below are ${sellerLabel}'s OWN footprint, not a real competitor view.
+Your job: tell the user honestly that you couldn't pull the competitive landscape this turn, show them ${sellerLabel}'s current position based on the rows below, and suggest they try again in a moment. DO NOT name specific competitors from memory — the data doesn't support those claims. It's fine to say "CrowdStrike and Microsoft Defender are typical competitors in this category" as general category knowledge, but do NOT claim anything about their specific federal footprint that isn't visible in the rows.`;
   }
 
   // Reframed-on-empty framing: the user pitched a vendor+agency combo, but
@@ -908,16 +919,17 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
     // competitors" questions.
     let competitorInfo = null;
     if (resolverInput?._competitors && resolverInput?.vendor) {
+      // Stash _sellerName up-front — we need it regardless of whether
+      // the competitor lookup succeeds. Without this, a failed lookup
+      // leaves downstream code with no seller reference, which breaks
+      // the channel-partner classifier and the card's sellerLens label.
+      resolverInput._sellerName = resolverInput.vendor;
       try {
         competitorInfo = await fetchCompetitors(resolverInput.vendor, endpoint);
         // Build multi-vendor input: keep the original vendor AND add each
         // competitor. Drop the singular `vendor` field in favor of the array
         // so the resolver ORs them all together as keywords for USASpending.
         const combined = [resolverInput.vendor, ...(competitorInfo.competitors || [])];
-        // Preserve the original seller name BEFORE we delete vendor — the
-        // card renderer uses this as sellerLens to write the verdict through
-        // the seller's lens (not the whole competitor list concatenated).
-        resolverInput._sellerName = resolverInput.vendor;
         delete resolverInput.vendor;
         resolverInput.vendors = combined;
         // Stash the competitor metadata so the renderer and payload
@@ -926,8 +938,11 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
         resolverInput._competitorList = competitorInfo.competitors;
       } catch (compErr) {
         console.warn('[askMo] competitor lookup failed, falling back to single-vendor card:', compErr.message);
-        // Fall through with the original single-vendor input. The card
-        // will still render, just without competitors.
+        // Fall through with the original single-vendor input + _sellerName
+        // already set above. Flag the failure so the payload summary can
+        // tell Mo "this is a degraded competitor view — don't invent
+        // competitor names the data doesn't show."
+        resolverInput._competitorFetchFailed = true;
       }
     }
 
