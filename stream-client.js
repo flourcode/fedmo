@@ -1096,6 +1096,22 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
 
     debug.rowCountDirect = rows.length;
 
+    // Diagnostic: capture field values from the top-spend row so the
+    // debug trace shows exactly what USASpending returned for Awarding
+    // Agency / Sub Agency / Office. Without this we can only guess at
+    // the shape, which has burned us during bucketing logic work.
+    if (rows.length > 0) {
+      const topRow = rows.slice().sort((a, b) =>
+        (parseFloat(b['Award Amount']) || 0) - (parseFloat(a['Award Amount']) || 0)
+      )[0];
+      debug.sampleRowFields = {
+        'Awarding Agency': topRow['Awarding Agency'] || null,
+        'Awarding Sub Agency': topRow['Awarding Sub Agency'] || null,
+        'Awarding Office': topRow['Awarding Office'] || null,
+        'Recipient Name': topRow['Recipient Name'] || null,
+      };
+    }
+
     // ── Competitor-mode category filter ───────────────────────────
     //
     // When the pull is a competitor cut (user asked "who are my
