@@ -50,16 +50,21 @@ import { resolve, applyPostFilters } from './resolver.js';
 // When a user pitches a vendor at an agency and the direct pull comes
 // back empty, the browser checks this file to decide how to fall back.
 //
-//   - Vendor IS in the file (e.g., "sentinelone" → endpoint security)
+//   - Vendor IS in the file (e.g., "sentinelone" → endpoint_security)
 //     → refire at the SAME agency using the category's keyword set,
 //       so the seller sees their actual competitive market (CrowdStrike,
 //       Defender, Trellix) rather than unrelated agency top-100 data
-//       (border walls, ship construction, border wall).
+//       (border walls, ship construction).
 //
 //   - Vendor is NOT in the file → DON'T refire automatically. Return
 //     'needs_qualifier' mode so Mo can ask the user what the product
 //     does. A MyPillow or niche-vendor pitch deserves a conversation,
 //     not a blind agency-wide fallback.
+//
+// The file shape is { categories: {...}, vendors: {...} } where vendors
+// reference categories by key. This module denormalizes on lookup so
+// downstream callers get a flat {categoryName, keywords, competitors}
+// shape regardless of how the file is structured.
 //
 // Best-effort load — if the file is missing or malformed, we skip the
 // category branch entirely and fall through to the "needs qualifier"
@@ -67,7 +72,8 @@ import { resolve, applyPostFilters } from './resolver.js';
 // instead of showing wrong data.
 // ─────────────────────────────────────────────────────────────────────
 
-let _vendorCategories = {};
+let _categoriesMap = {};    // category_key → { display_name, keywords }
+let _vendorsMap = {};       // vendor_key → { canonical, category, competitors }
 let _vendorCategoriesLoaded = false;
 
 export const vendorCategoriesReady = (async () => {
@@ -80,11 +86,12 @@ export const vendorCategoriesReady = (async () => {
       return;
     }
     const data = await res.json();
-    if (data && typeof data.vendors === 'object' && data.vendors !== null) {
-      _vendorCategories = data.vendors;
+    if (data && typeof data.vendors === 'object' && typeof data.categories === 'object') {
+      _categoriesMap = data.categories;
+      _vendorsMap = data.vendors;
       _vendorCategoriesLoaded = true;
     } else {
-      console.warn('[stream-client] vendor_categories.json has unexpected shape. Category-aware fallback disabled.');
+      console.warn('[stream-client] vendor_categories.json has unexpected shape (expected { categories, vendors }). Category-aware fallback disabled.');
       _vendorCategoriesLoaded = true;
     }
   } catch (err) {
@@ -94,9 +101,9 @@ export const vendorCategoriesReady = (async () => {
 })();
 
 // Normalize a vendor name for category lookup. Same rules as the file
-// keys — lowercase, trimmed, punctuation stripped. Not the same as
-// the resolver's norm() because we want to catch "AWS, Inc." and
-// "Amazon Web Services" as the same key.
+// keys — lowercase, trimmed, punctuation stripped, legal suffixes removed.
+// Not the same as the resolver's norm() because we want "AWS, Inc." and
+// "Amazon Web Services" to resolve to their category.
 function normalizeVendorForCategory(name) {
   return String(name || '')
     .toLowerCase()
@@ -106,10 +113,29 @@ function normalizeVendorForCategory(name) {
     .trim();
 }
 
+// Resolve a vendor name → {category, keywords, competitors} or null.
+// Denormalizes across the categories and vendors maps so callers get a
+// single flat object. Returns null for unknown vendors OR if the vendor's
+// category key is missing from the categories map (shouldn't happen in
+// practice because the JSON has referential integrity, but we guard
+// against it so a bad file doesn't crash).
 function lookupVendorCategory(vendorName) {
-  if (!_vendorCategoriesLoaded || !_vendorCategories) return null;
+  if (!_vendorCategoriesLoaded) return null;
   const key = normalizeVendorForCategory(vendorName);
-  return _vendorCategories[key] || null;
+  const vendor = _vendorsMap[key];
+  if (!vendor) return null;
+  const category = _categoriesMap[vendor.category];
+  if (!category) {
+    console.warn(`[stream-client] vendor "${key}" references missing category "${vendor.category}"`);
+    return null;
+  }
+  return {
+    vendorCanonical: vendor.canonical,
+    category: category.display_name || vendor.category,
+    categoryKey: vendor.category,
+    keywords: category.keywords || [],
+    competitors: vendor.competitors || [],
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -813,6 +839,82 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
     }
 
     debug.rowCountDirect = rows.length;
+
+    // ── Competitor-mode category filter ───────────────────────────
+    //
+    // When the pull is a competitor cut (user asked "who are my
+    // competitors"), the vendor list includes the seller + head-to-head
+    // competitors. USASpending keyword-matches that list across
+    // description/recipient/award-title, which sometimes pulls in wildly
+    // off-topic rows because competitor product names collide with
+    // unrelated words in contract descriptions.
+    //
+    // Real example: SentinelOne's competitor expansion includes
+    // CrowdStrike, whose product is called "Falcon". USASpending then
+    // surfaces $1.2B in Bahrain F-16 "Hamad's Falcons" production
+    // contracts — clearly not endpoint security work. A seller reading
+    // that card would walk away thinking CrowdStrike has a billion-
+    // dollar Air Force contract to displace. That's false and
+    // trust-damaging.
+    //
+    // Fix: if the seller is in a known category, require each surviving
+    // row to contain at least one category keyword somewhere in
+    // description, recipient name, or award title. Rows with nothing
+    // category-related get dropped. The filter is deliberately broad
+    // (any-of-many keywords) so we keep bundled contracts like "IT
+    // modernization with endpoint protection" alongside direct-product
+    // rows like "CrowdStrike Falcon license".
+    //
+    // Only fires for competitor mode. Direct single-vendor pulls don't
+    // need this — a user asking about "SentinelOne at DHS" expects the
+    // 2-row Thundercat cut, not a category-filtered view of all
+    // endpoint work.
+    const isCompetitorMode = !!(resolverInput?._competitors || resolverInput?._sellerName);
+    const sellerForCategoryFilter = resolverInput?._sellerName
+      || (Array.isArray(resolverInput?.vendors) ? resolverInput.vendors[0] : null);
+
+    if (isCompetitorMode && sellerForCategoryFilter && rows.length > 0) {
+      const sellerCategory = lookupVendorCategory(sellerForCategoryFilter);
+      if (sellerCategory && sellerCategory.keywords && sellerCategory.keywords.length > 0) {
+        const beforeCount = rows.length;
+        // Build the filter signal set: category keywords (e.g., ENDPOINT,
+        // EDR) PLUS the canonical names of the seller and every known
+        // competitor in the same category. We need the vendor-name leg
+        // because descriptions often name the product without the
+        // category word — "CROWDSTRIKE FALCON LICENSES" is clearly
+        // endpoint work even though the word ENDPOINT doesn't appear.
+        // Adding the competitor list is what keeps those rows alive
+        // while still dropping Bahrain F-16 contracts.
+        const signalSet = new Set();
+        for (const k of sellerCategory.keywords) signalSet.add(k.toUpperCase());
+        // Include seller + competitor canonical names as signals.
+        if (sellerCategory.vendorCanonical) signalSet.add(sellerCategory.vendorCanonical.toUpperCase());
+        for (const c of sellerCategory.competitors || []) {
+          // Split multi-word competitor names into whole-name matches;
+          // don't split into words because "Microsoft" alone would
+          // match too much. Keep the full name as a single signal.
+          signalSet.add(c.toUpperCase());
+        }
+        const signals = [...signalSet];
+        const signalMatches = (row) => {
+          const haystack = [
+            row['Description'] || '',
+            row['Recipient Name'] || '',
+            row['Award Description'] || '',
+            row['transaction_description'] || '',
+          ].join(' | ').toUpperCase();
+          return signals.some(s => haystack.includes(s));
+        };
+        rows = rows.filter(signalMatches);
+        debug.competitorCategoryFilter = {
+          category: sellerCategory.category,
+          signals,
+          beforeCount,
+          afterCount: rows.length,
+          droppedCount: beforeCount - rows.length,
+        };
+      }
+    }
 
     // ── Empty-state recovery: category-aware fallback + qualifier ──
     //
