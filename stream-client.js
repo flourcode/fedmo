@@ -979,16 +979,27 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
       resolverInput._sellerName = resolverInput.vendor;
       try {
         competitorInfo = await fetchCompetitors(resolverInput.vendor, endpoint);
-        // Build multi-vendor input: keep the original vendor AND add each
-        // competitor. Drop the singular `vendor` field in favor of the array
-        // so the resolver ORs them all together as keywords for USASpending.
-        const combined = [resolverInput.vendor, ...(competitorInfo.competitors || [])];
+        // Cap the query-expansion list at 6 competitors (seller + up to 6 =
+        // up to 7 OR-keywords). More than that and USASpending starts to
+        // timeout/500 on the combined query, and the resulting card turns
+        // into a noisy grab-bag instead of a real head-to-head view. The
+        // curated file lists stay under 6 naturally; Gemini fallback
+        // sometimes returns 10-13 entries for fuzzy vendors (e.g. VARs
+        // and resellers), which is where this cap matters.
+        const allCompetitors = Array.isArray(competitorInfo.competitors) ? competitorInfo.competitors : [];
+        const queryCompetitors = allCompetitors.slice(0, 6);
+        // Build multi-vendor input: keep the original vendor AND add the
+        // capped competitor set. Drop the singular `vendor` field in
+        // favor of the array so the resolver ORs them all together as
+        // keywords for USASpending.
+        const combined = [resolverInput.vendor, ...queryCompetitors];
         delete resolverInput.vendor;
         resolverInput.vendors = combined;
-        // Stash the competitor metadata so the renderer and payload
-        // summarizer can label the card appropriately.
+        // Stash the FULL competitor metadata (not the capped list) so
+        // Mo's prose can reference any of them, even the ones not in
+        // the query itself.
         resolverInput._competitorCategory = competitorInfo.category;
-        resolverInput._competitorList = competitorInfo.competitors;
+        resolverInput._competitorList = allCompetitors;
         resolverInput._competitorSource = competitorInfo._source || 'unknown';
       } catch (compErr) {
         console.warn('[askMo] competitor lookup failed, falling back to single-vendor card:', compErr.message);
