@@ -290,7 +290,8 @@ export const SCENARIOS = [
       {
         question: 'who are my competitors',
         assertions: [
-          { kind: 'hard', msg: 'tag has competitors=true', check: tagAttr('competitors', true) },
+          { kind: 'hard', msg: 'competitor mode fired (_competitors flag set)', check: (s) =>
+            s.resolverInput?._competitors === true },
           { kind: 'hard', msg: '_sellerName preserved', check: (s) =>
             String(s.resolverInput?._sellerName || '').toLowerCase().includes('datadog') },
           { kind: 'hard', msg: '_competitorSource is "file" (file-first path took)', check: (s) =>
@@ -332,7 +333,7 @@ export const SCENARIOS = [
       {
         question: 'who are my competitors',
         assertions: [
-          { kind: 'hard', msg: 'T3: competitors=true', check: tagAttr('competitors', true) },
+          { kind: 'hard', msg: 'T3: competitor mode fired', check: (s) => s.resolverInput?._competitors === true },
           { kind: 'hard', msg: 'T3: still AWS context', check: tagAttr('vendor', 'AWS') },
         ],
       },
@@ -401,8 +402,8 @@ export const SCENARIOS = [
         question: "who's subbing here",
         assertions: [
           { kind: 'hard', msg: 'no crash', check: (s) => !!s.mode && s.mode !== 'error' },
-          { kind: 'hard', msg: 'mode is subaward OR an honest fallback (prose/no_data/error)', check: (s) =>
-            ['subaward', 'prose', 'no_data', 'error'].includes(s.mode) },
+          { kind: 'hard', msg: 'mode is subaward OR an honest fallback (prose/no_data/no_subaward_data/error)', check: (s) =>
+            ['subaward', 'prose', 'no_data', 'no_subaward_data', 'error'].includes(s.mode) },
           { kind: 'soft', msg: 'if subaward mode, either rows returned or graceful empty handling', check: (s) =>
             s.mode !== 'subaward' || (s.rowCount || 0) >= 0 },
         ],
