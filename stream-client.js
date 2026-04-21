@@ -349,7 +349,7 @@ export async function fetchSubawards(resolverInput, endpoint) {
 
   // Shape for the subaward card renderer. Pulled from govhoo's structure
   // so the existing buildSubawardTurn can consume these without changes.
-  return raw.map(s => ({
+  let rows = raw.map(s => ({
     prime: s['Prime Recipient Name'] || 'Unknown Prime',
     sub: s['Sub-Awardee Name'] || 'Unknown Sub',
     amount: parseFloat(s['Sub-Award Amount']) || 0,
@@ -361,6 +361,42 @@ export async function fetchSubawards(resolverInput, endpoint) {
     naics: s['NAICS'] || '',
     _raw: s,
   }));
+
+  // ── Subaward direction post-filter ───────────────────────────────
+  //
+  // USASpending's subaward keyword-match scans BOTH the Prime Recipient
+  // Name field AND the Sub-Awardee Name field. When a seller asks
+  // "who's subbing to SAIC", they want rows where SAIC is the PRIME
+  // (so they can see SAIC's subs — the firms the seller could displace
+  // or join). But the API returns both directions mixed, and for a big
+  // firm like SAIC the "SAIC-as-sub" rows (TekSynap → SAIC, Corner
+  // Alliance → SAIC) often dominate, because SAIC is big enough to show
+  // up as a sub to many other primes.
+  //
+  // Fix: if the query had a vendor keyword, post-filter to rows where
+  // the vendor matches Prime Recipient Name. This gives the seller what
+  // they actually wanted — the subs UNDER their target prime.
+  //
+  // Zero-row fallback: if filtering by prime produces no rows, the
+  // vendor genuinely shows up only as a sub in this slice. Return the
+  // unfiltered rows so the user sees SOMETHING real rather than an
+  // empty card. Log the direction so Mo's payload summary can frame
+  // the data honestly ("here's where SAIC shows up as a sub").
+  const vendorInput = resolverInput?.vendor
+    || (Array.isArray(resolverInput?.vendors) ? resolverInput.vendors[0] : null);
+  if (vendorInput && rows.length > 0) {
+    const needle = String(vendorInput).toUpperCase();
+    const asPrimeRows = rows.filter(r => (r.prime || '').toUpperCase().includes(needle));
+    if (asPrimeRows.length > 0) {
+      rows = asPrimeRows;
+      rows._subawardDirection = 'as_prime';
+    } else {
+      // Fallback: vendor only shows up as a sub in this dataset
+      rows._subawardDirection = 'as_sub';
+    }
+  }
+
+  return rows;
 }
 
 // Compact payload summary for Mo's grounded second-pass call when she
@@ -409,7 +445,28 @@ export function summarizeSubawardsForMo(subs, resolverInput) {
     .map(([k, v]) => `${k}=${Array.isArray(v) ? v.join('|') : v}`)
     .join(', ');
 
-  return `Query: ${queryDesc || '(no filters)'} (SUBAWARD CUT)
+  // Direction framing: the post-filter in fetchSubawards stamps
+  // _subawardDirection on the rows array when there's a vendor input.
+  // 'as_prime' (default) means the vendor IS the prime and these are
+  // their subs — what the seller almost always wants. 'as_sub' means
+  // the vendor-as-prime filter came back empty and we fell back to the
+  // unfiltered set — the vendor only appears here as a sub to other
+  // primes. Mo needs to know which slice this is so her coaching
+  // targets the right audience.
+  const direction = subs._subawardDirection;
+  const vendorName = resolverInput?.vendor
+    || (Array.isArray(resolverInput?.vendors) ? resolverInput.vendors[0] : null);
+
+  let directionBlock = '';
+  if (direction === 'as_prime' && vendorName) {
+    directionBlock = `
+DIRECTION: ${vendorName} is the prime. These subawards show who ${vendorName} is awarding sub-work TO. The seller wants to know these subs so they can (a) displace a weak incumbent sub, or (b) partner with an established sub who's already in ${vendorName}'s delivery chain. Coach them accordingly.`;
+  } else if (direction === 'as_sub' && vendorName) {
+    directionBlock = `
+DIRECTION: ${vendorName} does NOT appear as a prime on any subawards in this slice. These rows show ${vendorName} appearing as a SUB to other primes. Tell the seller honestly that ${vendorName} isn't running sub teams in this agency — they're the hands on someone else's contract. The coaching shifts: if the seller wants to team with or displace ${vendorName}'s position, they need to target ${vendorName}'s prime customers (the top primes listed below) instead.`;
+  }
+
+  return `Query: ${queryDesc || '(no filters)'} (SUBAWARD CUT)${directionBlock}
 Total sub work (top ${subs.length} subs, last 12mo): $${(total / 1_000_000).toFixed(1)}M
 Unique primes giving out sub work: ${primeMap.size}
 Unique subs receiving work: ${subMap.size}
@@ -453,6 +510,118 @@ export function summarizePayloadForMo(rows, resolverInput, opts = {}) {
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5)
     .map(([n, a]) => `${n} ($${(a / 1_000_000).toFixed(1)}M)`);
+
+  // ── Channel-partner vs competitor classification ─────────────────
+  //
+  // When a seller pitches (e.g., AWS at VA), the top primes in the
+  // card include THREE kinds of vendors:
+  //   1. Direct    — the seller themselves (Amazon Web Services, Inc.)
+  //   2. Channel   — VARs reselling the seller (Four Points reselling
+  //                  AWS, Thundercat reselling CrowdStrike Falcon).
+  //                  Detectable: contract description names the seller's
+  //                  product.
+  //   3. Competitor — a different vendor in the same category (Microsoft
+  //                  selling Azure in an AWS competitor pull).
+  //
+  // Mo's coaching is radically different across these three. Attacking
+  // a channel partner who's reselling your product is shooting yourself
+  // in the foot — you want to DEFEND and STRENGTHEN that relationship.
+  // Competitors are the ones you attack. Without this distinction, Mo
+  // lumps Four Points in with Microsoft and the seller walks away with
+  // confused advice.
+  //
+  // Classification only runs when there's a seller in context. Returns
+  // a map { primeName: 'direct' | 'channel' | 'competitor' } passed to
+  // Mo's payload summary so her prose can use it.
+  const seller = resolverInput?._sellerName
+    || resolverInput?.vendor
+    || (Array.isArray(resolverInput?.vendors) ? resolverInput.vendors[0] : null);
+
+  const vendorRelations = new Map();
+  if (seller) {
+    // Build the set of name-forms USASpending might use for this seller.
+    // Contract descriptions are inconsistent: they'll say "AWS" in one
+    // field, "AMAZON WEB SERVICES" in another, "Amazon Web Services,
+    // Inc." in a third. If we only match on the user's input ("aws"),
+    // we miss the legal-name references and wrongly classify Four Points
+    // (reselling AWS, description says "AMAZON WEB SERVICES") as a
+    // competitor. Look up the category record to get the canonical form
+    // and include both.
+    const sellerForms = new Set();
+    const sellerRaw = String(seller).toUpperCase().trim();
+    if (sellerRaw.length >= 3) sellerForms.add(sellerRaw);
+    const cat = lookupVendorCategory(seller);
+    if (cat && cat.vendorCanonical) {
+      const canon = String(cat.vendorCanonical).toUpperCase().trim();
+      if (canon.length >= 3) sellerForms.add(canon);
+    }
+    // If neither form produced a usable match key, skip classification
+    // entirely — better to leave primes untagged than to tag them wrong.
+    if (sellerForms.size === 0) {
+      // No classification possible. topPrimesAnnotated below will render
+      // plain "Name ($M)" entries without relation tags.
+    } else {
+      // Build per-prime description corpus — concatenate every description
+      // that prime shows up on. If ANY of their contracts name ANY form
+      // of the seller, they're a channel partner. Empty description →
+      // assume competitor (safer default — better to attack a "competitor"
+      // who is actually a partner than to defend a "partner" who is
+      // actually a competitor, because the seller at least won't damage
+      // their own distribution).
+      const primeDescs = new Map();
+      for (const r of rows) {
+        const name = r['Recipient Name'] || 'Unknown';
+        const desc = [
+          r['Description'] || '',
+          r['Award Description'] || '',
+          r['transaction_description'] || '',
+        ].join(' ').toUpperCase();
+        if (!primeDescs.has(name)) primeDescs.set(name, '');
+        primeDescs.set(name, primeDescs.get(name) + ' ' + desc);
+      }
+      // Matcher: true if any of the seller name-forms appears in haystack.
+      const sellerHit = (haystack) => {
+        for (const form of sellerForms) {
+          if (haystack.includes(form)) return true;
+        }
+        return false;
+      };
+      for (const [name, corpus] of primeDescs.entries()) {
+        const nameUpper = name.toUpperCase();
+        if (sellerHit(nameUpper)) {
+          // Recipient name is the seller (or one of their forms —
+          // "Amazon Web Services, INC." contains "AMAZON WEB SERVICES").
+          vendorRelations.set(name, 'direct');
+        } else if (sellerHit(corpus)) {
+          // Recipient is some other firm, but their contracts reference
+          // the seller's product in the description. Channel partner
+          // reselling for the seller.
+          vendorRelations.set(name, 'channel');
+        } else {
+          // Neither name nor description names the seller. This is a
+          // different vendor in the same cut — competitor in a
+          // competitor-mode pull, or an unrelated prime in an agency-
+          // wide pull.
+          vendorRelations.set(name, 'competitor');
+        }
+      }
+    }
+  }
+
+  // Build the relation-annotated prime list for Mo's summary. Same top
+  // 5 by spend as topPrimes, but each one tagged so Mo knows how to
+  // coach against it.
+  const topPrimesAnnotated = [...primeMap.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([n, a]) => {
+      const rel = vendorRelations.get(n);
+      const tag = rel === 'direct' ? ' [THE SELLER]'
+        : rel === 'channel' ? ' [CHANNEL PARTNER reselling ' + seller + ']'
+        : rel === 'competitor' ? ' [COMPETITOR]'
+        : '';
+      return `${n} ($${(a / 1_000_000).toFixed(1)}M)${tag}`;
+    });
 
   // Agency breakdown
   const agencyMap = new Map();
@@ -543,7 +712,7 @@ Total (top ${rows.length} contracts, last 12mo): $${(total / 1_000_000).toFixed(
 Unique primes in slice: ${primeMap.size}
 Top 3 concentration: ${top3Pct}%
 Top primes:
-${topPrimes.map(p => '  - ' + p).join('\n')}
+${topPrimesAnnotated.map(p => '  - ' + p).join('\n')}
 Top awarding agencies:
 ${topAgencies.map(a => '  - ' + a).join('\n')}
 Expiring within 90 days: ${expiring.length} contracts, $${(expiringVal / 1_000_000).toFixed(1)}M`;

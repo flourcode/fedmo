@@ -185,17 +185,21 @@ export const SCENARIOS = [
   // 6. Coaching question — no data tag
   // ────────────────────────────────────────────────────────────
   {
-    name: 'Coaching: who should I team with at VA',
-    description: 'Tests that Mo recognizes coaching questions and answers in prose, without emitting a data tag.',
+    name: 'Teaming: who should I team with at VA',
+    description: 'Tests that teaming questions produce useful output — either prose coaching OR a subaward card showing prime/sub relationships. Both are valid answers for "who should I team with" — subawards literally answer the question.',
     turns: [
       {
         question: 'Who should I team with at VA',
         assertions: [
-          { kind: 'hard', msg: 'mode is "prose" (no data tag)', check: mode('prose') },
-          { kind: 'hard', msg: 'no tag attributes captured', check: (s) => !s.tagAttrs },
-          { kind: 'soft', msg: 'Mo asks clarifying questions or names concrete primes', check: (s) =>
+          { kind: 'hard', msg: 'mode is prose or subaward (both valid)', check: (s) =>
+            s.mode === 'prose' || s.mode === 'subaward' },
+          { kind: 'soft', msg: 'if subaward mode, rows returned', check: (s) =>
+            s.mode !== 'subaward' || (s.rowCount || 0) > 0 },
+          { kind: 'soft', msg: 'Mo names concrete primes or asks clarifying questions', check: (s) =>
             proseContains('what you sell')(s) || proseContains('what you offer')(s) ||
-            proseContains('booz')(s) || proseContains('leidos')(s) || proseContains('gdit')(s) },
+            proseContains('booz')(s) || proseContains('leidos')(s) || proseContains('gdit')(s) ||
+            proseContains('perspecta')(s) || proseContains('red river')(s) ||
+            proseContains('accenture')(s) || proseContains('deloitte')(s) },
         ],
       },
     ],
@@ -291,18 +295,21 @@ export const SCENARIOS = [
   // ────────────────────────────────────────────────────────────
   {
     name: 'Unknown vendor: Randomco at DoD',
-    description: 'Tests graceful handling of a vendor that isn\'t in any known list. Should pull something reasonable and not crash.',
+    description: 'Tests graceful handling of a vendor that isn\'t in any known list. Mo should either return no_data, return a thin data set, or (ideally) return needs_qualifier so she can ask the user what the product does rather than guessing.',
     turns: [
       {
         question: 'I sell Randomco to DoD',
         assertions: [
           { kind: 'hard', msg: 'no crash — mode is set', check: (s) => s.mode != null },
           { kind: 'hard', msg: 'tag has vendor=Randomco', check: tagAttr('vendor', 'Randomco') },
-          // Unknown vendor at a big agency: USASpending's keyword search
-          // hits nothing strongly, post-filter drops everything, and we
-          // surface a clean "no data" message. That's the expected path.
-          { kind: 'soft', msg: 'mode is either no_data or data with few rows', check: (s) =>
-            s.mode === 'no_data' || (s.mode === 'data' && s.rowCount <= 10) },
+          // Unknown vendor: three valid outcomes. needs_qualifier is the
+          // best — Mo refusing to guess and asking what the product does.
+          // no_data is acceptable — she pulled, came back empty, said so
+          // honestly. data with few rows is acceptable — keyword matched
+          // something small. Anything else is a fake-confidence risk.
+          { kind: 'soft', msg: 'mode is needs_qualifier, no_data, or data with few rows', check: (s) =>
+            s.mode === 'needs_qualifier' || s.mode === 'no_data' ||
+            (s.mode === 'data' && s.rowCount <= 10) },
         ],
       },
     ],
