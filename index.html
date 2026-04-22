@@ -3211,7 +3211,7 @@ const App = {
     }
 
     try {
-      const endpoint = window.FEDMO_CONFIG?.apiEndpoint || '';
+      const endpoint = AI_ENDPOINT;
       if (!endpoint) { pillDebug.skippedReason = 'no endpoint'; return; }
 
       const res = await fetch(endpoint, {
