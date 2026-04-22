@@ -2601,6 +2601,20 @@ const App = {
               scope,
               endpoint: AI_ENDPOINT,
             });
+            // Clear Mo's second-pass prose from the original data turn —
+            // Flash Lite often writes its own fabricated pipeline list
+            // there, which we're about to replace with a real one. The
+            // card stays (it's the scope reference); only the prose goes.
+            if (turnEls.postProseEl) {
+              turnEls.postProseEl.innerHTML = '';
+            }
+            // Also clear pre-prose if it contained a pipeline list
+            // (Mo sometimes writes the list BEFORE the data tag on
+            // pipeline-list questions). Leave short intro prose alone
+            // by only clearing if it looks long enough to be a list.
+            if (turnEls.preProseEl && turnEls.preProseEl.textContent.length > 400) {
+              turnEls.preProseEl.innerHTML = '<div style="color: var(--text-muted); font-style: italic;">Pulling the real records…</div>';
+            }
             // Append as a follow-up turn below the data card, so the
             // card is visible for context and the structured list
             // lives in its own turn block right underneath.
@@ -2608,6 +2622,11 @@ const App = {
             const followRender = this._buildRenderCallbacks(followTurn);
             followRender.renderPipelineList(pl);
             followRender.complete();
+            // Now that the real list rendered, clear the loading message
+            // in the data turn's pre-prose (if we set one above)
+            if (turnEls.preProseEl && turnEls.preProseEl.textContent.includes('Pulling the real records')) {
+              turnEls.preProseEl.innerHTML = '';
+            }
             this._track('turn_pipeline_list_deferred', {
               count: pl.items.length,
               lens: deferredIntent.lens || '(none)',
