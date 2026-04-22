@@ -589,14 +589,16 @@ export function resolve(input) {
       filters.agencies = [{ ...agency, type: 'awarding' }];
       postFilters.agency_scope = agency;
       if (agencyResidue) {
-        // Add as keyword hint (biases USASpending toward matching rows)
-        // AND as a client-side post-filter (hard narrow on Awarding
-        // Office field). Without the post-filter, office-level
-        // drilldowns like "DHS Office of Procurement Operations"
-        // return the full DHS cyber picture because the keyword match
-        // is fuzzy. With it, the card narrows to rows whose office
-        // field actually matches.
-        topics.push(agencyResidue);
+        // Post-filter only — no keyword push. Adding the residue as a
+        // USASpending keyword forces the API to match it against the
+        // contract description, which returns almost nothing because
+        // descriptions talk about WORK not OFFICES. Example: querying
+        // "DHS Office of Procurement Operations" with keyword filter
+        // returned 3 rows ($2M total) even though the actual OPO
+        // footprint is hundreds of contracts. The post_filter below
+        // narrows the returned rows to those whose Awarding Office
+        // OR Awarding Sub Agency contains the residue — real scoping
+        // without poisoning the upstream query.
         postFilters.office_scope = agencyResidue;
       }
     } else {
