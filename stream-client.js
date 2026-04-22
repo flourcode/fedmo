@@ -1006,8 +1006,12 @@ export function detectPipelineListIntent(question) {
   if (!question || typeof question !== 'string') return null;
   const text = question.toLowerCase();
 
-  // Pipeline intent keywords — must appear somewhere in the message
-  const pipelineKeywords = /\b(opps?|opportunit(?:y|ies)|pipeline|recompetes?|prospects?|targets?|leads?|plays?)\b/;
+  // Pipeline intent keywords — must appear somewhere in the message.
+  // Includes common truncations sellers type in flow ("5 pipe", "3 recomps").
+  // Requires \b word boundaries to avoid matching inside larger words
+  // (e.g., "plays" matches but "display" does not; "pipe" matches but
+  // "piped" does not).
+  const pipelineKeywords = /\b(opps?|opportunit(?:y|ies)|pipelines?|pipes?|recompetes?|recomps?|prospects?|targets?|leads?|plays?)\b/;
   const pipelineMatch = text.match(pipelineKeywords);
   if (!pipelineMatch) return null;
   const pipelineIdx = pipelineMatch.index;
@@ -1158,17 +1162,35 @@ export async function buildPipelineList({ rows, count, lens, scope, endpoint }) 
   }
   const records = selected.map(shapeRecordForInsights);
 
-  let insights = {}, intro = '', outro = '';
+  let insights = {}, intro = '', outro = '', insightsFailed = false;
   try {
     const apiResult = await fetchPipelineInsights({ records, lens, scope, endpoint });
     insights = apiResult.insights || {};
     intro = apiResult.intro || '';
     outro = apiResult.outro || '';
   } catch (err) {
-    console.warn('[pipeline] insight generation failed, showing records without insights:', err.message);
-    // Graceful degradation — show real records without insights rather
-    // than fail the whole flow. Sellers still get the data they asked
-    // for; they just don't get per-record coaching.
+    console.warn('[pipeline] insight generation failed, using deterministic fallback:', err.message);
+    insightsFailed = true;
+    // Graceful degradation — when the Lambda insight call fails, produce
+    // deterministic intro + outro text from the real records so the
+    // seller still gets some framing instead of a raw list. Per-record
+    // insights stay empty; the intro carries the load.
+    const scopeLabel = scope || 'this slice';
+    const hasLens = !!lens;
+    const top = records[0];
+    const expiringSoon = records.filter(r => r.daysLeft !== null && r.daysLeft <= 90).length;
+
+    if (hasLens) {
+      intro = `${records.length} records from ${scopeLabel}, screened for ${lens} fit. Sorted by urgency — expiring contracts first, then value.`;
+    } else {
+      intro = `${records.length} records from ${scopeLabel}, sorted by urgency — expiring contracts first, then value.`;
+    }
+
+    if (top && expiringSoon > 0) {
+      outro = `Start with #1 — it's closest to recompete and the highest-value move you can influence now.`;
+    } else if (top) {
+      outro = `Start with #1 — highest dollar value. Work the relationship before the recompete window opens.`;
+    }
   }
 
   const items = records.map(r => ({
@@ -1176,7 +1198,7 @@ export async function buildPipelineList({ rows, count, lens, scope, endpoint }) 
     insight: insights[r.awardId] || '', // empty string if Lambda didn't return one
   }));
 
-  return { items, intro, outro, lens, scope, count: items.length };
+  return { items, intro, outro, lens, scope, count: items.length, insightsFailed };
 }
 
 // ─────────────────────────────────────────────────────────────────────

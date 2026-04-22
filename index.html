@@ -2527,11 +2527,14 @@ const App = {
       //     rows.
       const pipelineIntent = detectPipelineListIntent(question);
       const haveActiveRows = Array.isArray(this.state.lastRows) && this.state.lastRows.length > 0;
-      // Detect if the question mentions a scope (agency) that isn't in
-      // the active card. If so, we need a fresh pull — don't apply the
-      // list request to the wrong rows.
+      // Detect if the question mentions a scope (agency OR topic) that isn't
+      // in the active card. If so, we need a fresh pull — don't apply the
+      // list request to the wrong rows. E.g. "5 cyber cms opps" after a
+      // plain CMS card: agency matches, but topic "cyber" is new. Reusing
+      // rows there would return Medicare admin contracts labeled as "cyber
+      // opps," which is a trust failure.
       const questionNamesDifferentScope = pipelineIntent && haveActiveRows
-        ? this._questionNamesNewAgency(question, this.state.lastResolverInput)
+        ? this._questionNamesNewScope(question, this.state.lastResolverInput)
         : false;
       if (pipelineIntent && haveActiveRows && !questionNamesDifferentScope) {
         try {
@@ -2722,10 +2725,22 @@ const App = {
   // case of a false negative is "list drawn from slightly-off data,"
   // which is still better than "list drawn from completely fabricated
   // data" (the whole point of this path).
-  _questionNamesNewAgency(question, resolverInput) {
+  // Returns true if the question names a DIFFERENT agency OR a topic that
+  // isn't already reflected in the active resolver input. Either condition
+  // means we need to re-pull rather than reuse stale rows.
+  //
+  // Why both checks: "5 cyber cms opps" after a plain CMS card had the right
+  // agency but a new topic. Reusing rows meant the pipeline list showed
+  // Medicare admin contracts labeled as "cyber opps" — wrong and dangerous.
+  //
+  // Errs toward triggering a refresh (false positive) over reusing stale
+  // rows (false negative). False positive = slightly slower turn. False
+  // negative = wrong data with a correct-looking label.
+  _questionNamesNewScope(question, resolverInput) {
     if (!question || !resolverInput) return false;
     const text = question.toLowerCase();
-    // Known agency aliases that commonly appear in pitches
+
+    // ── Agency change ──────────────────────────────────────────
     const agencies = [
       'dhs', 'dod', 'navy', 'army', 'air force', 'space force',
       'hhs', 'va', 'veterans affairs', 'treasury', 'doj', 'irs',
@@ -2733,18 +2748,54 @@ const App = {
       'epa', 'fda', 'cms', 'nih', 'fbi', 'uscis', 'cbp', 'ice',
       'tsa', 'uscg', 'occ', 'education', 'energy', 'interior',
       'justice', 'labor', 'transportation', 'agriculture', 'commerce',
+      'cisa', 'fema', 'socom', 'darpa', 'dea', 'faa', 'noaa', 'nist',
+      'cdc', 'hrsa', 'ihs', 'cbp', 'atf', 'bop', 'uspto',
     ];
     const currentAgency = (resolverInput.agency || '').toLowerCase();
     for (const alias of agencies) {
       const regex = new RegExp(`\\b${alias}\\b`);
       if (regex.test(text)) {
-        // Question mentions this agency. Is it different from the current?
         if (!currentAgency.includes(alias) && !alias.includes(currentAgency.split(' ')[0])) {
           return true;
         }
       }
     }
+
+    // ── Topic change ───────────────────────────────────────────
+    // Topics the federal-sales user is likely to mean as a filter. If any
+    // of these appears in the question and isn't present in the current
+    // resolver topic/keywords, we need a fresh pull. Kept tight — we don't
+    // want every stray adjective triggering a refresh.
+    const topicWords = [
+      'cyber', 'cybersecurity', 'security', 'cloud', 'ai', 'ml', 'genai',
+      'data', 'analytics', 'observability', 'monitoring', 'siem', 'edr', 'xdr',
+      'zero trust', 'zta', 'sbom', 'supply chain', 'identity',
+      'crm', 'salesforce', 'servicenow', 'splunk', 'sap',
+      'networking', 'cdn', 'edge', 'wireless', 'radio',
+      'health', 'healthcare', 'medicare', 'medicaid', 'biomedical',
+      'financial', 'finance', 'accounting', 'audit',
+      'logistics', 'supply', 'food', 'subsistence',
+      'construction', 'facilities', 'real estate',
+      'training', 'education', 'research',
+    ];
+    const currentTopicBlob = [
+      resolverInput.topic || '',
+      ...(Array.isArray(resolverInput.topics) ? resolverInput.topics : []),
+      ...(Array.isArray(resolverInput.keywords) ? resolverInput.keywords : []),
+    ].join(' ').toLowerCase();
+    for (const topic of topicWords) {
+      const regex = new RegExp(`\\b${topic.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`);
+      if (regex.test(text) && !currentTopicBlob.includes(topic)) {
+        return true;
+      }
+    }
+
     return false;
+  },
+
+  // Backward-compat shim so any external caller still works.
+  _questionNamesNewAgency(question, resolverInput) {
+    return this._questionNamesNewScope(question, resolverInput);
   },
 
   _onDataTurnComplete(result, question) {
