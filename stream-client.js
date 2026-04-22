@@ -493,15 +493,19 @@ export async function fetchUsaspending(resolverInput, endpoint) {
     }
   }
 
-  // Data grooming. Two things happen here that the render path downstream
+  // Data grooming. Three things happen here that the render path downstream
   // assumes have already run:
   //
-  // 1. _endTs for expiring-window filters
-  // 2. For DoD contracts, swap in the sub-agency name as the Awarding Agency
+  // 1. _endTs for expiring-window filters and pattern classification
+  // 2. _startTs for pattern classification (duration-based branches need
+  //    both timestamps; without _startTs every contract falls into the
+  //    'adjacent' default bucket and no pattern pill renders)
+  // 3. For DoD contracts, swap in the sub-agency name as the Awarding Agency
   //    so the treemap breaks into Navy/Army/Air Force instead of showing one
   //    undifferentiated "Department of Defense" block. Ported from v1.
   for (const r of raw) {
     r._endTs = r['End Date'] ? new Date(r['End Date']).getTime() : 0;
+    r._startTs = r['Start Date'] ? new Date(r['Start Date']).getTime() : 0;
     const topAgency = String(r['Awarding Agency'] || '').toUpperCase();
     if (topAgency.includes('DEFENSE') && r['Awarding Sub Agency']) {
       r['Awarding Agency'] = r['Awarding Sub Agency'];
