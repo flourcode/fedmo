@@ -1,28 +1,20 @@
 <!DOCTYPE html>
 <!--
-  Mo — fresh build from zero, April 22, 2026
+  Mo — a terminal for federal sales intelligence with judgment.
+  April 22, 2026.
 
-  One thing this must do perfectly:
-    Federal seller asks a question about the federal market → real
-    contracts appear in seconds, with a sentence of context above
-    and a sentence of coaching below each one.
+  Every answer is the same shape:
+    takeaway → facts → items → meaning → actions → refine
 
-  One answer shape for data questions: a list of real contracts.
-  No cards. No treemaps. No donuts. No followup chips. No Mo persona
-  paragraphs. Just real data and one line of voice.
-
-  Coaching and conversational follow-ups: Mo responds in prose, same
-  stream. She decides which mode the question needs.
-
-  Preserved from the old build: Mo's green face, the warm Atkinson
-  type, the purple primary. Everything else is gone on purpose.
+  No implicit context. Every query re-interpreted from what's in the box.
+  The thread is just scrollback. Each answer is screenshot-ready.
 -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#FDFCFF" media="(prefers-color-scheme: light)">
-<title>Mo — federal spending, asked.</title>
+<title>Mo — federal sales intelligence</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -44,8 +36,8 @@
     --border:      #E3E3F1;
     --border-soft: #EFEEF7;
 
-    --green-mo:    #7CB583;
-    --urgent:      #B84545;
+    --green-mo: #7CB583;
+    --urgent:   #B84545;
 
     --font: 'Atkinson Hyperlegible Next', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
     --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
@@ -77,7 +69,7 @@
   }
 
   .app {
-    max-width: 720px;
+    max-width: 760px;
     margin: 0 auto;
     padding: 32px 20px 220px;
     min-height: 100vh;
@@ -87,12 +79,9 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    margin-bottom: 6px;
+    margin-bottom: 4px;
   }
-  .mo-face {
-    width: 36px; height: 36px;
-    flex-shrink: 0;
-  }
+  .mo-face { width: 36px; height: 36px; flex-shrink: 0; }
   .mo-title {
     font-weight: 700;
     font-size: 20px;
@@ -102,23 +91,23 @@
   .mo-tagline {
     color: var(--text-muted);
     font-size: 15px;
-    margin-bottom: 40px;
+    margin-bottom: 36px;
   }
 
   .thread {
     display: flex;
     flex-direction: column;
-    gap: 32px;
+    gap: 28px;
   }
 
   .turn-user {
     align-self: flex-end;
-    max-width: 85%;
+    max-width: 88%;
     background: var(--primary-100);
     color: #fff;
     padding: 10px 16px;
-    border-radius: 18px 18px 4px 18px;
-    font-size: 15px;
+    border-radius: 16px 16px 4px 16px;
+    font-size: 14px;
     white-space: pre-wrap;
     word-wrap: break-word;
   }
@@ -126,93 +115,184 @@
   .turn-mo {
     display: flex;
     flex-direction: column;
-    gap: 12px;
-  }
-  .turn-mo-voice {
-    color: var(--text-body);
-    font-size: 15px;
-    line-height: 1.6;
-  }
-
-  .list {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    margin-top: 4px;
-  }
-  .list-item {
+    gap: 18px;
     background: var(--bg-card);
-    border: 1px solid var(--border);
+    border: 1px solid var(--border-soft);
     border-radius: 14px;
-    padding: 14px 16px;
+    padding: 20px 22px;
+  }
+
+  .answer-takeaway {
+    font-size: 17px;
+    line-height: 1.45;
+    font-weight: 600;
+    color: var(--text-title);
+    letter-spacing: -0.01em;
+  }
+
+  .answer-facts {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    transition: border-color 0.15s ease;
+    gap: 4px;
+    font-size: 14px;
+    color: var(--text-body);
+    line-height: 1.55;
   }
-  .list-item:hover { border-color: var(--primary-60); }
+  .answer-facts .fact::before {
+    content: '·';
+    color: var(--text-faint);
+    margin-right: 8px;
+    font-weight: 700;
+  }
 
-  .list-head {
+  .answer-items {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background: var(--bg-tint);
+    padding: 14px;
+    border-radius: 10px;
+    border: 1px solid var(--border-soft);
+  }
+  .answer-items-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    margin-bottom: -2px;
+  }
+  .answer-item {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    font-size: 13px;
+  }
+  .answer-item-head {
     display: flex;
     justify-content: space-between;
     gap: 12px;
     align-items: baseline;
   }
-  .list-vendor {
+  .answer-item-primary {
     font-weight: 600;
-    font-size: 15px;
     color: var(--text-title);
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    flex: 1; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  .list-amount {
+  .answer-item-amount {
     font-weight: 700;
-    font-size: 15px;
     color: var(--text-title);
     white-space: nowrap;
   }
-  .list-meta {
+  .answer-item-meta {
     font-size: 12px;
     color: var(--text-muted);
     display: flex;
     gap: 8px;
     flex-wrap: wrap;
-    align-items: center;
   }
-  .list-days {
-    font-weight: 600;
-    color: var(--primary-100);
+  .answer-item-meta .urgent { color: var(--urgent); font-weight: 600; }
+  .answer-item-scope {
+    font-size: 12px;
+    color: var(--text-body);
+    line-height: 1.45;
   }
-  .list-days.soon { color: var(--urgent); }
-  .list-id {
+  .answer-item-id {
     font-family: var(--mono);
     font-size: 11px;
     color: var(--text-faint);
   }
-  .list-scope {
-    font-size: 13px;
-    color: var(--text-body);
-    line-height: 1.5;
-  }
-  .list-insight {
+  .answer-item-id a { color: var(--primary-60); text-decoration: none; }
+  .answer-item-id a:hover { text-decoration: underline; }
+
+  .answer-meaning { display: flex; flex-direction: column; gap: 10px; }
+  .answer-meaning-class {
     font-size: 14px;
     color: var(--text-body);
     line-height: 1.55;
-    padding-top: 8px;
-    border-top: 1px solid var(--border-soft);
-    margin-top: 2px;
   }
-  .list-link {
-    font-size: 12px;
+  .answer-meaning-class strong {
+    color: var(--text-title);
+    font-weight: 700;
+  }
+  .answer-verify {
+    background: var(--bg-tint);
+    border-left: 3px solid var(--primary-60);
+    border-radius: 0 8px 8px 0;
+    padding: 10px 14px;
+    font-size: 13px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .answer-verify-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    margin-bottom: 4px;
+  }
+  .answer-verify .vline::before {
+    content: '•';
     color: var(--primary-60);
-    text-decoration: none;
-    align-self: flex-start;
-    margin-top: 2px;
+    margin-right: 8px;
   }
-  .list-link:hover { text-decoration: underline; }
+  .answer-verify-closer {
+    margin-top: 6px;
+    color: var(--text-muted);
+    font-style: italic;
+  }
+
+  .answer-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .answer-actions-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+  }
+  .action {
+    display: flex;
+    gap: 10px;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--text-body);
+  }
+  .action-num {
+    font-weight: 700;
+    color: var(--primary-100);
+    flex-shrink: 0;
+    min-width: 18px;
+  }
+
+  .answer-refine {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding-top: 4px;
+  }
+  .refine-chip {
+    background: var(--bg-tint);
+    border: 1px solid var(--border);
+    color: var(--text-body);
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-family: inherit;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .refine-chip:hover {
+    background: var(--primary-20);
+    border-color: var(--primary-60);
+    color: var(--primary-100);
+  }
 
   .composer {
     position: fixed;
@@ -222,7 +302,7 @@
     z-index: 10;
   }
   .composer-inner {
-    max-width: 720px;
+    max-width: 760px;
     margin: 0 auto;
     display: flex;
     gap: 8px;
@@ -232,8 +312,8 @@
     flex: 1;
     background: var(--bg-card);
     border: 1.5px solid var(--border);
-    border-radius: 16px;
-    padding: 14px 16px;
+    border-radius: 14px;
+    padding: 13px 16px;
     font-family: inherit;
     font-size: 15px;
     color: var(--text-body);
@@ -250,15 +330,14 @@
     color: #fff;
     border: none;
     border-radius: 12px;
-    padding: 12px 18px;
+    padding: 12px 20px;
     font-family: inherit;
     font-weight: 600;
     font-size: 14px;
     cursor: pointer;
     flex-shrink: 0;
-    transition: opacity 0.15s ease;
   }
-  .composer-send:hover { opacity: 0.9; }
+  .composer-send:hover { opacity: 0.92; }
   .composer-send:disabled { opacity: 0.4; cursor: not-allowed; }
 
   .thinking {
@@ -266,37 +345,19 @@
     font-style: italic;
     font-size: 14px;
   }
-  .thinking .dots::after {
-    content: '...';
-    display: inline-block;
-    animation: dotting 1.4s infinite steps(4, end);
-    width: 1.2em;
-    text-align: left;
-    overflow: hidden;
-    vertical-align: bottom;
-  }
-  @keyframes dotting {
-    0% { content: ''; }
-    25% { content: '.'; }
-    50% { content: '..'; }
-    75%, 100% { content: '...'; }
-  }
 
   .seed {
-    margin-top: 24px;
+    margin-top: 8px;
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 14px;
   }
-  .seed-title {
+  .seed-prompt {
     color: var(--text-body);
-    font-size: 17px;
-    line-height: 1.5;
+    font-size: 15px;
   }
   .seed-chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
+    display: flex; flex-wrap: wrap; gap: 8px;
   }
   .seed-chip {
     background: var(--bg-tint);
@@ -305,9 +366,8 @@
     padding: 8px 14px;
     border-radius: 999px;
     font-family: inherit;
-    font-size: 14px;
+    font-size: 13px;
     cursor: pointer;
-    transition: all 0.15s ease;
   }
   .seed-chip:hover {
     background: var(--primary-20);
@@ -337,15 +397,15 @@
     <svg class="mo-face" viewBox="0 0 40 40"><use href="#icon-face-mo"/></svg>
     <div class="mo-title">Mo</div>
   </div>
-  <div class="mo-tagline">Ask federal spending anything.</div>
+  <div class="mo-tagline">Federal sales intelligence. Ask one thing at a time.</div>
 
   <div class="thread" id="thread">
     <div class="seed" id="seed">
-      <div class="seed-title">Try:</div>
+      <div class="seed-prompt">Ask about expiring contracts, market share, or any specific agency + topic.</div>
       <div class="seed-chips">
-        <button class="seed-chip" data-q="cybersecurity at DHS">cybersecurity at DHS</button>
-        <button class="seed-chip" data-q="who's winning at the VA">who's winning at the VA</button>
-        <button class="seed-chip" data-q="cloud expiring at DoD">cloud expiring at DoD</button>
+        <button class="seed-chip" data-q="cybersecurity at DHS expiring next 12 months">cybersecurity at DHS expiring next 12 months</button>
+        <button class="seed-chip" data-q="cloud at DoD expiring next 90 days">cloud at DoD expiring next 90 days</button>
+        <button class="seed-chip" data-q="software at VA expiring next 6 months">software at VA expiring next 6 months</button>
       </div>
     </div>
   </div>
@@ -353,272 +413,364 @@
 
 <form class="composer" id="composer" onsubmit="return false;">
   <div class="composer-inner">
-    <textarea
-      id="input"
-      class="composer-input"
-      placeholder="Ask Mo..."
-      rows="1"
-      autofocus></textarea>
+    <textarea id="input" class="composer-input" placeholder="Ask Mo..." rows="1" autofocus></textarea>
     <button type="submit" class="composer-send" id="send">Ask</button>
   </div>
 </form>
 
 <script type="module">
-import {
-  askMo,
-  detectPipelineListIntent,
-  buildPipelineList,
-} from './stream-client.js';
+import { runExpiringIntent } from './mo-intent-expiring.js';
 
+// ============================================================================
+// Endpoint — the Lambda proxy for USASpending
+// ============================================================================
 const AI_ENDPOINT = 'https://llonymyskdiakyxhlxlex7ul640hbcke.lambda-url.us-east-1.on.aws/';
 
-// ── Helpers ──────────────────────────────────────────────────
+// ============================================================================
+// Intent parser — rule-based, no LLM
+// ============================================================================
+//
+// Parses free-text queries into { intent, agency, vendor, topic, window }.
+// For now, only the Expiring intent is wired up. Everything else falls
+// through to a friendly "not built yet" notice.
+// ============================================================================
+
+const AGENCY_ALIASES = {
+  'dhs': 'DHS', 'homeland security': 'DHS',
+  'dod': 'DoD', 'defense': 'DoD',
+  'va': 'VA', 'veterans affairs': 'VA',
+  'hhs': 'HHS', 'health and human services': 'HHS',
+  'navy': 'Navy', 'army': 'Army', 'air force': 'Air Force',
+  'disa': 'DISA', 'cisa': 'CISA', 'ice': 'ICE', 'cbp': 'CBP',
+  'nasa': 'NASA', 'nsa': 'NSA', 'cia': 'CIA', 'irs': 'IRS',
+  'treasury': 'Treasury', 'doj': 'DOJ', 'justice': 'DOJ',
+  'state': 'State', 'doc': 'Commerce', 'commerce': 'Commerce',
+  'dla': 'DLA', 'cms': 'CMS', 'nih': 'NIH',
+  'usda': 'USDA', 'agriculture': 'USDA',
+};
+
+const TOPIC_ALIASES = {
+  'cyber': 'cybersecurity', 'cybersecurity': 'cybersecurity',
+  'cloud': 'cloud', 'saas': 'cloud',
+  'aws': 'AWS', 'azure': 'Azure', 'gcp': 'GCP',
+  'software': 'software', 'licensing': 'software',
+  'edr': 'endpoint security', 'endpoint': 'endpoint security',
+  'sbom': 'software supply chain', 'supply chain': 'supply chain',
+  'ai': 'AI', 'ml': 'AI', 'genai': 'AI',
+  'siem': 'SIEM', 'zero trust': 'zero trust',
+};
+
+function parseQuery(text) {
+  const t = text.toLowerCase();
+  const result = { intent: null, agency: null, topic: null, vendor: null, window: '12mo', raw: text };
+
+  // Agency
+  for (const [alias, canonical] of Object.entries(AGENCY_ALIASES)) {
+    if (new RegExp(`\\b${alias}\\b`).test(t)) {
+      result.agency = canonical;
+      break;
+    }
+  }
+
+  // Topic
+  for (const [alias, canonical] of Object.entries(TOPIC_ALIASES)) {
+    if (new RegExp(`\\b${alias}\\b`).test(t)) {
+      result.topic = canonical;
+      break;
+    }
+  }
+
+  // Window
+  if (/\b(90\s*days?|next 90|90d)\b/.test(t)) result.window = '90d';
+  else if (/\b(6\s*months?|180\s*days?|next 6)\b/.test(t)) result.window = '180d';
+  else if (/\b(12\s*months?|year|365\s*days?|next 12)\b/.test(t)) result.window = '12mo';
+
+  // Intent — expiring is the only one wired this version
+  if (/\b(expir|recompete|turning over|ending|renewal)\b/.test(t)) {
+    result.intent = 'expiring';
+  }
+
+  return result;
+}
+
+// ============================================================================
+// Fetcher — calls the Lambda which proxies USASpending
+// ============================================================================
+
+async function fetchAwards({ agency, vendor, topic, endAfter, endBefore, limit = 100, sortBy }) {
+  // Build a USASpending /search/spending_by_award request
+  const filters = {
+    award_type_codes: ['A', 'B', 'C', 'D'], // contract codes
+    time_period: [{ start_date: '2020-10-01', end_date: '2100-01-01' }],
+  };
+  if (agency) filters.agencies = [{ type: 'awarding', tier: 'toptier', name: expandAgencyName(agency) }];
+  if (topic) filters.keywords = [topic];
+  if (vendor) filters.recipient_search_text = [vendor];
+
+  // Period-of-performance end date window
+  if (endBefore) {
+    filters.time_period = [{ start_date: endAfter === 'today' ? new Date().toISOString().slice(0,10) : endAfter, end_date: endBefore, date_type: 'date_signed' }];
+  }
+
+  const body = {
+    request_type: 'usaspending_proxy',
+    endpoint: '/api/v2/search/spending_by_award/',
+    payload: {
+      filters,
+      fields: [
+        'Award ID', 'Recipient Name', 'Award Amount', 'Description',
+        'Period of Performance End Date', 'Awarding Agency',
+        'Awarding Sub Agency', 'Awarding Office',
+      ],
+      page: 1,
+      limit,
+      sort: 'Award Amount',
+      order: 'desc',
+    },
+  };
+
+  const res = await fetch(AI_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    throw new Error(`USASpending proxy failed: ${res.status}`);
+  }
+  const data = await res.json();
+  const results = (data.results || []).map(r => ({
+    awardId: r['Award ID'] || '',
+    vendor: r['Recipient Name'] || 'Unknown',
+    amount: parseFloat(r['Award Amount']) || 0,
+    scope: r['Description'] || '',
+    endDate: r['Period of Performance End Date'] || null,
+    agency: r['Awarding Agency'] || '',
+    subAgency: r['Awarding Sub Agency'] || '',
+    office: r['Awarding Office'] || '',
+  }));
+
+  // Filter to only rows with end-dates in the requested window
+  const now = Date.now();
+  const windowEndTs = endBefore ? new Date(endBefore).getTime() : null;
+  const filtered = results.filter(r => {
+    if (!r.endDate) return false;
+    const end = new Date(r.endDate).getTime();
+    if (isNaN(end)) return false;
+    if (end < now) return false;
+    if (windowEndTs && end > windowEndTs) return false;
+    return true;
+  });
+
+  return { rows: filtered, rowCount: filtered.length };
+}
+
+function expandAgencyName(short) {
+  const map = {
+    'DHS': 'Department of Homeland Security',
+    'DoD': 'Department of Defense',
+    'VA': 'Department of Veterans Affairs',
+    'HHS': 'Department of Health and Human Services',
+    'Navy': 'Department of the Navy',
+    'Army': 'Department of the Army',
+    'Air Force': 'Department of the Air Force',
+    'Treasury': 'Department of the Treasury',
+    'DOJ': 'Department of Justice',
+    'State': 'Department of State',
+    'Commerce': 'Department of Commerce',
+    'USDA': 'Department of Agriculture',
+    'NASA': 'National Aeronautics and Space Administration',
+  };
+  return map[short] || short;
+}
+
+// ============================================================================
+// Rendering — one function per response section
+// ============================================================================
+
 const el = (tag, cls, text) => {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
-  if (text !== undefined) e.textContent = text;
+  if (text != null) e.textContent = text;
   return e;
 };
-const money = (amt) => {
-  if (amt >= 1e9) return `$${(amt / 1e9).toFixed(1)}B`;
-  if (amt >= 1e6) return `$${(amt / 1e6).toFixed(1)}M`;
-  if (amt >= 1e3) return `$${(amt / 1e3).toFixed(0)}K`;
-  return `$${amt.toFixed(0)}`;
-};
+
+function renderResponse(container, response) {
+  container.innerHTML = '';
+
+  // 1. Takeaway
+  container.appendChild(el('div', 'answer-takeaway', response.takeaway));
+
+  // 2. Facts
+  if (response.facts && response.facts.length) {
+    const facts = el('div', 'answer-facts');
+    response.facts.forEach(f => facts.appendChild(el('div', 'fact', f)));
+    container.appendChild(facts);
+  }
+
+  // 3. Items (optional)
+  if (response.items && response.items.length) {
+    const items = el('div', 'answer-items');
+    items.appendChild(el('div', 'answer-items-label', 'Top expiring'));
+    response.items.forEach(it => items.appendChild(renderItem(it)));
+    container.appendChild(items);
+  }
+
+  // 4. Meaning (classification + verify)
+  if (response.meaning) {
+    const meaning = el('div', 'answer-meaning');
+    const classDiv = el('div', 'answer-meaning-class');
+    const parts = response.meaning.classification.split('.');
+    if (parts[0]) {
+      classDiv.innerHTML = `<strong>${escapeHtml(parts[0])}.</strong>${escapeHtml(parts.slice(1).join('.'))}`;
+    } else {
+      classDiv.textContent = response.meaning.classification;
+    }
+    meaning.appendChild(classDiv);
+
+    if (response.meaning.verify && response.meaning.verify.length) {
+      const verify = el('div', 'answer-verify');
+      verify.appendChild(el('div', 'answer-verify-label', 'What you still need to verify'));
+      response.meaning.verify.forEach(q => verify.appendChild(el('div', 'vline', q)));
+      if (response.meaning.closer) {
+        verify.appendChild(el('div', 'answer-verify-closer', response.meaning.closer));
+      }
+      meaning.appendChild(verify);
+    }
+    container.appendChild(meaning);
+  }
+
+  // 5. Actions
+  if (response.actions && response.actions.length) {
+    const actions = el('div', 'answer-actions');
+    actions.appendChild(el('div', 'answer-actions-label', response.actions.length === 1 ? 'The call' : 'What to do'));
+    response.actions.forEach((a, i) => {
+      const row = el('div', 'action');
+      if (response.actions.length > 1) row.appendChild(el('span', 'action-num', `${i + 1}.`));
+      const body = el('span');
+      body.textContent = a;
+      row.appendChild(body);
+      actions.appendChild(row);
+    });
+    container.appendChild(actions);
+  }
+
+  // 6. Refine chips
+  if (response.refine && response.refine.length) {
+    const refine = el('div', 'answer-refine');
+    response.refine.forEach(q => {
+      const chip = el('button', 'refine-chip', q);
+      chip.addEventListener('click', () => {
+        input.value = q;
+        autoGrow();
+        input.focus();
+      });
+      refine.appendChild(chip);
+    });
+    container.appendChild(refine);
+  }
+}
+
+function renderItem(it) {
+  const item = el('div', 'answer-item');
+  const head = el('div', 'answer-item-head');
+  head.appendChild(el('div', 'answer-item-primary', it.primary));
+  head.appendChild(el('div', 'answer-item-amount', it.amount));
+  item.appendChild(head);
+
+  const meta = el('div', 'answer-item-meta');
+  if (it.context) meta.appendChild(el('span', null, it.context));
+  if (it.timing) {
+    if (it.context) meta.appendChild(el('span', null, '·'));
+    const t = el('span', null, it.timing);
+    if (/^\d+ day/.test(it.timing) && parseInt(it.timing, 10) <= 30) t.classList.add('urgent');
+    meta.appendChild(t);
+  }
+  item.appendChild(meta);
+
+  if (it.scope) item.appendChild(el('div', 'answer-item-scope', it.scope));
+
+  if (it.awardId) {
+    const idDiv = el('div', 'answer-item-id');
+    const link = document.createElement('a');
+    link.href = `https://www.usaspending.gov/award/${encodeURIComponent(it.awardId)}`;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.textContent = it.awardId;
+    idDiv.appendChild(link);
+    item.appendChild(idDiv);
+  }
+  return item;
+}
+
+function escapeHtml(s) {
+  return String(s || '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// ============================================================================
+// Main flow
+// ============================================================================
 
 const thread = document.getElementById('thread');
 const input = document.getElementById('input');
 const sendBtn = document.getElementById('send');
 const seed = document.getElementById('seed');
 
-const state = {
-  history: [],
-  lastRows: null,
-  lastResolverInput: null,
-  lastScope: null,
-  busy: false,
-};
+let busy = false;
 
-// ── Rendering ────────────────────────────────────────────────
-function appendUserTurn(question) {
-  if (seed && seed.parentNode) seed.parentNode.removeChild(seed);
-  const turn = el('div', 'turn-user', question);
-  thread.appendChild(turn);
-  scrollToBottom();
-}
-
-function appendMoTurn() {
-  const turn = el('div', 'turn-mo');
-  const voice = el('div', 'turn-mo-voice');
-  voice.innerHTML = `<span class="thinking">Mo's looking<span class="dots"></span></span>`;
-  turn.appendChild(voice);
-  thread.appendChild(turn);
-  scrollToBottom();
-  return { turn, voice };
-}
-
-function scrollToBottom() {
-  window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-}
-
-function renderList(voiceEl, items, intro, outro) {
-  voiceEl.innerHTML = '';
-  if (intro) {
-    const p = el('div');
-    p.textContent = intro;
-    voiceEl.appendChild(p);
-  }
-  const list = el('div', 'list');
-  items.forEach((item) => {
-    const r = item.record || item;
-    const card = el('div', 'list-item');
-
-    const head = el('div', 'list-head');
-    head.appendChild(el('div', 'list-vendor', r.vendor || 'Unknown'));
-    head.appendChild(el('div', 'list-amount', money(r.amount || 0)));
-    card.appendChild(head);
-
-    const meta = el('div', 'list-meta');
-    if (r.office) meta.appendChild(el('span', null, r.office));
-    if (r.daysLeft !== null && r.daysLeft !== undefined) {
-      if (r.office) meta.appendChild(el('span', null, '·'));
-      const days = el('span', 'list-days', `${r.daysLeft}d`);
-      if (r.daysLeft <= 90) days.classList.add('soon');
-      meta.appendChild(days);
-    }
-    if (r.awardId) {
-      if (meta.childNodes.length) meta.appendChild(el('span', null, '·'));
-      meta.appendChild(el('span', 'list-id', r.awardId));
-    }
-    card.appendChild(meta);
-
-    if (r.description) {
-      card.appendChild(el('div', 'list-scope', r.description));
-    }
-    if (item.insight) {
-      card.appendChild(el('div', 'list-insight', item.insight));
-    }
-    if (r.awardId) {
-      const link = el('a', 'list-link', 'Verify on USASpending →');
-      link.href = `https://www.usaspending.gov/award/${encodeURIComponent(r.awardId)}`;
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
-      card.appendChild(link);
-    }
-    list.appendChild(card);
-  });
-  voiceEl.appendChild(list);
-  if (outro) {
-    const p = el('div');
-    p.style.marginTop = '14px';
-    p.textContent = outro;
-    voiceEl.appendChild(p);
-  }
-  scrollToBottom();
-}
-
-function renderProse(voiceEl, text) {
-  voiceEl.innerHTML = '';
-  const p = el('div');
-  p.textContent = text;
-  voiceEl.appendChild(p);
-  scrollToBottom();
-}
-
-function renderNotice(voiceEl, message) {
-  voiceEl.innerHTML = '';
-  const p = el('div', 'notice', message);
-  voiceEl.appendChild(p);
-  scrollToBottom();
-}
-
-// ── Core flow ───────────────────────────────────────────────
 async function ask(question) {
-  if (state.busy) return;
-  state.busy = true;
+  if (busy) return;
+  busy = true;
   sendBtn.disabled = true;
 
-  appendUserTurn(question);
-  const { voice } = appendMoTurn();
+  if (seed && seed.parentNode) seed.parentNode.removeChild(seed);
+
+  // Render user turn
+  thread.appendChild(el('div', 'turn-user', question));
+
+  // Render placeholder Mo turn
+  const moTurn = el('div', 'turn-mo');
+  moTurn.innerHTML = '<div class="thinking">Mo\'s pulling the data…</div>';
+  thread.appendChild(moTurn);
+  window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
 
   try {
-    // Hot path: user is asking for a list AND we have active rows AND the
-    // scope still matches. Skip the LLM entirely and build the list
-    // deterministically from the cached rows. This makes follow-ups like
-    // "now for splunk" or "give me 5 salesforce-ready" instant and
-    // fabrication-proof.
-    const intent = detectPipelineListIntent(question);
-    if (intent && state.lastRows && state.lastRows.length > 0 && !questionNamesNewScope(question)) {
-      const pl = await buildPipelineList({
-        rows: state.lastRows,
-        count: intent.count,
-        lens: intent.lens,
-        scope: state.lastScope,
-        endpoint: AI_ENDPOINT,
-      });
-      renderList(voice, pl.items, pl.intro, pl.outro);
-      state.history.push({ role: 'user', content: question });
-      state.history.push({ role: 'model', content: `[list: ${pl.items.length} records from ${state.lastScope}]` });
-      return;
-    }
+    const query = parseQuery(question);
 
-    // Otherwise ask Mo. She decides: data-tag (pull data) or prose (coach).
-    const result = await askMo({
-      question,
-      history: state.history.slice(-4),
-      activeCardSummary: null,
-      endpoint: AI_ENDPOINT,
-      render: buildRenderShim(voice),
-    });
-
-    if (result.mode === 'data' && result.rows && result.rows.length > 0) {
-      state.lastRows = result.rows;
-      state.lastResolverInput = result.resolverInput;
-      state.lastScope = labelResolverInput(result.resolverInput);
-      state.history.push({ role: 'user', content: question });
-      state.history.push({ role: 'model', content: `[data pulled: ${state.lastScope}]` });
-
-      const count = intent?.count || Math.min(10, result.rows.length);
-      const pl = await buildPipelineList({
-        rows: result.rows,
-        count,
-        lens: intent?.lens || null,
-        scope: state.lastScope,
-        endpoint: AI_ENDPOINT,
-      });
-      renderList(voice, pl.items, pl.intro, pl.outro);
-    } else if (result.mode === 'prose' && result.text) {
-      // Coaching / conversational follow-up — Mo responds in her own voice.
-      renderProse(voice, result.text);
-      state.history.push({ role: 'user', content: question });
-      state.history.push({ role: 'model', content: result.text });
-    } else if (result.mode === 'no_data') {
-      renderNotice(voice, "I couldn't find contracts for that. Try a different agency, vendor, or topic — or describe what you're looking for.");
-    } else if (result.mode === 'error') {
-      renderNotice(voice, 'Hit an error on my end. Try that again?');
+    if (query.intent === 'expiring') {
+      const response = await runExpiringIntent(query, { fetchAwards });
+      renderResponse(moTurn, response);
     } else {
-      renderNotice(voice, "Nothing came back for that one. Want to try broader?");
+      // Unwired intents — honest fallback
+      moTurn.innerHTML = '';
+      moTurn.appendChild(el('div', 'answer-takeaway', 'I can only answer expiring-contract questions right now.'));
+      const facts = el('div', 'answer-facts');
+      facts.appendChild(el('div', 'fact', 'Nine more intents are coming — market size, who\'s winning, who buys, easy entries, is this deal real, who to partner with, where to focus, why are we losing, what to do next.'));
+      facts.appendChild(el('div', 'fact', 'For now: ask something with "expiring" or "recompete" and a specific agency.'));
+      moTurn.appendChild(facts);
+
+      const refine = el('div', 'answer-refine');
+      ['cybersecurity at DHS expiring next 12 months', 'cloud at DoD expiring next 90 days', 'who\'s winning in software at VA'].forEach(q => {
+        const chip = el('button', 'refine-chip', q);
+        chip.addEventListener('click', () => { input.value = q; autoGrow(); input.focus(); });
+        refine.appendChild(chip);
+      });
+      moTurn.appendChild(refine);
     }
   } catch (err) {
-    console.error('[ask] fatal:', err);
-    renderNotice(voice, 'Something broke. Try again in a moment.');
+    console.error('[ask] error:', err);
+    moTurn.innerHTML = '';
+    moTurn.appendChild(el('div', 'notice', 'Something broke on my end. Try again in a moment.'));
   } finally {
-    state.busy = false;
+    busy = false;
     sendBtn.disabled = false;
     input.focus();
+    window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
   }
 }
 
-// askMo expects render callbacks; we're handling final render ourselves
-// based on result.mode, so these are mostly no-ops. We just need to keep
-// the thinking indicator visible until the final render replaces it.
-function buildRenderShim(voiceEl) {
-  return {
-    streamPreTagProse: () => {},
-    onDataTag: () => {
-      voiceEl.innerHTML = `<span class="thinking">Pulling the data<span class="dots"></span></span>`;
-      return { _placeholder: true };
-    },
-    renderDataCard: () => {},
-    streamPostTagProse: () => {},
-    renderError: () => {},
-    complete: () => {},
-  };
-}
-
-function questionNamesNewScope(question) {
-  if (!state.lastResolverInput) return false;
-  const text = question.toLowerCase();
-  const agencies = [
-    'dhs', 'dod', 'navy', 'army', 'air force', 'space force',
-    'hhs', 'va', 'veterans affairs', 'treasury', 'doj', 'irs',
-    'nasa', 'dla', 'disa', 'dia', 'nsa', 'cia', 'state', 'doc',
-    'epa', 'fda', 'cms', 'nih', 'fbi', 'uscis', 'cbp', 'ice',
-    'tsa', 'uscg', 'usda', 'education', 'energy', 'interior',
-    'justice', 'labor', 'transportation', 'agriculture', 'commerce',
-  ];
-  const current = (state.lastResolverInput.agency || '').toLowerCase();
-  for (const alias of agencies) {
-    const regex = new RegExp(`\\b${alias}\\b`);
-    if (regex.test(text)) {
-      if (!current.includes(alias) && !alias.includes(current.split(' ')[0])) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
-function labelResolverInput(input) {
-  if (!input) return 'this slice';
-  const parts = [];
-  if (input.vendor) parts.push(input.vendor);
-  if (input.agency) parts.push(input.agency);
-  if (input.topic) parts.push(input.topic);
-  return parts.length ? parts.join(' · ') : 'this slice';
-}
-
-// ── Wiring ───────────────────────────────────────────────────
 function autoGrow() {
   input.style.height = 'auto';
   input.style.height = Math.min(140, input.scrollHeight) + 'px';
@@ -627,32 +779,26 @@ input.addEventListener('input', autoGrow);
 input.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
-    submitInput();
+    submit();
   }
 });
-
-function submitInput() {
+function submit() {
   const q = input.value.trim();
-  if (!q || state.busy) return;
+  if (!q || busy) return;
   input.value = '';
   autoGrow();
   ask(q);
 }
+sendBtn.addEventListener('click', submit);
 
-sendBtn.addEventListener('click', submitInput);
-
-document.querySelectorAll('.seed-chip').forEach((btn) => {
+document.querySelectorAll('.seed-chip').forEach(btn => {
   btn.addEventListener('click', () => {
     const q = btn.dataset.q;
-    if (q) {
-      input.value = q;
-      submitInput();
-    }
+    if (q) { input.value = q; submit(); }
   });
 });
 
 input.focus();
 </script>
-
 </body>
 </html>
