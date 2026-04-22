@@ -382,6 +382,33 @@ button { cursor: pointer; }
 .mo-treemap rect:active { opacity: 0.85; }
 .mo-treemap text { pointer-events: none; font-family: var(--font); }
 
+.mo-vehicles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+.mo-vehicle {
+  flex: 0 1 auto;
+  min-width: 140px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: transparent;
+}
+.mo-vehicle-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-title);
+  letter-spacing: 0.01em;
+}
+.mo-vehicle-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
 .mo-list { display: flex; flex-direction: column; }
 .mo-row {
   display: flex;
@@ -2044,10 +2071,33 @@ function buildCardSpec(m, query, sellerLens, territory) {
       face = 'watch';
       verdict = `${sellerLens} moves through the channel at this agency.`;
       action = `Get ${sellerLens} listed with ${topVar}. Your product moves through them.`;
+    } else if (directSpend > 0 && sellerShare >= 85) {
+      // Tautology guard: when the user pitched a product AND the query
+      // is filtered to that product's contracts, sellerShare approaches
+      // 100% trivially. Saying "AWS is winning here, 100% of this slice"
+      // is circular — of course AWS wins the AWS-filtered slice. Surface
+      // something diagnostic instead: WHERE the volume concentrates.
+      //
+      // Top agency + top prime (direct or reseller) tells the seller what
+      // the footprint actually looks like. If there's material expiring,
+      // note it — that's the move.
+      face = 'open';
+      const topAgencyShort = topAgency || 'a single agency';
+      const topPrimeName = tc(vendorSorted[0]?.[0] || sellerLens);
+      const isSellerPrime = Utils.normalizeVendorName(topPrimeName).includes(sellerNormalized)
+                         || sellerNormalized.includes(Utils.normalizeVendorName(topPrimeName));
+      if (isSellerPrime) {
+        verdict = `${sellerLens}'s direct footprint: ${Utils.money(directSpend)} at ${topAgencyShort}, mostly.`;
+      } else {
+        verdict = `${sellerLens} flows mostly through ${topPrimeName} here — ${Utils.money(directSpend)}.`;
+      }
+      action = exp90Val > 0
+        ? `Focus on the ${(m.expiring||[]).length} contracts expiring in the next 90 days — that's where your next move is.`
+        : `Watch the recompete cycle on the top primes. That's where you'll win or lose this account.`;
     } else if (directSpend > 0 && sellerShare >= 10) {
       face = 'open';
       verdict = `${sellerLens} is winning here — ${sellerShare}% of this slice.`;
-      action = `Defend the expiring contracts and expand into adjacent agencies.`;
+      action = `Defend the expiring contracts. Look for adjacent agencies where ${sellerLens} isn't yet showing up.`;
     } else if (directSpend > 0) {
       face = 'watch';
       verdict = `${sellerLens} has a foothold here (${Utils.money(directSpend)}).`;
@@ -2087,12 +2137,12 @@ function buildCardSpec(m, query, sellerLens, territory) {
   // ── Stats — three KPIs above the fold ─────────────────────
   // NOTE: 'total' is the sum of just the top-100 contracts shown, NOT the
   // true market total. For big markets like "HHS" ($96B+/yr), top 100 is
-  // a thin slice. Label accordingly so sellers don't mistake this for
-  // the actual market size.
+  // a thin slice. Label says "Obligated" — tells the seller what they're
+  // looking at without over-claiming.
   const stats = [
-    { label: 'Top 100 $', value: Utils.money(total) },
+    { label: 'Obligated', value: Utils.money(total) },
     { label: 'Vendors', value: String(vendorCount) },
-    { label: 'Top 3', value: top3Pct + '%' },
+    { label: 'Top 3 share', value: top3Pct + '%' },
   ];
 
   // ── Treemap — top 6 buckets + Other.
@@ -2182,10 +2232,21 @@ function buildCardSpec(m, query, sellerLens, territory) {
   const expiringMore = expiringAll.slice(3);
 
   // ── Vehicle line — what GWAC/IDIQs are moving the money ───
+  // Promote to a proper section (not a footer footnote) so sellers can see
+  // the contract path at a glance. A federal seller's whole capture motion
+  // turns on whether they hold the right GWAC, so this is the single most
+  // load-bearing item for their next move. Cap at 4 vehicles to keep it
+  // scannable.
   const vehicleSorted = Object.entries(m.vehicles || {}).sort((a,b) => b[1].spend - a[1].spend);
-  const topVehicles = vehicleSorted.slice(0, 3);
-  const vehicleLine = topVehicles.length > 0
-    ? topVehicles.map(([name, d]) => `${name} (${Utils.money(d.spend)})`).join(', ')
+  const vehicles = vehicleSorted.slice(0, 4).map(([name, d]) => ({
+    name,
+    spend: Utils.money(d.spend),
+    count: d.count,
+  }));
+  // Retain the old joined-string form for backward compatibility with any
+  // downstream consumer still reading spec.vehicleLine.
+  const vehicleLine = vehicles.length > 0
+    ? vehicles.map(v => `${v.name} (${v.spend})`).join(', ')
     : null;
 
   // ── Followups — what to ask Mo next ───────────────────────
@@ -2211,6 +2272,7 @@ function buildCardSpec(m, query, sellerLens, territory) {
     primes,
     expiring,
     expiringMore,
+    vehicles,
     vehicleLine,
     followups: followups.slice(0, 4),
     sourceCount: contractCount,
@@ -3917,7 +3979,21 @@ const App = {
       html += `</div>`;
     }
 
-    if (spec.vehicleLine) {
+    if (spec.vehicles && spec.vehicles.length > 0) {
+      html += `<div class="mo-comp-head"><div class="mo-comp-title">Contract vehicles</div><div class="mo-comp-meta">${spec.vehicles.length} shown</div></div>`;
+      html += `<div class="mo-vehicles">`;
+      spec.vehicles.forEach(v => {
+        const countLabel = v.count === 1 ? '1 contract' : `${v.count} contracts`;
+        html += `<div class="mo-vehicle">
+          <div class="mo-vehicle-name">${Html.escapeHtml(v.name)}</div>
+          <div class="mo-vehicle-meta">${Html.escapeHtml(v.spend)} · ${countLabel}</div>
+        </div>`;
+      });
+      html += `</div>`;
+    } else if (spec.vehicleLine) {
+      // Back-compat: if somehow we have the joined string but not the
+      // structured array (e.g., older render path), fall back to the
+      // original footnote style.
       html += `<div style="margin-top:16px;font-size:12px;color:var(--text-muted);"><strong style="color:var(--text-title);font-weight:500;">Vehicles:</strong> ${Html.escapeHtml(spec.vehicleLine)}</div>`;
     }
 
