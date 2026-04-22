@@ -1455,7 +1455,7 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
       // Coaching / conversational path — first pass WAS the whole answer
       // firstPassFull is the final text; render.streamPreTagProse already
       // got the cumulative version as it arrived
-      render.complete();
+      render.complete(debug);
       debug.firstPassRaw = firstPassFull || preTagText;
       debug.mode = 'prose';
 
@@ -1603,7 +1603,7 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
         },
       });
 
-      render.complete();
+      render.complete(debug);
       debug.mode = 'subaward';
       return {
         mode: 'subaward',
@@ -1990,7 +1990,7 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
       }
 
       render.streamPostTagProse(scrubbed);
-      render.complete();
+      render.complete(debug);
       debug.mode = 'data';
       return {
         mode: 'data',
@@ -2002,7 +2002,7 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
       };
     }
 
-    render.complete();
+    render.complete(debug);
     debug.mode = 'data';
     return {
       mode: 'data',

@@ -2928,6 +2928,7 @@ const App = {
           question,
           cardSpec: null,
           prose: '',
+          debug: result?.debug,
         });
         this._track('turn_no_data', { mode: result.mode });
       }
@@ -3176,10 +3177,15 @@ const App = {
   // Fetch smart pills from Lambda. Fires after the second-pass prose
   // completes — runs in background, renders when response arrives.
   // Never blocks the main response. Silent failure if Lambda returns
-  // nothing valid.
-  async fetchSmartPills({ chipsEl, question, cardSpec, prose }) {
-    if (!chipsEl) return;
-    if (!question) return;
+  // nothing valid. Stashes state in debug object for trace visibility.
+  async fetchSmartPills({ chipsEl, question, cardSpec, prose, debug }) {
+    // Initialize debug tracking immediately so even early-exit reasons
+    // show up in the trace panel.
+    const pillDebug = { attempted: true, status: null, rawCount: 0, validCount: 0, skippedReason: null, pills: [] };
+    if (debug) debug.pills = pillDebug;
+
+    if (!chipsEl) { pillDebug.skippedReason = 'no chipsEl'; return; }
+    if (!question) { pillDebug.skippedReason = 'no question'; return; }
 
     // Build a tight card summary for the prompt. Keep it short — Gemini
     // Flash Lite does better with concise context than a full dump.
@@ -3206,7 +3212,7 @@ const App = {
 
     try {
       const endpoint = window.FEDMO_CONFIG?.apiEndpoint || '';
-      if (!endpoint) return;
+      if (!endpoint) { pillDebug.skippedReason = 'no endpoint'; return; }
 
       const res = await fetch(endpoint, {
         method: 'POST',
@@ -3219,23 +3225,64 @@ const App = {
         }),
       });
 
-      if (!res.ok) return;
+      pillDebug.status = res.status;
+      if (!res.ok) { pillDebug.skippedReason = `HTTP ${res.status}`; return; }
       const data = await res.json();
       const raw = Array.isArray(data?.suggestions) ? data.suggestions : [];
+      pillDebug.rawCount = raw.length;
+      pillDebug.raw = raw.slice(0, 10);
 
       // Round-trip validation — drop anything that can't be safely rendered.
       const validated = raw.filter(s => this._validateSmartPill(s, contextPrimes));
+      pillDebug.validCount = validated.length;
+      pillDebug.pills = validated;
+
       if (validated.length < 2) {
-        // Fewer than 2 valid suggestions → render nothing. Better to let
-        // Mo's prose be the ending than to show 1 lonely pill.
+        pillDebug.skippedReason = `only ${validated.length} valid (need 2+)`;
         return;
       }
 
       this._renderSmartPills(chipsEl, validated.slice(0, 5));
+      pillDebug.rendered = true;
       this._track('smart_pills_rendered', { count: validated.length });
+
+      // Update the debug panel for this turn if it's being shown. Pills
+      // arrive async AFTER _renderDebugPanel already ran, so without this
+      // re-render the trace wouldn't include pill state. Sibling debug
+      // slot is reachable via the chipsEl id pattern: {turnId}-chips and
+      // {turnId}-debug share the same turnId prefix.
+      try {
+        const chipsId = chipsEl.id || '';
+        const debugId = chipsId.endsWith('-chips') ? chipsId.replace(/-chips$/, '-debug') : null;
+        const debugEl = debugId ? document.getElementById(debugId) : chipsEl.closest('.turn-mo')?.querySelector('.mo-debug-slot');
+        if (debugEl) {
+          // Update the stashed debug so 'Copy trace' always has fresh data
+          debugEl._stashedDebug = debug;
+          // If panel is currently visible, re-render to show pill info
+          if (this.state?.debugVisible) {
+            this._renderDebugPanel(debugEl, debug);
+          }
+        }
+      } catch (e) {
+        // Non-fatal — pills rendered, debug refresh is cosmetic
+      }
     } catch (err) {
-      // Silent failure — pills are supplementary
+      pillDebug.skippedReason = `threw: ${err?.name || 'Error'}`;
       console.debug('[pills] fetch failed', err?.message || err);
+
+      // Same trace refresh on the failure path — so "skipped: HTTP 400"
+      // or "skipped: threw" shows up in Copy trace.
+      try {
+        const chipsId = chipsEl?.id || '';
+        const debugId = chipsId.endsWith('-chips') ? chipsId.replace(/-chips$/, '-debug') : null;
+        const debugEl = debugId ? document.getElementById(debugId) : chipsEl?.closest('.turn-mo')?.querySelector('.mo-debug-slot');
+        if (debugEl) {
+          debugEl._stashedDebug = debug;
+          if (this.state?.debugVisible) {
+            this._renderDebugPanel(debugEl, debug);
+          }
+        }
+      } catch (_) {}
     }
   },
 
@@ -3424,6 +3471,37 @@ const App = {
       lines.push('Mo second-pass raw output (post-card prose):');
       const indented = d.secondPassRaw.split('\n').map(ln => '  ' + ln).join('\n');
       lines.push(indented);
+      lines.push('');
+    }
+
+    // Smart-pill activity. Shown AFTER the rest because pills are the
+    // last async thing to arrive on a turn. If no pills rendered, this
+    // section tells you why — HTTP 400 (Lambda not deployed), LLM
+    // returned nothing, validation dropped everything, etc.
+    if (d.pills) {
+      const p = d.pills;
+      lines.push('Smart pills:');
+      if (p.skippedReason) {
+        lines.push(`  skipped: ${p.skippedReason}`);
+      }
+      if (p.status !== null && p.status !== undefined) {
+        lines.push(`  HTTP status: ${p.status}`);
+      }
+      if (typeof p.rawCount === 'number') {
+        lines.push(`  raw suggestions from LLM: ${p.rawCount}`);
+      }
+      if (typeof p.validCount === 'number') {
+        lines.push(`  passed validation: ${p.validCount}`);
+      }
+      if (p.rendered) {
+        lines.push(`  rendered: yes`);
+      }
+      if (Array.isArray(p.raw) && p.raw.length > 0) {
+        lines.push('  raw suggestions:');
+        p.raw.forEach((s, i) => {
+          lines.push(`    [${i}] type=${s?.type || '?'} label="${String(s?.label || '').slice(0, 40)}" term="${String(s?.term || '').slice(0, 60)}"`);
+        });
+      }
       lines.push('');
     }
 
@@ -3762,7 +3840,7 @@ const App = {
       // replies, clarifying questions, and errors intentionally skip chips
       // because the seller's next question is already in their head —
       // suggestions would just get in the way.
-      complete: () => {
+      complete: (debug) => {
         if (chipsEl && turnEls.chipData) {
           const { mode, cardSpec } = turnEls.chipData;
           // Only fire smart pills for actual data modes. Coaching replies,
@@ -3776,11 +3854,14 @@ const App = {
             const prose = (postProseEl?.textContent || '').slice(0, 500);
             // Fire and forget — pills populate when Lambda responds.
             // Silent failure if Lambda timeouts or returns nothing valid.
+            // Pass debug so pill state is captured in the trace even if
+            // the user turns on the debug panel later.
             this.fetchSmartPills({
               chipsEl,
               question: turnEls.turnQuestion,
               cardSpec,
               prose,
+              debug,
             });
           }
         }
