@@ -563,6 +563,29 @@ button { cursor: pointer; }
   transform: scale(0.97);
 }
 
+/* Smart pills — LLM-generated followups. Fade in sequentially (animation-delay
+   is inlined per-pill by _renderSmartPills) so they feel like they're arriving
+   thoughtfully, not popping in all at once. Subtle upward drift reinforces the
+   'Mo just thought of something' beat. */
+.mo-followup-smart {
+  opacity: 0;
+  transform: translateY(4px);
+  animation: moPillFadeIn 280ms ease-out forwards;
+}
+@keyframes moPillFadeIn {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mo-followup-smart {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
 /* Also-try sub-row inside the chips element. Wraps like the main chip
    row but shows its own inline label so it reads as a second shelf of
    options, not a continuation of the primary chips. */
@@ -2735,7 +2758,7 @@ const App = {
       loadingId = turnEls.turnId;
 
       // Build render callbacks that drive the composite turn shell
-      const render = this._buildRenderCallbacks(turnEls);
+      const render = this._buildRenderCallbacks(turnEls, question);
 
       // ── Pipeline-list path ─────────────────────────────────────────
       // User is asking for a structured pipeline list ("give me 5 opps",
@@ -2849,7 +2872,7 @@ const App = {
             // card is visible for context and the structured list
             // lives in its own turn block right underneath.
             const followTurn = this.appendCompositeTurn();
-            const followRender = this._buildRenderCallbacks(followTurn);
+            const followRender = this._buildRenderCallbacks(followTurn, question);
             followRender.renderPipelineList(pl);
             followRender.complete();
             // Now that the real list rendered, clear the loading message
@@ -2895,9 +2918,17 @@ const App = {
         // hatch chips so the user isn't stuck — they can tap to broaden,
         // pivot, or slice differently. Without these chips the turn is a
         // dead-end that forces the user to type their way out.
-        const chips = this.generateFollowupChips('no_data', [], result.resolverInput);
-        const alsoTry = this.generateAlsoTryChips('no_data', [], result.resolverInput);
-        this._renderChips(turnEls.chipsEl, chips, alsoTry);
+        // fetchSmartPills with minimal context — no card, no prose — so
+        // the LLM will suggest broader or alternative queries. If nothing
+        // round-trips as valid, the chip row stays empty, which is fine:
+        // the empty-state code shows an 'I couldn't find data' message
+        // and the user will type their own next query.
+        this.fetchSmartPills({
+          chipsEl: turnEls.chipsEl,
+          question,
+          cardSpec: null,
+          prose: '',
+        });
         this._track('turn_no_data', { mode: result.mode });
       }
       // On error, we don't push to history — the user will retry
@@ -3091,351 +3122,133 @@ const App = {
   },
 
   // ── Render callbacks — wire stream-client to the DOM ────────
-  // ── Followup chips — derived from what the card just showed ─────
+  // ── Smart Pills — LLM-driven "what to ask next" suggestions ─────────
   //
-  // Called right after a data card renders (and right after Mo's post-tag
-  // prose finishes streaming). Returns a small array of { label, question }
-  // objects that render as tappable chips under the response. Tapping a
-  // chip sends the question as the next user turn — same delegated-click
-  // machinery as starter chips (`.mo-followup[data-ask]`).
+  // Replaces the old deterministic generateFollowupChips + generateAlsoTryChips.
+  // Instead of mechanical "top prime → drill into them" templates, we now ask
+  // Gemini Flash Lite to pick 3-5 lateral moves specific to what the user
+  // just saw. The LLM returns a strict JSON schema — never free text — and
+  // each suggestion is validated to round-trip through Mo's resolver before
+  // rendering. If the LLM returns nothing valid, we render NO pills at all.
+  // Silence > filler.
   //
-  // Design principle: chips are SURVEY MOVES. They help the seller
-  // navigate from "here's what I saw" to "here's the natural next slice
-  // to look at" without having to think about what to type. Every chip
-  // should be a question the seller is likely to ask anyway, phrased
-  // exactly as they'd type it.
-  //
-  // No Gemini call, no async. Pure derivation from rendered data. Keeps
-  // the latency invisible and the suggestions deterministic.
-  //
-  // Returns [] for coaching/no-data turns so chips disappear entirely
-  // when the card is missing. The row's :empty CSS collapses it.
-  generateFollowupChips(mode, rows, resolverInput) {
-    if (!mode) return [];
+  // Pattern cribbed from govhoo's SearchPills.generate — typed schema,
+  // background fetch, graceful empty state. See also the Lambda handler
+  // handleMoPills in index.mjs.
 
-    // Helper to trim legal suffixes — "Amazon Web Services, INC." →
-    // "Amazon Web Services". Used for vendor names in chip labels so
-    // they read naturally. Defined early because no_data mode may need
-    // it before we get to the main-mode code below.
-    const cleanName = (name) => {
-      return String(name || '')
-        .replace(/,?\s*(?:INC\.?|INCORPORATED|LLC|L\.?L\.?C\.?|LTD\.?|CORP\.?|CORPORATION|COMPANY|CO\.?)\s*$/i, '')
-        .replace(/\s+/g, ' ')
-        .trim();
-    };
+  // Stubs for backward compatibility with any legacy call sites that
+  // reference these by name. Return empty array so no pills render.
+  generateFollowupChips() { return []; },
+  generateAlsoTryChips() { return []; },
 
-    const agency = resolverInput?.agency || '';
-    const vendorLabel = resolverInput?.vendor
-      || (Array.isArray(resolverInput?.vendors) && resolverInput.vendors.length > 0 ? resolverInput.vendors[0] : '');
+  // Allowed suggestion types — must match Lambda MO_PILLS_PROMPT exactly.
+  _SMART_PILL_TYPES: new Set(['vendor', 'competitor', 'subagency', 'topic', 'drill']),
 
-    // ── No-data escape hatches ────────────────────────────────────
-    // The pull came back empty — either the main data query or the
-    // subaward query — and Mo rendered an honest "I don't see data"
-    // message. Without chips the user is stuck. These chips give them
-    // three concrete next moves derived from what they originally asked.
-    //
-    // The questions are phrased as explicit scope-breakers ("across all
-    // agencies", "at the agency") to override whatever sticky context
-    // Mo's prompt might try to carry from the empty turn.
-    if (mode === 'no_data') {
-      const chips = [];
-      // If they asked for vendor+agency, give them three ways out:
-      //   1. See the agency market (drop vendor)
-      //   2. See the vendor federally (drop agency)
-      //   3. See what's expiring at the agency (different slice, still useful)
-      if (vendorLabel && agency) {
-        chips.push({
-          label: `${agency} market`,
-          question: `Show me the ${agency} market`,
-        });
-        chips.push({
-          label: `${vendorLabel} across all agencies`,
-          question: `Show me ${vendorLabel} across all agencies`,
-        });
-        chips.push({
-          label: `Expiring at ${agency}`,
-          question: `Show only expiring contracts at ${agency}`,
-        });
-      }
-      // Vendor only, no agency — user asked a federal vendor question
-      // and got nothing. Common cause: small/niche firm that only shows
-      // up as a SUB, not a prime. Give them three concrete ways forward:
-      //   1. Competitor view — who else plays in this space
-      //   2. Subaward angle — maybe they're buried under a big prime
-      //   3. Explicit "tell me more" prompt to unstick the conversation
-      else if (vendorLabel) {
-        chips.push({
-          label: `Who competes with ${cleanName(vendorLabel)}`,
-          question: `Who are ${vendorLabel}'s competitors?`,
-        });
-        chips.push({
-          label: `Is ${cleanName(vendorLabel)} a sub anywhere?`,
-          question: `Show me subawards where ${vendorLabel} is a sub`,
-        });
-        chips.push({
-          label: `What does ${cleanName(vendorLabel)} sell?`,
-          question: `Tell me what ${vendorLabel} sells so we can find the market`,
-        });
-      }
-      // Agency only — broaden with three angles so the user isn't
-      // stuck with one button. Expiring pipeline is the highest-
-      // signal default; the other two open escape paths.
-      else if (agency) {
-        chips.push({
-          label: `Expiring at ${agency}`,
-          question: `Show only expiring contracts at ${agency}`,
-        });
-        chips.push({
-          label: `Top primes at ${agency}`,
-          question: `Who are the top primes at ${agency}`,
-        });
-        chips.push({
-          label: `Cybersecurity at ${agency}`,
-          question: `Show cybersecurity at ${agency}`,
-        });
-      }
-      return chips.slice(0, 3);
+  // Validate a single suggestion. Returns true if it's safe to render,
+  // false if it references an entity we can't resolve. Worst-case: a
+  // valid-looking pill sends a query Mo can handle normally (vendor
+  // lookup, topic lookup, agency filter). We reject pills with obvious
+  // hallucination patterns — empty text, too-long text, unknown types.
+  _validateSmartPill(pill, contextPrimes) {
+    if (!pill || typeof pill !== 'object') return false;
+    if (!this._SMART_PILL_TYPES.has(pill.type)) return false;
+    if (typeof pill.label !== 'string' || pill.label.length === 0 || pill.label.length > 40) return false;
+    if (typeof pill.term !== 'string' || pill.term.length === 0 || pill.term.length > 120) return false;
+
+    // Drill-type pills must reference a vendor that appears in the card's
+    // primes list. Without this check the LLM could suggest "Who subs for
+    // IronCloud Corp" — an invented vendor. Forcing the drill target to
+    // be a real prime in the current card eliminates that failure mode.
+    if (pill.type === 'drill') {
+      if (!Array.isArray(contextPrimes) || contextPrimes.length === 0) return false;
+      const termUpper = String(pill.term).toUpperCase();
+      const labelUpper = String(pill.label).toUpperCase();
+      const matches = contextPrimes.some(p => {
+        const pUpper = String(p).toUpperCase();
+        return termUpper.includes(pUpper) || labelUpper.includes(pUpper);
+      });
+      if (!matches) return false;
     }
 
-    // Everything below needs actual rows.
-    if (!rows || rows.length === 0) return [];
-
-    // Top prime / top sub-agency — used by most chip rules below. Derived
-    // from the rows the card is actually showing, not from a separate
-    // analyzer, so the chips always match what the user sees.
-    const primeTotals = new Map();
-    const subAgencyTotals = new Map();
-    for (const r of rows) {
-      const p = (r['Recipient Name'] || '').trim();
-      const amt = parseFloat(r['Award Amount']) || 0;
-      if (p) primeTotals.set(p, (primeTotals.get(p) || 0) + amt);
-      const sa = (r['Awarding Sub Agency'] || r['Awarding Agency'] || '').trim();
-      if (sa) subAgencyTotals.set(sa, (subAgencyTotals.get(sa) || 0) + amt);
-    }
-    const topPrimes = [...primeTotals.entries()].sort((a, b) => b[1] - a[1]).map(e => e[0]);
-    const topSubs = [...subAgencyTotals.entries()].sort((a, b) => b[1] - a[1]).map(e => e[0]);
-    const topPrime = topPrimes[0] || '';
-    const topSub = topSubs[0] || '';
-
-    const chips = [];
-
-    // ── Seller pitch with real data ─────────────────────────────────
-    // User said "I sell X to Y" AND the pull was NOT a competitor cut,
-    // NOT a reframe, and not subaward-mode. These are the natural sales
-    // follow-ups after seeing your own footprint.
-    if (mode === 'data' && !resolverInput?._reframedFromVendor &&
-        !resolverInput?._sellerName && (resolverInput?.vendor || resolverInput?.vendors)) {
-      // vendorLabel was captured at the top of the function
-      if (agency) {
-        chips.push({ label: 'Who are my competitors here', question: `Who are ${vendorLabel}'s competitors at ${agency}?` });
-      } else {
-        chips.push({ label: 'Who are my competitors', question: `Who are ${vendorLabel}'s competitors?` });
-      }
-      if (topPrime && cleanName(topPrime).toLowerCase() !== vendorLabel.toLowerCase()) {
-        chips.push({ label: `Who's subbing on ${cleanName(topPrime)}`, question: `Who's subbing on ${cleanName(topPrime)}'s work${agency ? ' at ' + agency : ''}?` });
-      } else if (topPrime) {
-        chips.push({ label: `Who's subbing on ${cleanName(topPrime)}`, question: `Who's ${cleanName(topPrime)} subbing to${agency ? ' at ' + agency : ''}?` });
-      }
-      chips.push({ label: 'Show only expiring', question: `Show only expiring ${vendorLabel} contracts${agency ? ' at ' + agency : ''}` });
-    }
-
-    // ── Reframed card (vendor pitched, no direct data, market shown) ─
-    // The user pitched a product that isn't in the slice — we showed the
-    // agency market instead. Chips let them survey that market: drill
-    // into the top incumbent, explore subs, narrow to expiring.
-    else if (mode === 'data' && resolverInput?._reframedFromVendor) {
-      if (topPrime) {
-        chips.push({ label: `${cleanName(topPrime)}`, question: `What is ${cleanName(topPrime)} doing${agency ? ' at ' + agency : ' federally'}?` });
-      }
-      if (agency) {
-        chips.push({ label: `Who's subbing at ${agency}`, question: `Who's subbing at ${agency}?` });
-        chips.push({ label: `Only expiring at ${agency}`, question: `Show only expiring contracts at ${agency}` });
-      }
-    }
-
-    // ── Competitor card ─────────────────────────────────────────────
-    // User asked "who are my competitors" or similar. Each competitor in
-    // the top primes becomes a tappable chip — drill into one at a time.
-    else if (mode === 'data' && resolverInput?._sellerName && Array.isArray(resolverInput?._competitorList)) {
-      const seller = resolverInput._sellerName;
-      // Take top 3 primes that aren't the seller
-      const competitors = topPrimes
-        .map(cleanName)
-        .filter(n => n && n.toLowerCase() !== seller.toLowerCase())
-        .slice(0, 3);
-      for (const c of competitors) {
-        chips.push({ label: c, question: `${c}${agency ? ' at ' + agency : ''}` });
-      }
-    }
-
-    // ── Agency-only (no vendor specified) ──────────────────────────
-    // User asked about an agency or topic without naming a vendor. Chips
-    // surface the top prime, top sub-agency, and expiring as natural
-    // next slices.
-    else if (mode === 'data' && !resolverInput?.vendor && !resolverInput?.vendors) {
-      if (topPrime) {
-        chips.push({ label: `Top prime: ${cleanName(topPrime)}`, question: `What is ${cleanName(topPrime)} doing${agency ? ' at ' + agency : ' federally'}?` });
-      }
-      if (topSub && topSub.toLowerCase() !== (agency || '').toLowerCase()) {
-        chips.push({ label: topSub, question: `Show me ${topSub}${resolverInput?.topic ? ' ' + resolverInput.topic : ''}` });
-      }
-      if (agency) {
-        chips.push({ label: 'Show only expiring', question: `Show only expiring contracts at ${agency}` });
-      }
-    }
-
-    // ── Subaward card ──────────────────────────────────────────────
-    // User pulled a subaward slice. Chips let them flip back to the
-    // prime's main work, or drill into a specific sub.
-    else if (mode === 'subaward') {
-      if (topPrime) {
-        chips.push({ label: `${cleanName(topPrime)}'s prime contracts`, question: `What is ${cleanName(topPrime)} doing as a prime${agency ? ' at ' + agency : ' federally'}?` });
-      }
-      // For subaward rows, 'Recipient Name' was the PRIME — we need the
-      // sub names. Stream-client shaped them into `_subs` on the rows?
-      // Actually the rows coming through renderSubawardCard have been
-      // remapped and our generateFollowupChips is called with the remapped
-      // shape via `rows`. The sub names live in 'Sub-Awardee Name'.
-      const subTotals = new Map();
-      for (const r of rows) {
-        const s = (r['Sub-Awardee Name'] || '').trim();
-        const amt = parseFloat(r['Sub-Award Amount']) || 0;
-        if (s) subTotals.set(s, (subTotals.get(s) || 0) + amt);
-      }
-      const topSubName = [...subTotals.entries()].sort((a, b) => b[1] - a[1]).map(e => e[0])[0];
-      if (topSubName) {
-        // Explicit scope-break phrasing: "across all agencies" is a strong
-        // enough signal to override the sticky agency context Mo carries
-        // from the previous turn. "Show me X federally" isn't, because
-        // Mo's prompt reads "federally" as a modifier and keeps the agency.
-        // This chip WANTS to leave the agency behind, so we say so.
-        chips.push({
-          label: `${cleanName(topSubName)}'s other work`,
-          question: `Show me ${cleanName(topSubName)} across all agencies`
-        });
-      }
-    }
-
-    // Cap at 3 chips — any more creates visual noise and choice paralysis.
-    return chips.slice(0, 3);
+    return true;
   },
 
-  // ── Also Try chips — lateral moves, not drill-downs ─────────────────
-  //
-  // Govhoo-inspired. The main chip row (generateFollowupChips) suggests
-  // DEEPER moves: drill into the top incumbent, show expiring, pull subs.
-  // These are different — LATERAL: related vendors, related topics,
-  // alternative NAICS/PSC codes.
-  //
-  // Called with the same inputs as generateFollowupChips. Returns
-  // 0-4 chips in a separate row labeled "Also try".
-  generateAlsoTryChips(mode, rows, resolverInput) {
-    if (!resolverInput || mode === 'error' || mode === 'needs_qualifier') return [];
+  // Fetch smart pills from Lambda. Fires after the second-pass prose
+  // completes — runs in background, renders when response arrives.
+  // Never blocks the main response. Silent failure if Lambda returns
+  // nothing valid.
+  async fetchSmartPills({ chipsEl, question, cardSpec, prose }) {
+    if (!chipsEl) return;
+    if (!question) return;
 
-    const chips = [];
-    const seen = new Set();
-    const push = (label, question) => {
-      const key = String(label).toLowerCase();
-      if (seen.has(key)) return;
-      if (chips.length >= 4) return;
-      seen.add(key);
-      chips.push({ label, question });
-    };
-
-    const agency = (resolverInput.agency || '').trim();
-    const topic = (resolverInput.topic || '').trim();
-    const vendor = (resolverInput.vendor ||
-      (Array.isArray(resolverInput.vendors) && resolverInput.vendors[0]) || '').toString().trim();
-
-    // ── Vendor queries: suggest competitors as quick chips ──
-    // These are VENDORS the user might also want to look at in the same
-    // market. We don't pull from resolverInput._competitorList because
-    // that only exists AFTER a competitors="true" pull. Instead we use
-    // a compact hand-curated table of known federal head-to-heads.
-    if (vendor) {
-      const v = vendor.toLowerCase();
-      const vendorNeighbors = {
-        'aws':            ['Microsoft Azure', 'Oracle Cloud', 'Google Cloud'],
-        'amazon':         ['Microsoft Azure', 'Oracle Cloud', 'Google Cloud'],
-        'microsoft':      ['AWS', 'Oracle Cloud', 'Google Cloud'],
-        'azure':          ['AWS', 'Oracle Cloud', 'Google Cloud'],
-        'oracle':         ['AWS', 'Microsoft Azure', 'SAP'],
-        'google':         ['AWS', 'Microsoft Azure', 'Oracle Cloud'],
-        'gcp':            ['AWS', 'Microsoft Azure', 'Oracle Cloud'],
-        'splunk':         ['Elastic', 'Datadog', 'Sumo Logic'],
-        'elastic':        ['Splunk', 'Datadog', 'Grafana'],
-        'datadog':        ['Splunk', 'New Relic', 'Dynatrace'],
-        'crowdstrike':    ['SentinelOne', 'Palo Alto', 'Microsoft Defender'],
-        'sentinelone':    ['CrowdStrike', 'Palo Alto', 'Tanium'],
-        'palo alto':      ['CrowdStrike', 'Fortinet', 'Cisco'],
-        'akamai':         ['Cloudflare', 'Fastly', 'Imperva'],
-        'cloudflare':     ['Akamai', 'Fastly', 'Imperva'],
-        'sonatype':       ['Snyk', 'Black Duck', 'JFrog'],
-        'snyk':           ['Sonatype', 'Black Duck', 'Veracode'],
-        'palantir':       ['Databricks', 'Snowflake', 'Booz Allen'],
-        'okta':           ['SailPoint', 'Ping Identity', 'CyberArk'],
-        'servicenow':     ['Salesforce', 'BMC', 'Atlassian'],
-        'salesforce':     ['ServiceNow', 'Microsoft Dynamics', 'Oracle'],
-      };
-      const neighbors = vendorNeighbors[v] || null;
-      if (neighbors) {
-        for (const n of neighbors) {
-          const q = agency ? `${n} at ${agency}` : `Show me ${n}`;
-          push(n, q);
-        }
+    // Build a tight card summary for the prompt. Keep it short — Gemini
+    // Flash Lite does better with concise context than a full dump.
+    let cardSummary = '';
+    const contextPrimes = [];
+    if (cardSpec) {
+      const parts = [];
+      if (cardSpec.stats && Array.isArray(cardSpec.stats)) {
+        const statsStr = cardSpec.stats.map(s => `${s.label}: ${s.value}`).join(', ');
+        parts.push(`Stats: ${statsStr}`);
       }
+      if (cardSpec.treemap && Array.isArray(cardSpec.treemap)) {
+        const topAgencies = cardSpec.treemap.slice(0, 5).map(t => t.name).join(', ');
+        parts.push(`Top sub-agencies: ${topAgencies}`);
+      }
+      if (cardSpec.primes && Array.isArray(cardSpec.primes)) {
+        const primeNames = cardSpec.primes.slice(0, 5).map(p => p.name);
+        contextPrimes.push(...primeNames);
+        parts.push(`Top primes: ${primeNames.join(', ')}`);
+      }
+      if (cardSpec.headline) parts.push(`Mo's headline: ${cardSpec.headline}`);
+      cardSummary = parts.join('. ');
     }
 
-    // ── Topic queries: suggest adjacent topic/keyword searches ──
-    // When the user asked about a broad topic, surface narrower or
-    // related ones they'd also benefit from seeing. Keeps the "also try"
-    // row useful even when no vendor is in play.
-    if (topic || (!vendor && !agency)) {
-      const t = (topic || '').toLowerCase();
-      const topicNeighbors = {
-        'cloud':         ['IaaS', 'Cloud hosting', 'Cloud migration'],
-        'cybersecurity': ['Zero trust', 'SIEM', 'Endpoint security'],
-        'cyber':         ['Zero trust', 'SIEM', 'Endpoint security'],
-        'security':      ['Zero trust', 'Identity', 'Endpoint security'],
-        'ai':            ['ML', 'LLM', 'Generative AI'],
-        'ml':            ['AI', 'LLM', 'Data analytics'],
-        'data':          ['Analytics', 'Data warehouse', 'Data integration'],
-        'analytics':     ['Data warehouse', 'BI', 'ML'],
-        'identity':      ['Zero trust', 'IAM', 'PIV'],
-        'iam':           ['Identity', 'Zero trust', 'PIV'],
-        'devsecops':     ['SBOM', 'Container security', 'SAST'],
-        'sbom':          ['Supply chain security', 'SAST', 'DevSecOps'],
-      };
-      const neighbors = topicNeighbors[t];
-      if (neighbors) {
-        for (const n of neighbors) {
-          const q = agency ? `${n} at ${agency}` : `Show me ${n}`;
-          push(n, q);
-        }
-      }
-    }
+    try {
+      const endpoint = window.FEDMO_CONFIG?.apiEndpoint || '';
+      if (!endpoint) return;
 
-    // ── Agency-only: suggest top sub-agencies or adjacent agencies ──
-    // Narrows a "show me DHS" into "DHS CISA" etc. Only fires when the
-    // user didn't already specify a narrower scope.
-    if (agency && !topic && !vendor && rows && rows.length > 0) {
-      const agencyLower = agency.toLowerCase();
-      const agencyNeighbors = {
-        'dod':            ['Navy', 'Army', 'Air Force', 'DISA'],
-        'dhs':            ['CISA', 'TSA', 'FEMA', 'CBP'],
-        'hhs':            ['CMS', 'NIH', 'CDC', 'FDA'],
-        'doj':            ['FBI', 'DEA', 'ATF'],
-        'treasury':       ['IRS', 'OCC'],
-        'commerce':       ['NOAA', 'NIST', 'Census'],
-        'dot':            ['FAA', 'FHWA'],
-      };
-      const subs = agencyNeighbors[agencyLower];
-      if (subs) {
-        for (const s of subs) push(s, `Show me ${s}`);
-      }
-    }
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          request_type: 'mo_pills',
+          question,
+          card_summary: cardSummary,
+          prose: prose || '',
+        }),
+      });
 
-    return chips.slice(0, 4);
+      if (!res.ok) return;
+      const data = await res.json();
+      const raw = Array.isArray(data?.suggestions) ? data.suggestions : [];
+
+      // Round-trip validation — drop anything that can't be safely rendered.
+      const validated = raw.filter(s => this._validateSmartPill(s, contextPrimes));
+      if (validated.length < 2) {
+        // Fewer than 2 valid suggestions → render nothing. Better to let
+        // Mo's prose be the ending than to show 1 lonely pill.
+        return;
+      }
+
+      this._renderSmartPills(chipsEl, validated.slice(0, 5));
+      this._track('smart_pills_rendered', { count: validated.length });
+    } catch (err) {
+      // Silent failure — pills are supplementary
+      console.debug('[pills] fetch failed', err?.message || err);
+    }
+  },
+
+  // Render smart pills with a fade-in stream so they feel like they're
+  // arriving thoughtfully rather than popping in all at once. Uses the
+  // same .mo-followup class as the starter chips so the delegated
+  // click handler picks them up. Label is what displays; data-ask
+  // carries the full term to send as the next user message.
+  _renderSmartPills(chipsEl, pills) {
+    if (!chipsEl || !pills || pills.length === 0) return;
+    chipsEl.innerHTML = pills.map((p, i) =>
+      `<button class="mo-followup mo-followup-smart" data-ask="${Html.escapeHtml(p.term)}" style="animation-delay:${i * 80}ms">${Html.escapeHtml(p.label)}</button>`
+    ).join('');
   },
 
   // Render chip specs into the turn's chip slot. Each chip is a button
@@ -3688,8 +3501,13 @@ const App = {
 
 
   // ── Render callbacks — wire stream-client to the DOM ────────
-  _buildRenderCallbacks(turnEls) {
+  _buildRenderCallbacks(turnEls, turnQuestion) {
     const { preProseEl, cardSlotEl, postProseEl, chipsEl } = turnEls;
+    // Stash the question on turnEls so any callback that fires later (after
+    // streaming completes) can access it for mo_pills requests. Without
+    // this, the complete() callback has no way to know what the user
+    // actually asked this turn.
+    turnEls.turnQuestion = String(turnQuestion || '').slice(0, 200);
 
     return {
       // Stream Mo's pre-tag prose (or whole response if no <data> tag).
@@ -3793,10 +3611,13 @@ const App = {
         // Render treemaps inside the new card
         initTreemaps(cardRef);
         // Stash chip context for the complete() callback. We don't render
-        // chips now — they render after Mo's post-tag prose finishes so
+        // pills now — they render after Mo's post-tag prose finishes so
         // they appear in their natural reading order (data → explanation
-        // → next moves). This data is what generateFollowupChips needs.
-        turnEls.chipData = { mode: 'data', rows, resolverInput };
+        // → next moves). This data is what fetchSmartPills needs: the
+        // spec gives Lambda the card summary (stats, primes, treemap)
+        // and the caller already has the user's question + will have
+        // the final prose once complete() fires.
+        turnEls.chipData = { mode: 'data', rows, resolverInput, cardSpec: spec };
         // Track
         this._track('card_render', {
           face: spec.verdict?.face,
@@ -3846,10 +3667,10 @@ const App = {
         cardRef.innerHTML = '';
         if (cardBody) cardRef.appendChild(cardBody);
         else cardRef.appendChild(fullTurn);
-        // Chips for subaward mode read the REMAPPED rows above (with
-        // 'Sub-Awardee Name' and 'Sub-Award Amount' fields), not the
-        // original subs array, so generateFollowupChips can find sub
-        // names the same way it finds prime names in data mode.
+        // Subaward mode doesn't fire smart pills today — subaward specs
+        // have a different shape than card specs and would need their
+        // own pill-generation path. Leaving chipData populated so if
+        // pills get wired up later the context is there.
         turnEls.chipData = { mode: 'subaward', rows, resolverInput };
         this._track('subaward_card_render', { rows: subs.length });
       },
@@ -3943,10 +3764,25 @@ const App = {
       // suggestions would just get in the way.
       complete: () => {
         if (chipsEl && turnEls.chipData) {
-          const { mode, rows, resolverInput } = turnEls.chipData;
-          const chips = this.generateFollowupChips(mode, rows, resolverInput);
-          const alsoTry = this.generateAlsoTryChips(mode, rows, resolverInput);
-          this._renderChips(chipsEl, chips, alsoTry);
+          const { mode, cardSpec } = turnEls.chipData;
+          // Only fire smart pills for actual data modes. Coaching replies,
+          // clarifying questions, and errors intentionally skip pills —
+          // the seller's next question is already in their head and pill
+          // suggestions would be noise.
+          if (mode === 'data' && cardSpec) {
+            // Grab Mo's post-card prose as it stands right now (streaming
+            // is complete by the time complete() fires). This gives the
+            // pill-generator the strategic context Mo just argued.
+            const prose = (postProseEl?.textContent || '').slice(0, 500);
+            // Fire and forget — pills populate when Lambda responds.
+            // Silent failure if Lambda timeouts or returns nothing valid.
+            this.fetchSmartPills({
+              chipsEl,
+              question: turnEls.turnQuestion,
+              cardSpec,
+              prose,
+            });
+          }
         }
         this._updateEmptyState();
         this._updateJumpVisibility();
