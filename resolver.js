@@ -588,7 +588,17 @@ export function resolve(input) {
     if (agency) {
       filters.agencies = [{ ...agency, type: 'awarding' }];
       postFilters.agency_scope = agency;
-      if (agencyResidue) topics.push(agencyResidue);
+      if (agencyResidue) {
+        // Add as keyword hint (biases USASpending toward matching rows)
+        // AND as a client-side post-filter (hard narrow on Awarding
+        // Office field). Without the post-filter, office-level
+        // drilldowns like "DHS Office of Procurement Operations"
+        // return the full DHS cyber picture because the keyword match
+        // is fuzzy. With it, the card narrows to rows whose office
+        // field actually matches.
+        topics.push(agencyResidue);
+        postFilters.office_scope = agencyResidue;
+      }
     } else {
       // Unknown agency — fall through to keywords. Better a keyword search
       // than silent no-op. User might have typed a legitimate agency we
@@ -654,6 +664,24 @@ export function applyPostFilters(rows, postFilters) {
             || sub.includes(needle)
             || top === wantedName
             || top.includes(needle);
+      });
+    }
+  }
+
+  // Office-level narrowing. Used when a compound-agency input like
+  // "DHS Office of Procurement Operations" was parsed — the parent
+  // subtier (DHS) went into the API filter, and the office residue
+  // ("office of procurement operations") lands here to narrow the
+  // already-returned rows. Matches the Awarding Office field, which
+  // is populated by USASpending for most civilian contracts and by
+  // our offices.json decode for DoD contracts.
+  if (postFilters.office_scope) {
+    const officeNeedle = String(postFilters.office_scope).toLowerCase().trim();
+    if (officeNeedle.length >= 3) {
+      out = out.filter(r => {
+        const office = (r['Awarding Office'] || '').toLowerCase();
+        const sub = (r['Awarding Sub Agency'] || '').toLowerCase();
+        return office.includes(officeNeedle) || sub.includes(officeNeedle);
       });
     }
   }
