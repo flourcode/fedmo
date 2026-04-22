@@ -231,6 +231,56 @@ export function findDataTag(text) {
   };
 }
 
+// Defensive: strip any <data ... /> tags from prose text. Used on the
+// second-pass stream because Mo occasionally echoes the original data
+// tag in her grounded prose despite the prompt forbidding it. Without
+// this, the raw markup leaks into the rendered post-card prose and the
+// user literally sees "<data agency=..." in their card. Also handles
+// the partial-tag case mid-stream — if the chunk ends with "<da", we
+// hold back the partial fragment until the next chunk completes it.
+//
+// Returns { cleaned, hasPartial } — caller should NOT render if
+// hasPartial is true (wait for next chunk to disambiguate). On
+// completed chunks, fully-formed tags are removed and the surrounding
+// whitespace is collapsed so we don't leave double-newlines where a
+// tag was.
+export function stripDataTags(text) {
+  if (!text) return { cleaned: '', hasPartial: false };
+  // Detect any partial trailing tag — if we see "<data" without a closer
+  // anywhere AFTER it, hold off rendering. Also catch shorter prefixes
+  // like "<d", "<da", "<dat" that occur when a stream chunk lands
+  // mid-tag — we don't want to flash "Some prose <da" to the user.
+  const partialIdx = text.lastIndexOf('<data');
+  let hasPartial = false;
+  if (partialIdx >= 0) {
+    const tail = text.slice(partialIdx);
+    if (!/\/>/.test(tail) && !/<\/data>/i.test(tail)) {
+      hasPartial = true;
+      // Don't render the partial — return only the safe prefix
+      const safe = text.slice(0, partialIdx);
+      return { cleaned: safe.replace(/<data\b[^>]*\/>/gi, '').replace(/\n{3,}/g, '\n\n').trim(), hasPartial };
+    }
+  } else {
+    // Check for shorter prefixes of "<data" at the very end of the chunk:
+    //   "...something <"        → hold (could be anything)
+    //   "...something <d"       → hold (could become <data)
+    //   "...something <da"      → hold
+    //   "...something <dat"     → hold
+    // Only trigger when the trailing "<x..." is at the very end and is
+    // a valid prefix of "<data". Other "<" usage (like "<5%") falls
+    // through normally because there's prose after the "<".
+    const partialPrefixMatch = text.match(/<(?:d(?:a(?:t)?)?)?$/i);
+    if (partialPrefixMatch) {
+      hasPartial = true;
+      const safe = text.slice(0, partialPrefixMatch.index);
+      return { cleaned: safe.replace(/<data\b[^>]*\/>/gi, '').replace(/\n{3,}/g, '\n\n').trim(), hasPartial };
+    }
+  }
+  // Strip all complete tags + collapse leftover whitespace
+  const cleaned = text.replace(/<data\b[^>]*\/>/gi, '').replace(/\n{3,}/g, '\n\n').trim();
+  return { cleaned, hasPartial: false };
+}
+
 // Convert <data> tag attributes into resolver input shape.
 // Handles type coercion: "true" → true, "5000000" → 5_000_000, etc.
 export function dataAttrsToResolverInput(attrs) {
@@ -1599,7 +1649,12 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
         payloadSummary: subSummary,
         abortController: secondAbort,
         onChunk: (accumulated) => {
-          render.streamPostTagProse(accumulated);
+          // Defensive: strip any <data> tags Mo may have echoed despite
+          // the prompt forbidding it. Without this, raw markup leaks
+          // into the rendered prose.
+          const { cleaned, hasPartial } = stripDataTags(accumulated);
+          if (hasPartial) return; // wait for next chunk to disambiguate
+          render.streamPostTagProse(cleaned);
         },
       });
 
@@ -1610,7 +1665,11 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
         preTagText,
         subs,
         resolverInput,
-        postTagText: secondPassFull,
+        // Strip any leaked <data> tags from the historical record. The
+        // raw stream is preserved in debug.secondPassRaw for diagnosis,
+        // but Mo's conversation memory should reflect the cleaned prose
+        // the user actually saw.
+        postTagText: stripDataTags(secondPassFull).cleaned,
         debug,
       };
     }
@@ -1863,7 +1922,13 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
       payloadSummary: summary,
       abortController: secondAbort,
       onChunk: (accumulated) => {
-        render.streamPostTagProse(accumulated);
+        // Defensive: strip any <data> tags Mo may have echoed despite
+        // the prompt forbidding it. Without this, raw markup leaks
+        // into the rendered prose. See stripDataTags() for partial-tag
+        // handling so the user never sees a half-rendered <da fragment.
+        const { cleaned, hasPartial } = stripDataTags(accumulated);
+        if (hasPartial) return; // wait for next chunk to disambiguate
+        render.streamPostTagProse(cleaned);
       },
     });
 
@@ -2009,7 +2074,11 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
       preTagText,
       rows,
       resolverInput,
-      postTagText: secondPassFull,
+      // Strip any leaked <data> tags from the historical record. The
+      // raw stream is preserved in debug.secondPassRaw for diagnosis,
+      // but Mo's conversation memory should reflect the cleaned prose
+      // the user actually saw.
+      postTagText: stripDataTags(secondPassFull).cleaned,
       debug,
     };
   } catch (err) {
