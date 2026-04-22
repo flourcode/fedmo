@@ -2554,7 +2554,6 @@ const App = {
             count: pl.items.length,
             lens: pipelineIntent.lens || '(none)',
           });
-          this.removeLoading(loadingId);
           return;
         } catch (err) {
           console.error('[onSend] pipeline-list path failed, falling through to askMo:', err);
@@ -2618,8 +2617,17 @@ const App = {
           }
         }
       } else if (result.mode === 'prose' && result.text) {
+        // If the prose-scrubber fired, the fabricated text is already
+        // streamed into preProseEl. Overwrite the DOM with the scrub's
+        // correction text so the user doesn't see the fake contracts.
+        if (result.debug && result.debug.fabricationScrubbed && turnEls.preProseEl) {
+          turnEls.preProseEl.innerHTML = `<div style="color: var(--text-muted); font-style: italic; line-height: 1.55;">${Html.escapeHtml(result.text)}</div>`;
+          // Clear the card slot too — sometimes the loading placeholder
+          // is still there
+          if (turnEls.cardSlotEl) turnEls.cardSlotEl.innerHTML = '';
+        }
         this._history.push({ role: 'model', content: result.text });
-        this._track('turn_prose', { length: result.text.length });
+        this._track('turn_prose', { length: result.text.length, scrubbed: !!(result.debug && result.debug.fabricationScrubbed) });
       } else if (result.mode === 'needs_qualifier') {
         // Vendor pitched at agency, direct pull empty, vendor NOT in
         // categories file. Instead of rendering wrong data (the old Turn A
