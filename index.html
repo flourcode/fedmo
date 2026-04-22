@@ -1199,7 +1199,7 @@ body.thread-empty .mo-ask-bar {
 // If you're serving from Amplify, just drop resolver.js and
 // mo-stream-client.v2.js in the same folder as this HTML file.
 import { resolve, applyPostFilters } from './resolver.js';
-import { askMo } from './stream-client.js';
+import { askMo, detectPipelineListIntent, buildPipelineList } from './stream-client.js';
 
 // Always start at the top on reload — disable the browser's default scroll
 // restoration which remembers where the user was before reload. That behavior
@@ -2510,6 +2510,58 @@ const App = {
       // Build render callbacks that drive the composite turn shell
       const render = this._buildRenderCallbacks(turnEls);
 
+      // ── Pipeline-list path ─────────────────────────────────────────
+      // User is asking for a structured pipeline list ("give me 5 opps",
+      // "top 10 recompetes", "5 salesforce-ready opportunities"). We
+      // route this around the main LLM flow to prevent fabrication:
+      // record fields come from real rows, the LLM only writes insight
+      // text keyed to real Award IDs.
+      //
+      // Two cases:
+      //   Hot path (this block): user wants a list on the CURRENT scope.
+      //     Active rows exist AND the question doesn't name a different
+      //     scope (e.g. a different agency the active card isn't about).
+      //   Cold-start (handled below after askMo): user names a new scope.
+      //     askMo fires, emits a data tag, pulls fresh data. Then the
+      //     deferred-intent check re-runs buildPipelineList on the new
+      //     rows.
+      const pipelineIntent = detectPipelineListIntent(question);
+      const haveActiveRows = Array.isArray(this.state.lastRows) && this.state.lastRows.length > 0;
+      // Detect if the question mentions a scope (agency) that isn't in
+      // the active card. If so, we need a fresh pull — don't apply the
+      // list request to the wrong rows.
+      const questionNamesDifferentScope = pipelineIntent && haveActiveRows
+        ? this._questionNamesNewAgency(question, this.state.lastResolverInput)
+        : false;
+      if (pipelineIntent && haveActiveRows && !questionNamesDifferentScope) {
+        try {
+          const scope = this._labelForResolverInput(this.state.lastResolverInput);
+          render.onDataTag(this.state.lastResolverInput || {});
+          const pl = await buildPipelineList({
+            rows: this.state.lastRows,
+            count: pipelineIntent.count,
+            lens: pipelineIntent.lens,
+            scope,
+            endpoint: AI_ENDPOINT,
+          });
+          render.renderPipelineList(pl);
+          render.complete();
+          this._history.push({
+            role: 'model',
+            content: `[pipeline-list rendered: ${pl.items.length} items${pipelineIntent.lens ? ', lens: ' + pipelineIntent.lens : ''}]`,
+          });
+          this._track('turn_pipeline_list', {
+            count: pl.items.length,
+            lens: pipelineIntent.lens || '(none)',
+          });
+          this.removeLoading(loadingId);
+          return;
+        } catch (err) {
+          console.error('[onSend] pipeline-list path failed, falling through to askMo:', err);
+          // fall through to the normal askMo flow
+        }
+      }
+
       const result = await askMo({
         question,
         history: this._history.slice(0, -1), // askMo appends the current question itself
@@ -2531,6 +2583,40 @@ const App = {
       // Update state + history based on what happened
       if (result.mode === 'data' && result.rows && result.rows.length > 0) {
         this._onDataTurnComplete(result, question);
+
+        // If the ORIGINAL question was a pipeline-list ask and we just
+        // pulled fresh data, chain directly into the pipeline-list
+        // render on those rows. This handles the "ok give 5 opps for
+        // DISA" cold-start case: the user asked for a list, we didn't
+        // have the data yet, Mo pulled it, now we deliver the list
+        // from the real rows. Two-turn behavior compressed into one
+        // visible response.
+        const deferredIntent = detectPipelineListIntent(question);
+        if (deferredIntent) {
+          try {
+            const scope = this._labelForResolverInput(result.resolverInput);
+            const pl = await buildPipelineList({
+              rows: result.rows,
+              count: deferredIntent.count,
+              lens: deferredIntent.lens,
+              scope,
+              endpoint: AI_ENDPOINT,
+            });
+            // Append as a follow-up turn below the data card, so the
+            // card is visible for context and the structured list
+            // lives in its own turn block right underneath.
+            const followTurn = this.appendCompositeTurn();
+            const followRender = this._buildRenderCallbacks(followTurn);
+            followRender.renderPipelineList(pl);
+            followRender.complete();
+            this._track('turn_pipeline_list_deferred', {
+              count: pl.items.length,
+              lens: deferredIntent.lens || '(none)',
+            });
+          } catch (err) {
+            console.error('[onSend] deferred pipeline-list failed:', err);
+          }
+        }
       } else if (result.mode === 'prose' && result.text) {
         this._history.push({ role: 'model', content: result.text });
         this._track('turn_prose', { length: result.text.length });
@@ -2598,6 +2684,42 @@ const App = {
   // When a data-backed turn completes successfully, stash the card state and
   // write a compact transcript entry to history. We don't push the raw payload
   // into history — Gemini doesn't need it again, and it would bloat context.
+  // Detect whether the question names an agency that's DIFFERENT from
+  // the one in the active card's resolver input. Used to decide
+  // whether a pipeline-list request can be satisfied from active rows
+  // or needs a fresh data pull first.
+  //
+  // Conservative — only flags a mismatch when we see a recognizable
+  // agency alias in the question. If we're uncertain (e.g. ambiguous
+  // terms), treat as same-scope and let the hot path run. The worst
+  // case of a false negative is "list drawn from slightly-off data,"
+  // which is still better than "list drawn from completely fabricated
+  // data" (the whole point of this path).
+  _questionNamesNewAgency(question, resolverInput) {
+    if (!question || !resolverInput) return false;
+    const text = question.toLowerCase();
+    // Known agency aliases that commonly appear in pitches
+    const agencies = [
+      'dhs', 'dod', 'navy', 'army', 'air force', 'space force',
+      'hhs', 'va', 'veterans affairs', 'treasury', 'doj', 'irs',
+      'nasa', 'dla', 'disa', 'dia', 'nsa', 'cia', 'state', 'doc',
+      'epa', 'fda', 'cms', 'nih', 'fbi', 'uscis', 'cbp', 'ice',
+      'tsa', 'uscg', 'occ', 'education', 'energy', 'interior',
+      'justice', 'labor', 'transportation', 'agriculture', 'commerce',
+    ];
+    const currentAgency = (resolverInput.agency || '').toLowerCase();
+    for (const alias of agencies) {
+      const regex = new RegExp(`\\b${alias}\\b`);
+      if (regex.test(text)) {
+        // Question mentions this agency. Is it different from the current?
+        if (!currentAgency.includes(alias) && !alias.includes(currentAgency.split(' ')[0])) {
+          return true;
+        }
+      }
+    }
+    return false;
+  },
+
   _onDataTurnComplete(result, question) {
     // State update: the card is now the active card
     const m = analyzeMarket(result.rows, this._labelForResolverInput(result.resolverInput));
@@ -2607,6 +2729,10 @@ const App = {
       this.state.lastMarketMetrics = m;
       this.state.lastQuery = spec.query;
       this.state.lastResolverInput = result.resolverInput;
+      // Stash raw rows so the pipeline-list path can generate real
+      // records on request without refetching. Keep only what
+      // shape-for-insights needs to avoid memory bloat.
+      this.state.lastRows = result.rows;
     }
     // History entry: combined pre+post prose, so Mo can reference her own
     // earlier analysis in later turns.
@@ -3302,6 +3428,63 @@ const App = {
         // resolver input give them a way forward.
         turnEls.chipData = { mode: 'no_data', rows: [], resolverInput: turnEls.lastResolverInput || {} };
         this._track('error_shown', { msg: (msg || '').slice(0, 80) });
+      },
+
+      // Render a structured pipeline list (govhoo pattern). Takes the
+      // output from buildPipelineList: real contract records + per-
+      // record insight text keyed by Award ID. Renders as a list of
+      // opportunity cards. ZERO fabrication possible because the record
+      // fields come from real USASpending rows, not the LLM.
+      renderPipelineList: (pl) => {
+        if (cardSlotEl) cardSlotEl.innerHTML = '';
+        if (!preProseEl || !pl) return;
+        if (!pl.items || pl.items.length === 0) {
+          preProseEl.innerHTML = `<div class="mo-empty-msg" style="color: var(--text-muted);">There aren't any pipeline candidates in this slice to list.</div>`;
+          return;
+        }
+        const money = (amt) => {
+          if (amt >= 1e9) return `$${(amt / 1e9).toFixed(1)}B`;
+          if (amt >= 1e6) return `$${(amt / 1e6).toFixed(1)}M`;
+          if (amt >= 1e3) return `$${(amt / 1e3).toFixed(0)}K`;
+          return `$${amt.toFixed(0)}`;
+        };
+        const escapeHtml = (s) => Html.escapeHtml(String(s || ''));
+        let html = '';
+        if (pl.intro) {
+          html += `<div style="color: var(--text-body); margin-bottom: 18px; line-height: 1.55;">${escapeHtml(pl.intro)}</div>`;
+        }
+        html += '<div class="mo-pipeline-list" style="display: flex; flex-direction: column; gap: 14px;">';
+        pl.items.forEach((item, i) => {
+          const r = item.record;
+          const daysLabel = r.daysLeft !== null && r.daysLeft !== undefined
+            ? `${r.daysLeft}d left`
+            : r.endDate;
+          html += `
+            <div class="mo-pipeline-item" style="border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; background: var(--surface); display: flex; flex-direction: column; gap: 8px;">
+              <div style="display: flex; justify-content: space-between; gap: 12px; align-items: baseline; flex-wrap: wrap;">
+                <div style="font-weight: 600; font-size: 15px; color: var(--text-primary); flex: 1; min-width: 0;">
+                  <span style="color: var(--text-muted); font-weight: 500;">${i + 1}.</span>
+                  ${escapeHtml(r.vendor)}
+                </div>
+                <div style="font-weight: 700; font-size: 15px; color: var(--text-primary); white-space: nowrap;">${money(r.amount)}</div>
+              </div>
+              <div style="font-size: 12px; color: var(--text-muted); display: flex; gap: 10px; flex-wrap: wrap;">
+                <span>${escapeHtml(r.office)}</span>
+                <span>·</span>
+                <span>${escapeHtml(daysLabel)}</span>
+                <span>·</span>
+                <span style="font-family: var(--font-mono, monospace); font-size: 11px;">${escapeHtml(r.awardId)}</span>
+              </div>
+              ${r.description ? `<div style="font-size: 13px; color: var(--text-body); line-height: 1.45;">${escapeHtml(r.description)}</div>` : ''}
+              ${item.insight ? `<div style="font-size: 14px; color: var(--text-body); line-height: 1.55; padding-top: 6px; border-top: 1px solid var(--border-faint, var(--border));">${escapeHtml(item.insight)}</div>` : ''}
+            </div>
+          `;
+        });
+        html += '</div>';
+        if (pl.outro) {
+          html += `<div style="color: var(--text-body); margin-top: 18px; line-height: 1.55;">${escapeHtml(pl.outro)}</div>`;
+        }
+        preProseEl.innerHTML = html;
       },
 
       // Called after Mo's whole turn is done — pre-tag prose, data card,

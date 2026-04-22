@@ -958,6 +958,205 @@ export async function streamOnce({ endpoint, history, activeCardSummary, payload
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// Pipeline-list generation (govhoo pattern)
+// ─────────────────────────────────────────────────────────────────────
+//
+// User asks "give me 5 salesforce-ready pipeline opps" or "top 10
+// recompetes at DHS" — this is a structured-list request where each
+// item is a real contract with specific fields (vendor, Award ID,
+// amount, end date, office). Without guardrails, Flash Lite fabricates
+// these fields. With this path, the fields come from real rows and the
+// LLM only writes the per-item insight text.
+//
+// Flow:
+//   1. Detect pipeline-list intent from the user message (count + lens)
+//   2. Select top N records from the rows deterministically (by
+//      expiring-soon priority + dollar value)
+//   3. Shape each record into the payload expected by the Lambda
+//   4. Call fedmo_pipeline_insights — returns insights keyed by awardId
+//   5. Combine real records + insights into the final output
+//   6. Client renders from real records; insights slot in per-card
+//
+// Fabrication is structurally impossible because the LLM never produces
+// record fields — only insight text keyed to awardIds the client
+// controls.
+// ─────────────────────────────────────────────────────────────────────
+
+// Detect whether the user message is asking for a structured pipeline
+// list. Returns { count, lens } if matched, null otherwise.
+//
+// Matches:
+//   "give me 5 opps"                    → { count: 5, lens: null }
+//   "show me 10 pipeline opportunities" → { count: 10, lens: null }
+//   "5 salesforce-ready pipeline opps"  → { count: 5, lens: "salesforce" }
+//   "top 5 recompetes for DHS"          → { count: 5, lens: null }
+//   "give me 5 splunk-fit opportunities" → { count: 5, lens: "splunk" }
+//   "5 opps for AWS"                    → { count: 5, lens: "aws" }
+//
+// Does NOT match things that just contain a number and an unrelated word.
+// Requires BOTH a count (1-20) AND a pipeline-intent keyword nearby.
+export function detectPipelineListIntent(question) {
+  if (!question || typeof question !== 'string') return null;
+  const text = question.toLowerCase();
+
+  // Pipeline intent keywords — must appear somewhere in the message
+  const pipelineKeywords = /\b(opps?|opportunit(?:y|ies)|pipeline|recompetes?|prospects?|targets?|leads?|plays?)\b/;
+  if (!pipelineKeywords.test(text)) return null;
+
+  // Count extraction — accept "5", "top 5", "give me 5", "5-10" → 5
+  const countMatch = text.match(/\b(?:top\s+|give\s+me\s+|show\s+(?:me\s+)?|list\s+(?:me\s+)?)?(\d{1,2})\b/);
+  if (!countMatch) return null;
+  const count = parseInt(countMatch[1], 10);
+  if (count < 1 || count > 20) return null;
+
+  // Lens extraction — look for "[word]-ready", "[word]-fit", "[word]-friendly"
+  // or "[word] opportunities" / "[word] opps" / "for [word]"
+  let lens = null;
+  const lensMatch1 = text.match(/\b([a-z][a-z0-9]+(?:\s[a-z][a-z0-9]+)?)-(?:ready|fit|friendly|focused)\b/);
+  if (lensMatch1) {
+    lens = lensMatch1[1];
+  } else {
+    // "5 opps for Salesforce" or "5 Splunk opps"
+    const forMatch = text.match(/\bfor\s+([a-z][a-z0-9]+(?:\s+[a-z][a-z0-9]+)?)\s*(?:$|[?.!])/);
+    if (forMatch) {
+      const candidate = forMatch[1].trim();
+      // Don't treat agency names as lenses — "5 opps for DHS" is a
+      // scope, not a lens. The caller decides what to do with the
+      // scope (pull fresh data).
+      const commonAgencies = /^(dhs|dod|navy|army|air force|space force|hhs|va|treasury|doj|irs|nasa|usaf|dla|disa|dia|nsa|cia|state|doc|epa|fda|cms|nih|fbi|uscis|cbp|ice|tsa|uscg|occ)$/;
+      if (!commonAgencies.test(candidate)) {
+        lens = candidate;
+      }
+    }
+  }
+
+  return { count, lens };
+}
+
+// Select the top N records from the rows for the pipeline list. Priority:
+//   1. Expiring within 90 days (urgency signal)
+//   2. Expiring within 12 months (near-term recompetes)
+//   3. Remaining top-value contracts if we still need more to hit N
+// Sort within each tier by dollar value descending.
+export function selectPipelineRecords(rows, count) {
+  if (!Array.isArray(rows) || rows.length === 0) return [];
+  const now = Date.now();
+  const in90 = now + 90 * 86400_000;
+  const in365 = now + 365 * 86400_000;
+
+  const tier1 = []; // expiring in 90d
+  const tier2 = []; // expiring in 365d (excluding tier 1)
+  const tier3 = []; // everything else, ranked by value
+
+  for (const r of rows) {
+    const amt = parseFloat(r['Award Amount']) || 0;
+    const endTs = r._endTs;
+    if (endTs > now && endTs <= in90) {
+      tier1.push(r);
+    } else if (endTs > in90 && endTs <= in365) {
+      tier2.push(r);
+    } else if (amt > 0) {
+      tier3.push(r);
+    }
+  }
+
+  // Sort each tier by dollar value descending
+  const byValue = (a, b) => (parseFloat(b['Award Amount']) || 0) - (parseFloat(a['Award Amount']) || 0);
+  tier1.sort(byValue);
+  tier2.sort(byValue);
+  tier3.sort(byValue);
+
+  // Take from tier 1 first, then tier 2, then tier 3 to fill count
+  const selected = [];
+  for (const pool of [tier1, tier2, tier3]) {
+    for (const r of pool) {
+      if (selected.length >= count) break;
+      selected.push(r);
+    }
+    if (selected.length >= count) break;
+  }
+  return selected;
+}
+
+// Shape a row into the record payload the Lambda expects.
+function shapeRecordForInsights(r) {
+  const now = Date.now();
+  const endTs = r._endTs || 0;
+  const daysLeft = endTs > now
+    ? Math.max(0, Math.round((endTs - now) / 86400_000))
+    : null;
+  const endDate = endTs
+    ? new Date(endTs).toISOString().slice(0, 10)
+    : 'unknown';
+  return {
+    awardId: String(r['Award ID'] || ''),
+    vendor: String(r['Recipient Name'] || 'Unknown'),
+    amount: parseFloat(r['Award Amount']) || 0,
+    endDate,
+    daysLeft,
+    office: String(
+      r['Awarding Office']
+      || r['Awarding Sub Agency']
+      || r['Awarding Agency']
+      || ''
+    ),
+    agency: String(r['Awarding Agency'] || ''),
+    description: String(r['Description'] || '').slice(0, 240).replace(/\s+/g, ' ').trim(),
+  };
+}
+
+// Call the Lambda for per-record insights. Real records in, insights
+// keyed by Award ID out.
+export async function fetchPipelineInsights({ records, lens, scope, endpoint }) {
+  const res = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      request_type: 'fedmo_pipeline_insights',
+      records,
+      lens: lens || null,
+      scope: scope || null,
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`Pipeline insights failed: ${res.status} ${body.slice(0, 120)}`);
+  }
+  return await res.json();
+}
+
+// Build the full pipeline-list output. Combines real records (from rows)
+// with per-record insights (from Lambda) into a render-ready structure.
+// This is what the browser actually displays.
+export async function buildPipelineList({ rows, count, lens, scope, endpoint }) {
+  const selected = selectPipelineRecords(rows, count);
+  if (selected.length === 0) {
+    return { items: [], intro: '', outro: '', noDataReason: 'no-rows' };
+  }
+  const records = selected.map(shapeRecordForInsights);
+
+  let insights = {}, intro = '', outro = '';
+  try {
+    const apiResult = await fetchPipelineInsights({ records, lens, scope, endpoint });
+    insights = apiResult.insights || {};
+    intro = apiResult.intro || '';
+    outro = apiResult.outro || '';
+  } catch (err) {
+    console.warn('[pipeline] insight generation failed, showing records without insights:', err.message);
+    // Graceful degradation — show real records without insights rather
+    // than fail the whole flow. Sellers still get the data they asked
+    // for; they just don't get per-record coaching.
+  }
+
+  const items = records.map(r => ({
+    record: r,
+    insight: insights[r.awardId] || '', // empty string if Lambda didn't return one
+  }));
+
+  return { items, intro, outro, lens, scope, count: items.length };
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // askMo — top-level orchestrator for one user turn
 // ─────────────────────────────────────────────────────────────────────
 //
