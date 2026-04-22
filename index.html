@@ -397,9 +397,13 @@ button { cursor: pointer; }
   color: var(--text-title);
   flex: 1;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  /* Allow wrapping for long vendor names. Ellipsis-on-nowrap was
+     eating the end of real names on mobile ("Emergent Product
+     Development Gaith..."), which is costly when sellers need to
+     recognize the name to act. Two lines is acceptable; the row
+     will grow to fit. */
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .mo-row-amount {
   color: var(--text-title);
@@ -423,9 +427,8 @@ button { cursor: pointer; }
   font-size: 14px;
   font-weight: 500;
   color: var(--text-title);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
   flex: 1;
   min-width: 0;
 }
@@ -456,22 +459,26 @@ button { cursor: pointer; }
 
 .mo-exp-pattern {
   margin-top: 6px;
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
 }
 .mo-exp-pattern-pill {
   display: inline-flex;
   align-items: center;
   flex-shrink: 0;
-  height: 20px;
-  padding: 0 8px;
-  border-radius: 10px;
-  font-size: 11px;
+  height: 18px;
+  padding: 0 7px;
+  margin-right: 6px;
+  border-radius: 9px;
+  font-size: 10px;
   font-weight: 500;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
   white-space: nowrap;
+  vertical-align: middle;
+  position: relative;
+  top: -1px;
 }
 .mo-exp-pattern-renewal    { background: var(--primary-20);    color: var(--primary-100); }
 .mo-exp-pattern-short-term { background: #F4E2C7; color: #8C5A1A; }
@@ -479,11 +486,7 @@ button { cursor: pointer; }
 .mo-exp-pattern-spending   { background: var(--border-soft); color: var(--text-muted); }
 .mo-exp-pattern-adjacent   { background: var(--border-soft); color: var(--text-muted); }
 .mo-exp-pattern-blurb {
-  font-size: 12px;
-  color: var(--text-muted);
-  line-height: 1.4;
-  flex: 1;
-  min-width: 0;
+  /* Inline flow with the pill — single text stream, no wasted columns */
 }
 
 .mo-prose {
@@ -1044,22 +1047,36 @@ body.thread-empty .mo-ask-bar {
   flex-shrink: 0;
 }
 .mo-action-link {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 12px;
   font-size: 12px;
   font-weight: 500;
   color: var(--primary-100);
-  text-decoration: none;
-  padding: 2px 0;
-  border-bottom: 1px solid var(--primary-40);
-  transition: border-color 120ms;
-}
-.mo-action-link:hover { border-bottom-color: var(--primary-100); }
-.mo-action-link-primary {
-  padding: 4px 12px;
-  background: var(--primary-20);
-  border-bottom: none;
+  background: transparent;
+  border: 1px solid var(--border);
   border-radius: var(--radius-pill);
+  text-decoration: none;
+  transition: background 120ms, border-color 120ms;
+  -webkit-tap-highlight-color: transparent;
 }
-.mo-action-link-primary:hover { background: var(--primary-40); }
+.mo-action-link:hover {
+  background: var(--bg-tint);
+  border-color: var(--primary-40);
+}
+.mo-action-link:active {
+  background: var(--primary-20);
+  transform: scale(0.97);
+}
+/* Filled variant for cases that want a primary-action feel (unused on
+   expiring-row View now — kept for backward compatibility with any path
+   that still references it). */
+.mo-action-link-primary {
+  background: var(--primary-20);
+  border-color: transparent;
+}
+.mo-action-link-primary:hover { background: var(--primary-40); border-color: transparent; }
 
 /* Legacy pill style, still used on expiring rows below */
 .mo-view-link {
@@ -4129,8 +4146,8 @@ const App = {
           <div class="mo-row-2line-bottom">
             <span class="mo-row-2line-meta"></span>
             <span class="mo-row-actions">
-              <a class="mo-action-link" href="${liUrl}" target="_blank" rel="noopener" title="Find ${Html.escapeHtml(r.sub)} employees on LinkedIn" onclick="App._track('linkedin_search', { vendor: '${Html.escapeHtml(r.sub).slice(0,40)}' })">Sub people</a>
-              ${r.link ? `<a class="mo-action-link mo-action-link-primary" href="${r.link}" target="_blank" rel="noopener">View prime</a>` : ''}
+              <a class="mo-action-link" href="${liUrl}" target="_blank" rel="noopener" title="Find ${Html.escapeHtml(r.sub)} employees on LinkedIn" onclick="App._track('linkedin_search', { vendor: '${Html.escapeHtml(r.sub).slice(0,40)}' })">People</a>
+              ${r.link ? `<a class="mo-action-link" href="${r.link}" target="_blank" rel="noopener">View</a>` : ''}
             </span>
           </div>
         </div>`;
@@ -4205,7 +4222,7 @@ const App = {
             <span class="mo-row-2line-meta">${Html.escapeHtml(meta)}</span>
             <span class="mo-row-actions">
               <a class="mo-action-link" href="${liUrl}" target="_blank" rel="noopener" title="Find ${Html.escapeHtml(p.name)} employees on LinkedIn" onclick="App._track('linkedin_search', { vendor: '${Html.escapeHtml(p.name).slice(0,40)}' })">People</a>
-              ${p.link ? `<a class="mo-action-link mo-action-link-primary" href="${p.link}" target="_blank" rel="noopener">View</a>` : ''}
+              ${p.link ? `<a class="mo-action-link" href="${p.link}" target="_blank" rel="noopener">View</a>` : ''}
             </span>
           </div>
         </div>`;
@@ -4219,7 +4236,15 @@ const App = {
         const idShort = e.contractId ? e.contractId.slice(0, 24) + (e.contractId.length > 24 ? '…' : '') : '';
         const meta = [idShort, e.vehicle].filter(Boolean).join(' · ');
         const liUrl = `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(Utils.linkedinSearchTerm(e.vendor))}&origin=GLOBAL_SEARCH_HEADER`;
-        const patternHtml = e.patternLabel
+        // Show pattern UI ONLY for meaningful classifications. 'adjacent'
+        // is the default-fallback kind that fires when nothing else matches,
+        // and its blurb ("Related to the market but doesn't fit a clean
+        // pattern") was repeating on every un-matched row, creating visual
+        // noise and suggesting the classifier wasn't trying. Suppressing
+        // it lets the meaningful labels stand out and stops the empty-
+        // repetition problem surfaced in mobile review.
+        const showPattern = e.patternLabel && e.patternKind !== 'adjacent';
+        const patternHtml = showPattern
           ? `<div class="mo-exp-pattern">
               <span class="mo-exp-pattern-pill mo-exp-pattern-${e.patternKind}">${Html.escapeHtml(e.patternLabel)}</span>
               <span class="mo-exp-pattern-blurb">${Html.escapeHtml(e.patternBlurb)}</span>
@@ -4240,7 +4265,7 @@ const App = {
             <span class="mo-row-2line-meta">${Html.escapeHtml(meta)}</span>
             <span class="mo-row-actions">
               <a class="mo-action-link" href="${liUrl}" target="_blank" rel="noopener" title="Find ${Html.escapeHtml(e.vendor)} employees on LinkedIn" onclick="App._track('linkedin_search', { vendor: '${Html.escapeHtml(e.vendor).slice(0,40)}' })">People</a>
-              ${e.link ? `<a class="mo-action-link mo-action-link-primary" href="${e.link}" target="_blank" rel="noopener">View</a>` : ''}
+              ${e.link ? `<a class="mo-action-link" href="${e.link}" target="_blank" rel="noopener">View</a>` : ''}
             </span>
           </div>
         </div>`;
