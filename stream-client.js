@@ -747,19 +747,31 @@ export function summarizePayloadForMo(rows, resolverInput, opts = {}) {
     .map(([n, a]) => `${n} ($${(a / 1_000_000).toFixed(1)}M)`);
 
   // Expiring pipeline — 90 day and 12 month windows, with specific
-  // top contracts so Mo can name targets in her prose. Fedhoo pattern:
-  // sellers don't care about "$X expires in 90 days" as an abstract
-  // number; they care about WHICH contracts, WHO holds them, and HOW
-  // SOON. Surface the top 3 near-term targets with full context.
+  // contract records so Mo can produce govhoo-style recompete lists.
+  //
+  // Sellers asking "pipeline opps," "recompete targets," "what's expiring,"
+  // or "[product]-ready opportunities" don't want aggregate numbers —
+  // they want a list of specific contracts with IDs, full descriptions,
+  // vendor names, end dates, and dollar values. Give Mo the raw material
+  // to build that list in her prose. Without these records in context,
+  // she can only work from summary stats and her answers devolve to
+  // generic "$X is expiring, find out who holds them" advice.
   const now = Date.now(), in90 = now + 90 * 86400_000, in365 = now + 365 * 86400_000;
   const expiring = rows
     .filter(r => r._endTs > now && r._endTs <= in90)
     .sort((a, b) => a._endTs - b._endTs); // soonest first
   const expiringVal = expiring.reduce((s, r) => s + (parseFloat(r['Award Amount']) || 0), 0);
-  const expiring12 = rows.filter(r => r._endTs > now && r._endTs <= in365);
+  const expiring12 = rows
+    .filter(r => r._endTs > now && r._endTs <= in365)
+    .sort((a, b) => b['Award Amount'] - a['Award Amount']); // highest value first
   const expiring12Val = expiring12.reduce((s, r) => s + (parseFloat(r['Award Amount']) || 0), 0);
   const daysOut = (ts) => Math.max(0, Math.round((ts - now) / 86400_000));
-  const topExpiringDetail = expiring.slice(0, 3).map(r => {
+  const formatEndDate = (ts) => ts
+    ? new Date(ts).toISOString().slice(0, 10)
+    : 'unknown';
+
+  // 90-day near-term targets (immediate pipeline) — keep concise format
+  const topExpiringDetail = expiring.slice(0, 5).map(r => {
     const vendor = r['Recipient Name'] || 'Unknown';
     const amt = parseFloat(r['Award Amount']) || 0;
     const office = r['Awarding Office']
@@ -768,6 +780,30 @@ export function summarizePayloadForMo(rows, resolverInput, opts = {}) {
       || '';
     const desc = (r['Description'] || '').slice(0, 80).replace(/\s+/g, ' ').trim();
     return `${vendor} — $${(amt / 1_000_000).toFixed(1)}M at ${office}, ${daysOut(r._endTs)}d left${desc ? ' — ' + desc : ''}`;
+  });
+
+  // 12-month recompete candidates (full records Mo can cite in bulleted
+  // answers). Top 10 by dollar value, rich detail. This is what lets
+  // her produce govhoo-quality contract-by-contract pipeline answers.
+  const recompeteList = expiring12.slice(0, 10).map(r => {
+    const vendor = r['Recipient Name'] || 'Unknown';
+    const amt = parseFloat(r['Award Amount']) || 0;
+    const office = r['Awarding Office']
+      || r['Awarding Sub Agency']
+      || r['Awarding Agency']
+      || '';
+    const awardId = r['Award ID'] || '';
+    const desc = (r['Description'] || '').slice(0, 160).replace(/\s+/g, ' ').trim();
+    const endDate = formatEndDate(r._endTs);
+    const parts = [
+      `  • ${vendor}`,
+      `    Contract: ${awardId}`,
+      `    Value: $${(amt / 1_000_000).toFixed(1)}M`,
+      `    Ends: ${endDate} (${daysOut(r._endTs)}d)`,
+      `    Office: ${office}`,
+    ];
+    if (desc) parts.push(`    Scope: ${desc}`);
+    return parts.join('\n');
   });
 
   // Top 3 concentration
@@ -858,7 +894,8 @@ Top awarding agencies:
 ${topAgencies.map(a => '  - ' + a).join('\n')}
 Pipeline — expiring in next 90 days: ${expiring.length} contracts, $${(expiringVal / 1_000_000).toFixed(1)}M total
 ${topExpiringDetail.length > 0 ? 'Top near-term targets:\n' + topExpiringDetail.map(t => '  - ' + t).join('\n') : '  (nothing expiring soon)'}
-Pipeline — 12-month outlook: ${expiring12.length} contracts, $${(expiring12Val / 1_000_000).toFixed(1)}M total`;
+Pipeline — 12-month outlook: ${expiring12.length} contracts, $${(expiring12Val / 1_000_000).toFixed(1)}M total
+${recompeteList.length > 0 ? 'Top recompete candidates (next 12 months, full records for citing in prose):\n' + recompeteList.join('\n\n') : ''}`;
 }
 
 // ─────────────────────────────────────────────────────────────────────
