@@ -1316,7 +1316,7 @@ body.thread-empty .mo-ask-bar {
 // If you're serving from Amplify, just drop resolver.js and
 // mo-stream-client.v2.js in the same folder as this HTML file.
 import { resolve, applyPostFilters } from './resolver.js';
-import { askMo, detectPipelineListIntent, buildPipelineList } from './stream-client.js';
+import { askMo, detectPipelineListIntent, buildPipelineList, stripDataTags } from './stream-client.js';
 
 // Always start at the top on reload — disable the browser's default scroll
 // restoration which remembers where the user was before reload. That behavior
@@ -3072,9 +3072,16 @@ const App = {
       // shape-for-insights needs to avoid memory bloat.
       this.state.lastRows = result.rows;
     }
-    // History entry: combined pre+post prose, so Mo can reference her own
-    // earlier analysis in later turns.
-    const combined = [result.preTagText || '', '[data card rendered]', result.postTagText || ''].filter(Boolean).join('\n\n');
+    // History entry: combined pre+post prose for conversational continuity.
+    // We aggressively strip any <data> tags that might have leaked through —
+    // Mo's own past tags, if visible in history, anchor Flash Lite to repeat
+    // the same tag value on follow-up turns (the topic-bleed bug). Also
+    // drop the '[data card rendered]' structural marker — Mo doesn't need
+    // it to understand context, and it can reinforce 'I emit a tag every
+    // turn' as a behavioral pattern.
+    const cleanPre = stripDataTags(result.preTagText || '').cleaned;
+    const cleanPost = stripDataTags(result.postTagText || '').cleaned;
+    const combined = [cleanPre, cleanPost].filter(Boolean).join('\n\n');
     this._history.push({ role: 'model', content: combined });
     this._track('turn_data', {
       rows: result.rows.length,
