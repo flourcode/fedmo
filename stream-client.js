@@ -746,10 +746,29 @@ export function summarizePayloadForMo(rows, resolverInput, opts = {}) {
     .slice(0, 3)
     .map(([n, a]) => `${n} ($${(a / 1_000_000).toFixed(1)}M)`);
 
-  // Expiring count (next 90 days)
-  const now = Date.now(), in90 = now + 90 * 86400_000;
-  const expiring = rows.filter(r => r._endTs > now && r._endTs <= in90);
+  // Expiring pipeline — 90 day and 12 month windows, with specific
+  // top contracts so Mo can name targets in her prose. Fedhoo pattern:
+  // sellers don't care about "$X expires in 90 days" as an abstract
+  // number; they care about WHICH contracts, WHO holds them, and HOW
+  // SOON. Surface the top 3 near-term targets with full context.
+  const now = Date.now(), in90 = now + 90 * 86400_000, in365 = now + 365 * 86400_000;
+  const expiring = rows
+    .filter(r => r._endTs > now && r._endTs <= in90)
+    .sort((a, b) => a._endTs - b._endTs); // soonest first
   const expiringVal = expiring.reduce((s, r) => s + (parseFloat(r['Award Amount']) || 0), 0);
+  const expiring12 = rows.filter(r => r._endTs > now && r._endTs <= in365);
+  const expiring12Val = expiring12.reduce((s, r) => s + (parseFloat(r['Award Amount']) || 0), 0);
+  const daysOut = (ts) => Math.max(0, Math.round((ts - now) / 86400_000));
+  const topExpiringDetail = expiring.slice(0, 3).map(r => {
+    const vendor = r['Recipient Name'] || 'Unknown';
+    const amt = parseFloat(r['Award Amount']) || 0;
+    const office = r['Awarding Office']
+      || r['Awarding Sub Agency']
+      || r['Awarding Agency']
+      || '';
+    const desc = (r['Description'] || '').slice(0, 80).replace(/\s+/g, ' ').trim();
+    return `${vendor} — $${(amt / 1_000_000).toFixed(1)}M at ${office}, ${daysOut(r._endTs)}d left${desc ? ' — ' + desc : ''}`;
+  });
 
   // Top 3 concentration
   const top3Sum = [...primeMap.values()].sort((a, b) => b - a).slice(0, 3).reduce((s, v) => s + v, 0);
@@ -837,7 +856,9 @@ Top primes:
 ${topPrimesAnnotated.map(p => '  - ' + p).join('\n')}
 Top awarding agencies:
 ${topAgencies.map(a => '  - ' + a).join('\n')}
-Expiring within 90 days: ${expiring.length} contracts, $${(expiringVal / 1_000_000).toFixed(1)}M`;
+Pipeline — expiring in next 90 days: ${expiring.length} contracts, $${(expiringVal / 1_000_000).toFixed(1)}M total
+${topExpiringDetail.length > 0 ? 'Top near-term targets:\n' + topExpiringDetail.map(t => '  - ' + t).join('\n') : '  (nothing expiring soon)'}
+Pipeline — 12-month outlook: ${expiring12.length} contracts, $${(expiring12Val / 1_000_000).toFixed(1)}M total`;
 }
 
 // ─────────────────────────────────────────────────────────────────────

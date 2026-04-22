@@ -2726,20 +2726,40 @@ const App = {
         });
       }
       // Vendor only, no agency — user asked a federal vendor question
-      // and got nothing. Not much to offer; a competitor slice is the
-      // one useful move.
+      // and got nothing. Common cause: small/niche firm that only shows
+      // up as a SUB, not a prime. Give them three concrete ways forward:
+      //   1. Competitor view — who else plays in this space
+      //   2. Subaward angle — maybe they're buried under a big prime
+      //   3. Explicit "tell me more" prompt to unstick the conversation
       else if (vendorLabel) {
         chips.push({
-          label: `Who competes with ${vendorLabel}`,
+          label: `Who competes with ${cleanName(vendorLabel)}`,
           question: `Who are ${vendorLabel}'s competitors?`,
         });
+        chips.push({
+          label: `Is ${cleanName(vendorLabel)} a sub anywhere?`,
+          question: `Show me subawards where ${vendorLabel} is a sub`,
+        });
+        chips.push({
+          label: `What does ${cleanName(vendorLabel)} sell?`,
+          question: `Tell me what ${vendorLabel} sells so we can find the market`,
+        });
       }
-      // Agency only — just broaden to "what's expiring here" as a
-      // useful default slice.
+      // Agency only — broaden with three angles so the user isn't
+      // stuck with one button. Expiring pipeline is the highest-
+      // signal default; the other two open escape paths.
       else if (agency) {
         chips.push({
           label: `Expiring at ${agency}`,
           question: `Show only expiring contracts at ${agency}`,
+        });
+        chips.push({
+          label: `Top primes at ${agency}`,
+          question: `Who are the top primes at ${agency}`,
+        });
+        chips.push({
+          label: `Cybersecurity at ${agency}`,
+          question: `Show cybersecurity at ${agency}`,
         });
       }
       return chips.slice(0, 3);
@@ -3103,6 +3123,11 @@ const App = {
       // that renderDataCard will later target. We keep it simple: return
       // the cardSlotEl itself and attach a loading placeholder inline.
       onDataTag: (resolverInput) => {
+        // Stash the resolverInput for error paths. If the query fails or
+        // returns empty, renderError needs the original query scope to
+        // generate context-aware escape chips (agency market, vendor
+        // federally, etc).
+        turnEls.lastResolverInput = resolverInput;
         if (cardSlotEl) {
           cardSlotEl.innerHTML = `
             <div class="mo-empty" style="padding: 16px 0;">
@@ -3124,6 +3149,10 @@ const App = {
           const emptyCard = empty.querySelector('.turn-mo-card');
           if (emptyCard) cardRef.appendChild(emptyCard);
           else cardRef.appendChild(empty);
+          // Set chipData so complete() renders context-aware escape chips
+          // below the empty card. Without this, the user hits a dead-end
+          // with no way forward except typing a brand-new query.
+          turnEls.chipData = { mode: 'no_data', rows: [], resolverInput };
           return;
         }
         const label = this._labelForResolverInput(resolverInput);
@@ -3248,11 +3277,21 @@ const App = {
       // Show an error state inside the turn. Keeps any successfully-rendered
       // pre-tag prose and card above, only the bottom shows the error.
       renderError: (msg) => {
+        // Clear the "Pulling data..." loading placeholder from the card
+        // slot so it doesn't hang visible alongside the error message.
+        // Without this, the user sees both the loader AND the error,
+        // which feels like the tool is stuck.
+        if (cardSlotEl) cardSlotEl.innerHTML = '';
         if (postProseEl) {
           postProseEl.innerHTML = `<div class="mo-empty-msg" style="color: var(--text-muted);">${Html.escapeHtml(msg || 'Something went sideways.')}</div>`;
         } else if (preProseEl) {
           preProseEl.innerHTML = `<div class="mo-empty-msg" style="color: var(--text-muted);">${Html.escapeHtml(msg || 'Something went sideways.')}</div>`;
         }
+        // Set chipData so complete() renders escape chips. Errors leave
+        // users stuck without this — they have to type a brand-new query
+        // to try anything else. Context-aware chips from the original
+        // resolver input give them a way forward.
+        turnEls.chipData = { mode: 'no_data', rows: [], resolverInput: turnEls.lastResolverInput || {} };
         this._track('error_shown', { msg: (msg || '').slice(0, 80) });
       },
 
