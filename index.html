@@ -1,4 +1,26 @@
 <!DOCTYPE html>
+<!--
+  ════════════════════════════════════════════════════════════════════
+  Mo v2 — working copy — April 20, 2026
+  ════════════════════════════════════════════════════════════════════
+
+  v2 architecture — simpler than v1, external modules do the heavy lifting. It uses:
+    - resolver.js  (external module) for canonical-name resolution
+    - mo-stream-client.v2.js  (external module) for streaming + <data> tags
+    - index.v2.mjs  (Lambda) for the single streaming endpoint
+
+  What changed from v1:
+    - No intent router. One ask() path for everything.
+    - No client-side acronym tables (moved to resolver.js).
+    - No agency/vendor post-filters (moved to resolver.js).
+    - No separate runSearch/runRefine/runAskMo/runSellerPitch/runCompare.
+    - Mo drives via <data> tags; browser intercepts and fetches data.
+    - Two-shot streaming: Mo writes, hits <data>, pauses, browser fetches,
+      renders card, fires second Mo call grounded in real payload.
+
+  v1 lives at mo_mock.v1.html + index.v1.mjs as a frozen rollback target.
+  ════════════════════════════════════════════════════════════════════
+-->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -36,7 +58,6 @@
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
   gtag('js', new Date());
-
   gtag('config', 'G-R0CRXSQJL5');
 </script>
 <style>
@@ -3227,6 +3248,13 @@ const App = {
       lines.push('Mo first-pass raw output:');
       // Indent every line by 2 spaces for readability when pasted
       const indented = d.firstPassRaw.split('\n').map(ln => '  ' + ln).join('\n');
+      lines.push(indented);
+      lines.push('');
+    }
+
+    if (d.secondPassRaw) {
+      lines.push('Mo second-pass raw output (post-card prose):');
+      const indented = d.secondPassRaw.split('\n').map(ln => '  ' + ln).join('\n');
       lines.push(indented);
       lines.push('');
     }

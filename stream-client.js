@@ -1863,6 +1863,12 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
       },
     });
 
+    // Stash the raw second-pass for the trace panel. Debug readers need
+    // to see BOTH the first-pass (that emitted the tag) AND the second-
+    // pass (Mo's grounded prose on top of the card) to diagnose tone
+    // drift or hallucination patterns.
+    debug.secondPassRaw = secondPassFull || '';
+
     // ── Fabrication detection — multi-layered safety net ─────
     //
     // This is the last guard before Mo's prose reaches a beta partner.
