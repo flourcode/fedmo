@@ -382,33 +382,6 @@ button { cursor: pointer; }
 .mo-treemap rect:active { opacity: 0.85; }
 .mo-treemap text { pointer-events: none; font-family: var(--font); }
 
-.mo-vehicles {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 4px;
-}
-.mo-vehicle {
-  flex: 0 1 auto;
-  min-width: 140px;
-  padding: 10px 12px;
-  border: 1px solid var(--border-soft);
-  border-radius: 8px;
-  background: transparent;
-}
-.mo-vehicle-name {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-title);
-  letter-spacing: 0.01em;
-}
-.mo-vehicle-meta {
-  font-size: 11px;
-  color: var(--text-muted);
-  margin-top: 2px;
-  font-variant-numeric: tabular-nums;
-}
-
 .mo-list { display: flex; flex-direction: column; }
 .mo-row {
   display: flex;
@@ -481,6 +454,38 @@ button { cursor: pointer; }
 .mo-exp-days { flex-shrink: 0; font-weight: 500; color: #B58840; }
 .mo-exp-days.urgent { color: #A85D70; }
 
+.mo-exp-pattern {
+  margin-top: 6px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.mo-exp-pattern-pill {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+.mo-exp-pattern-renewal    { background: var(--primary-20);    color: var(--primary-100); }
+.mo-exp-pattern-short-term { background: #F4E2C7; color: #8C5A1A; }
+.mo-exp-pattern-maturing   { background: #DDE6F0; color: #3E5A7F; }
+.mo-exp-pattern-spending   { background: var(--border-soft); color: var(--text-muted); }
+.mo-exp-pattern-adjacent   { background: var(--border-soft); color: var(--text-muted); }
+.mo-exp-pattern-blurb {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+  flex: 1;
+  min-width: 0;
+}
+
 .mo-prose {
   margin-top: 16px;
   padding: 16px;
@@ -534,6 +539,46 @@ button { cursor: pointer; }
   transform: scale(0.97);
 }
 .greeting-examples .mo-followup { height: 40px; padding: 0 20px; font-size: 15px; }
+
+/* Also-try variant — lighter-weight outlined chips that read as "optional
+   lateral moves" vs the filled primary followup chips. Visually calmer so
+   the main followups still draw the eye first. */
+.mo-followup-alt {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-body);
+  font-weight: 400;
+}
+.mo-followup-alt:hover {
+  background: var(--bg-tint);
+  border-color: var(--primary-40);
+  color: var(--primary-100);
+}
+.mo-followup-alt:active {
+  background: var(--primary-20);
+  color: var(--primary-100);
+  transform: scale(0.97);
+}
+
+/* Also-try sub-row inside the chips element. Wraps like the main chip
+   row but shows its own inline label so it reads as a second shelf of
+   options, not a continuation of the primary chips. */
+.mo-alsotry-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  width: 100%;
+}
+.mo-alsotry-label {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+  margin-right: 2px;
+}
 
 /* Post-response followup chips — sit under Mo's prose after a data-backed
    turn. Designed to feel like a continuation of the conversation, not a
@@ -1705,6 +1750,91 @@ const Utils = {
     const s = raw.trim();
     return s.slice(0, 100).toUpperCase();
   },
+
+  // Classify an expiring contract by its likely recompete pattern. Pure
+  // function of the contract's own facts — no historical lookups. Adapted
+  // from the govhoo approach because this single signal is what tells a
+  // seller whether to chase a contract or wait for its follow-on.
+  //
+  // Returns { kind, label, blurb } where:
+  //   kind   — machine key ('renewal' | 'short-term' | 'maturing' | 'spending' | 'adjacent')
+  //   label  — short display label ("Renewal", "Short-term bridge")
+  //   blurb  — 1-sentence diagnostic in Mo's voice explaining why this
+  //            classification + what it means for the seller's capture play
+  //
+  // Detection rules (in priority order):
+  //   1. Description keywords for RENEWAL (license, subscription, SaaS,
+  //      renewal itself, enterprise agreement). High-frequency re-buy;
+  //      seller needs to already be on the vehicle OR displace at renewal.
+  //   2. Small-dollar + <3yr (but NOT short bridge) → SPENDING. Repeat
+  //      low-dollar buys from a steady customer. Not huge wins
+  //      individually but useful for pipeline rhythm.
+  //   3. Duration <18 months → SHORT-TERM. Bridge contracts or truncated
+  //      base years; full recompete follow-on likely.
+  //   4. Duration 36-60 months → MATURING. Standard IDIQ/BPA lifecycle;
+  //      fresh RFP incoming.
+  //   5. Otherwise → ADJACENT. Related scope but not a clean pattern fit.
+  classifyPattern(contract) {
+    const desc = String(contract['Description'] || '').toUpperCase();
+    const startTs = contract._startTs || 0;
+    const endTs = contract._endTs || 0;
+    const durationDays = startTs && endTs ? (endTs - startTs) / 86400_000 : null;
+    const durationYears = durationDays ? durationDays / 365 : null;
+    const amt = parseFloat(contract['Award Amount']) || 0;
+
+    // Renewal signals in the description — software licensing, subscriptions,
+    // enterprise agreements. These are NOT one-off buys; they come back.
+    const renewalSignals = /\b(RENEW|SUBSCRIPTION|LICENSE|LICENSES|SAAS|SOFTWARE MAINTENANCE|ELA\b|ENTERPRISE AGREEMENT|ENTERPRISE LICENSE|ANNUAL SUPPORT|OPTION YEAR|BASE POP|MAINTENANCE AND SUPPORT)\b/;
+    if (renewalSignals.test(desc)) {
+      return {
+        kind: 'renewal',
+        label: 'Renewal',
+        blurb: `Recurring buy — this one comes back on a predictable cycle. You want to be on the vehicle before the option year lapses.`,
+      };
+    }
+
+    // Repeat-spend: small-dollar contracts in the 1-3yr range that look
+    // like steady buys from a known customer. Flagged BEFORE short-term
+    // so small-dollar short contracts get the "repeat spend" read
+    // (more accurate for a $200K/1yr buy than "short bridge about to
+    // become a $50M recompete"). The threshold is tuned for what a
+    // federal seller would actually call small — sub-$500K.
+    if (amt > 0 && amt < 500_000 && durationYears !== null && durationYears < 3) {
+      return {
+        kind: 'spending',
+        label: 'Repeat spend',
+        blurb: `Small, frequent-buy pattern. Not a huge single win but indicates a steady buyer — worth knowing for pipeline rhythm.`,
+      };
+    }
+
+    // Short-term bridge contracts. Real capture signal: the buyer didn't
+    // lock in a 5-year IDIQ, which means a clean recompete is coming.
+    if (durationYears !== null && durationYears < 1.8) {
+      const yearLabel = durationYears < 1.1 ? `${durationYears.toFixed(1)} year` : `${durationYears.toFixed(1)} years`;
+      return {
+        kind: 'short-term',
+        label: 'Short-term bridge',
+        blurb: `Short runway (${yearLabel}) — this is a bridge or base-only award, so expect a full recompete shortly. Good target if you can mobilize fast.`,
+      };
+    }
+
+    // Maturing — standard federal IDIQ/BPA lifecycle coming to end.
+    if (durationYears !== null && durationYears >= 3 && durationYears <= 6) {
+      return {
+        kind: 'maturing',
+        label: 'Maturing',
+        blurb: `Standard 3-5 year lifecycle ending. Incumbent's relationship is mature, which cuts both ways — strong past performance but also scope fatigue if the buyer's ready for change.`,
+      };
+    }
+
+    // Default — the scope is there but doesn't cleanly match the other
+    // patterns. Still worth flagging as a signal.
+    return {
+      kind: 'adjacent',
+      label: 'Adjacent scope',
+      blurb: `Related to the market but doesn't fit a clean renewal or maturing pattern. Worth a read on the description to see if it's your angle.`,
+    };
+  },
 };
 
 // ── SECTORS / Territory ─────────────────────────────────────
@@ -2214,6 +2344,7 @@ function buildCardSpec(m, query, sellerLens, territory) {
     const agencyShort = Utils.cleanAgency(c['Awarding Agency'] || '');
     const office = c['Awarding Sub Agency'] && c['Awarding Sub Agency'] !== c['Awarding Agency']
       ? c['Awarding Sub Agency'] : '';
+    const pattern = Utils.classifyPattern(c);
     return {
       vendor: Utils.titleCase(c['Recipient Name'] || ''),
       amount: Utils.money(parseFloat(c['Award Amount']) || 0),
@@ -2223,6 +2354,9 @@ function buildCardSpec(m, query, sellerLens, territory) {
       description: Utils.cleanDescription(c['Description'] || ''),
       days,
       urgent: days <= 30,
+      patternKind: pattern.kind,
+      patternLabel: pattern.label,
+      patternBlurb: pattern.blurb,
       link: c['generated_internal_id']
         ? `https://www.usaspending.gov/award/${c['generated_internal_id']}`
         : null,
@@ -2736,7 +2870,8 @@ const App = {
         // pivot, or slice differently. Without these chips the turn is a
         // dead-end that forces the user to type their way out.
         const chips = this.generateFollowupChips('no_data', [], result.resolverInput);
-        this._renderChips(turnEls.chipsEl, chips);
+        const alsoTry = this.generateAlsoTryChips('no_data', [], result.resolverInput);
+        this._renderChips(turnEls.chipsEl, chips, alsoTry);
         this._track('turn_no_data', { mode: result.mode });
       }
       // On error, we don't push to history — the user will retry
@@ -3159,18 +3294,150 @@ const App = {
     return chips.slice(0, 3);
   },
 
+  // ── Also Try chips — lateral moves, not drill-downs ─────────────────
+  //
+  // Govhoo-inspired. The main chip row (generateFollowupChips) suggests
+  // DEEPER moves: drill into the top incumbent, show expiring, pull subs.
+  // These are different — LATERAL: related vendors, related topics,
+  // alternative NAICS/PSC codes.
+  //
+  // Called with the same inputs as generateFollowupChips. Returns
+  // 0-4 chips in a separate row labeled "Also try".
+  generateAlsoTryChips(mode, rows, resolverInput) {
+    if (!resolverInput || mode === 'error' || mode === 'needs_qualifier') return [];
+
+    const chips = [];
+    const seen = new Set();
+    const push = (label, question) => {
+      const key = String(label).toLowerCase();
+      if (seen.has(key)) return;
+      if (chips.length >= 4) return;
+      seen.add(key);
+      chips.push({ label, question });
+    };
+
+    const agency = (resolverInput.agency || '').trim();
+    const topic = (resolverInput.topic || '').trim();
+    const vendor = (resolverInput.vendor ||
+      (Array.isArray(resolverInput.vendors) && resolverInput.vendors[0]) || '').toString().trim();
+
+    // ── Vendor queries: suggest competitors as quick chips ──
+    // These are VENDORS the user might also want to look at in the same
+    // market. We don't pull from resolverInput._competitorList because
+    // that only exists AFTER a competitors="true" pull. Instead we use
+    // a compact hand-curated table of known federal head-to-heads.
+    if (vendor) {
+      const v = vendor.toLowerCase();
+      const vendorNeighbors = {
+        'aws':            ['Microsoft Azure', 'Oracle Cloud', 'Google Cloud'],
+        'amazon':         ['Microsoft Azure', 'Oracle Cloud', 'Google Cloud'],
+        'microsoft':      ['AWS', 'Oracle Cloud', 'Google Cloud'],
+        'azure':          ['AWS', 'Oracle Cloud', 'Google Cloud'],
+        'oracle':         ['AWS', 'Microsoft Azure', 'SAP'],
+        'google':         ['AWS', 'Microsoft Azure', 'Oracle Cloud'],
+        'gcp':            ['AWS', 'Microsoft Azure', 'Oracle Cloud'],
+        'splunk':         ['Elastic', 'Datadog', 'Sumo Logic'],
+        'elastic':        ['Splunk', 'Datadog', 'Grafana'],
+        'datadog':        ['Splunk', 'New Relic', 'Dynatrace'],
+        'crowdstrike':    ['SentinelOne', 'Palo Alto', 'Microsoft Defender'],
+        'sentinelone':    ['CrowdStrike', 'Palo Alto', 'Tanium'],
+        'palo alto':      ['CrowdStrike', 'Fortinet', 'Cisco'],
+        'akamai':         ['Cloudflare', 'Fastly', 'Imperva'],
+        'cloudflare':     ['Akamai', 'Fastly', 'Imperva'],
+        'sonatype':       ['Snyk', 'Black Duck', 'JFrog'],
+        'snyk':           ['Sonatype', 'Black Duck', 'Veracode'],
+        'palantir':       ['Databricks', 'Snowflake', 'Booz Allen'],
+        'okta':           ['SailPoint', 'Ping Identity', 'CyberArk'],
+        'servicenow':     ['Salesforce', 'BMC', 'Atlassian'],
+        'salesforce':     ['ServiceNow', 'Microsoft Dynamics', 'Oracle'],
+      };
+      const neighbors = vendorNeighbors[v] || null;
+      if (neighbors) {
+        for (const n of neighbors) {
+          const q = agency ? `${n} at ${agency}` : `Show me ${n}`;
+          push(n, q);
+        }
+      }
+    }
+
+    // ── Topic queries: suggest adjacent topic/keyword searches ──
+    // When the user asked about a broad topic, surface narrower or
+    // related ones they'd also benefit from seeing. Keeps the "also try"
+    // row useful even when no vendor is in play.
+    if (topic || (!vendor && !agency)) {
+      const t = (topic || '').toLowerCase();
+      const topicNeighbors = {
+        'cloud':         ['IaaS', 'Cloud hosting', 'Cloud migration'],
+        'cybersecurity': ['Zero trust', 'SIEM', 'Endpoint security'],
+        'cyber':         ['Zero trust', 'SIEM', 'Endpoint security'],
+        'security':      ['Zero trust', 'Identity', 'Endpoint security'],
+        'ai':            ['ML', 'LLM', 'Generative AI'],
+        'ml':            ['AI', 'LLM', 'Data analytics'],
+        'data':          ['Analytics', 'Data warehouse', 'Data integration'],
+        'analytics':     ['Data warehouse', 'BI', 'ML'],
+        'identity':      ['Zero trust', 'IAM', 'PIV'],
+        'iam':           ['Identity', 'Zero trust', 'PIV'],
+        'devsecops':     ['SBOM', 'Container security', 'SAST'],
+        'sbom':          ['Supply chain security', 'SAST', 'DevSecOps'],
+      };
+      const neighbors = topicNeighbors[t];
+      if (neighbors) {
+        for (const n of neighbors) {
+          const q = agency ? `${n} at ${agency}` : `Show me ${n}`;
+          push(n, q);
+        }
+      }
+    }
+
+    // ── Agency-only: suggest top sub-agencies or adjacent agencies ──
+    // Narrows a "show me DHS" into "DHS CISA" etc. Only fires when the
+    // user didn't already specify a narrower scope.
+    if (agency && !topic && !vendor && rows && rows.length > 0) {
+      const agencyLower = agency.toLowerCase();
+      const agencyNeighbors = {
+        'dod':            ['Navy', 'Army', 'Air Force', 'DISA'],
+        'dhs':            ['CISA', 'TSA', 'FEMA', 'CBP'],
+        'hhs':            ['CMS', 'NIH', 'CDC', 'FDA'],
+        'doj':            ['FBI', 'DEA', 'ATF'],
+        'treasury':       ['IRS', 'OCC'],
+        'commerce':       ['NOAA', 'NIST', 'Census'],
+        'dot':            ['FAA', 'FHWA'],
+      };
+      const subs = agencyNeighbors[agencyLower];
+      if (subs) {
+        for (const s of subs) push(s, `Show me ${s}`);
+      }
+    }
+
+    return chips.slice(0, 4);
+  },
+
   // Render chip specs into the turn's chip slot. Each chip is a button
   // with the same class + data-ask wiring as starter chips, so the
   // existing global click delegation fires them as user messages.
-  _renderChips(chipsEl, chipSpecs) {
+  _renderChips(chipsEl, chipSpecs, alsoTrySpecs) {
     if (!chipsEl) return;
-    if (!Array.isArray(chipSpecs) || chipSpecs.length === 0) {
+    const hasMain = Array.isArray(chipSpecs) && chipSpecs.length > 0;
+    const hasAlso = Array.isArray(alsoTrySpecs) && alsoTrySpecs.length > 0;
+    if (!hasMain && !hasAlso) {
       chipsEl.innerHTML = '';
       return;
     }
-    chipsEl.innerHTML = chipSpecs.map(c =>
-      `<button class="mo-followup" data-ask="${Html.escapeHtml(c.question)}">${Html.escapeHtml(c.label)}</button>`
-    ).join('');
+    let html = '';
+    if (hasMain) {
+      html += chipSpecs.map(c =>
+        `<button class="mo-followup" data-ask="${Html.escapeHtml(c.question)}">${Html.escapeHtml(c.label)}</button>`
+      ).join('');
+    }
+    if (hasAlso) {
+      html += `<div class="mo-alsotry-row">`;
+      html += `<span class="mo-alsotry-label">Also try</span>`;
+      html += alsoTrySpecs.map(c =>
+        `<button class="mo-followup mo-followup-alt" data-ask="${Html.escapeHtml(c.question)}">${Html.escapeHtml(c.label)}</button>`
+      ).join('');
+      html += `</div>`;
+    }
+    chipsEl.innerHTML = html;
   },
 
   // ── Debug panel ─────────────────────────────────────────────
@@ -3652,7 +3919,8 @@ const App = {
         if (chipsEl && turnEls.chipData) {
           const { mode, rows, resolverInput } = turnEls.chipData;
           const chips = this.generateFollowupChips(mode, rows, resolverInput);
-          this._renderChips(chipsEl, chips);
+          const alsoTry = this.generateAlsoTryChips(mode, rows, resolverInput);
+          this._renderChips(chipsEl, chips, alsoTry);
         }
         this._updateEmptyState();
         this._updateJumpVisibility();
@@ -3942,6 +4210,12 @@ const App = {
         const idShort = e.contractId ? e.contractId.slice(0, 24) + (e.contractId.length > 24 ? '…' : '') : '';
         const meta = [idShort, e.vehicle].filter(Boolean).join(' · ');
         const liUrl = `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(Utils.linkedinSearchTerm(e.vendor))}&origin=GLOBAL_SEARCH_HEADER`;
+        const patternHtml = e.patternLabel
+          ? `<div class="mo-exp-pattern">
+              <span class="mo-exp-pattern-pill mo-exp-pattern-${e.patternKind}">${Html.escapeHtml(e.patternLabel)}</span>
+              <span class="mo-exp-pattern-blurb">${Html.escapeHtml(e.patternBlurb)}</span>
+            </div>`
+          : '';
         return `<div class="mo-exp-row">
           <div class="mo-exp-top">
             <span class="mo-exp-vendor">${Html.escapeHtml(e.vendor)}</span>
@@ -3952,6 +4226,7 @@ const App = {
             <span class="mo-exp-days ${e.urgent ? 'urgent' : ''}">${e.days}d left</span>
           </div>
           ${e.description ? `<div class="mo-row-desc">${Html.escapeHtml(e.description)}</div>` : ''}
+          ${patternHtml}
           <div class="mo-row-2line-bottom" style="margin-top:6px;">
             <span class="mo-row-2line-meta">${Html.escapeHtml(meta)}</span>
             <span class="mo-row-actions">
@@ -3979,23 +4254,13 @@ const App = {
       html += `</div>`;
     }
 
-    if (spec.vehicles && spec.vehicles.length > 0) {
-      html += `<div class="mo-comp-head"><div class="mo-comp-title">Contract vehicles</div><div class="mo-comp-meta">${spec.vehicles.length} shown</div></div>`;
-      html += `<div class="mo-vehicles">`;
-      spec.vehicles.forEach(v => {
-        const countLabel = v.count === 1 ? '1 contract' : `${v.count} contracts`;
-        html += `<div class="mo-vehicle">
-          <div class="mo-vehicle-name">${Html.escapeHtml(v.name)}</div>
-          <div class="mo-vehicle-meta">${Html.escapeHtml(v.spend)} · ${countLabel}</div>
-        </div>`;
-      });
-      html += `</div>`;
-    } else if (spec.vehicleLine) {
-      // Back-compat: if somehow we have the joined string but not the
-      // structured array (e.g., older render path), fall back to the
-      // original footnote style.
-      html += `<div style="margin-top:16px;font-size:12px;color:var(--text-muted);"><strong style="color:var(--text-title);font-weight:500;">Vehicles:</strong> ${Html.escapeHtml(spec.vehicleLine)}</div>`;
-    }
+    // Vehicle info is intentionally NOT shown as its own section/footer.
+    // A vehicle label is only useful when tied to a specific contract so
+    // the seller knows which one to chase. The per-contract meta line in
+    // "Top primes" and "Expiring soon" already shows "<contract-id> ·
+    // <vehicle>" when the vehicle is detectable, which is the actionable
+    // form. An aggregate "Vehicles: SeaPort-NxG ($6.4M)" footer told the
+    // seller nothing they could act on.
 
     // Card-internal followups from spec.followups were removed in Turn D.
     // They duplicated the data-derived chips painted below the turn by
