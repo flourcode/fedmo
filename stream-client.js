@@ -1079,7 +1079,38 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
       render.complete();
       debug.firstPassRaw = firstPassFull || preTagText;
       debug.mode = 'prose';
-      return { mode: 'prose', text: firstPassFull || preTagText, debug };
+
+      // Fabrication check: in the prose-only path, Mo hasn't pulled any
+      // data, so any Contract ID or specific dollar amount she cites is
+      // fabricated. This is the exact failure mode where Mo produces
+      // "5 DISA opportunities" with made-up Award IDs and values. Detect
+      // and scrub. Federal sellers acting on fake contracts is a
+      // catastrophic trust failure.
+      const proseText = firstPassFull || preTagText || '';
+      const idPattern = /\b[A-Z0-9]{10,20}\b/g;
+      const suspiciousIds = [];
+      let proseMatch;
+      const seen = new Set();
+      while ((proseMatch = idPattern.exec(proseText)) !== null) {
+        const id = proseMatch[0].toUpperCase();
+        if (seen.has(id)) continue;
+        seen.add(id);
+        // Must have both letters and digits to look like an Award ID
+        if (!/\d/.test(id) || !/[A-Z]/.test(id)) continue;
+        // Skip common non-award tokens (common words won't match 10+ chars all-caps)
+        suspiciousIds.push(id);
+      }
+
+      if (suspiciousIds.length > 0) {
+        console.warn('[askMo] Mo cited Award IDs in prose-only turn (no data pulled):', suspiciousIds);
+        debug.fabricatedIds = suspiciousIds;
+        debug.fabricatedProseOriginal = proseText;
+        const correction = `I was about to give you specific contract data without actually pulling it. That's a line I won't cross — contract IDs, dollar values, and end dates have to come from the real USASpending data.\n\nTell me the scope you want (agency, vendor, or topic) and I'll pull it fresh. For example: "give me 5 DISA opps" becomes a real data pull when I run it as a scoped query.`;
+        debug.fabricationScrubbed = true;
+        return { mode: 'prose', text: correction, debug };
+      }
+
+      return { mode: 'prose', text: proseText, debug };
     }
 
     // ── Data pull + second pass ─────────────────────────────────
@@ -1444,6 +1475,70 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
         render.streamPostTagProse(accumulated);
       },
     });
+
+    // Fabrication detection: scan Mo's prose for Award IDs and check
+    // them against the real rows. If any cited ID doesn't match, flag
+    // it in debug so we can see Mo is hallucinating even when the
+    // prompt rule fails. This is a safety net that surfaces the worst
+    // possible failure mode (citing contracts that don't exist) in
+    // the debug trace.
+    const realAwardIds = new Set(rows.map(r => String(r['Award ID'] || '').toUpperCase()).filter(Boolean));
+    // Award ID pattern: alphanumeric, usually 12+ chars, often
+    // includes numbers. Matches formats like 70CTD021FR0000232,
+    // FA873024FB028, HC102821D0001, W56HZV15CA001, etc.
+    const idPattern = /\b[A-Z0-9]{10,20}\b/g;
+    const citedIds = new Set();
+    const fabricatedIds = [];
+    let match;
+    while ((match = idPattern.exec(secondPassFull || '')) !== null) {
+      const id = match[0].toUpperCase();
+      // Skip if we already checked this one or it's obviously not an award ID
+      if (citedIds.has(id)) continue;
+      citedIds.add(id);
+      // Must contain at least one digit AND one letter to avoid
+      // matching pure dollar-amount patterns or descriptions.
+      if (!/\d/.test(id) || !/[A-Z]/.test(id)) continue;
+      if (!realAwardIds.has(id)) {
+        fabricatedIds.push(id);
+      }
+    }
+    if (fabricatedIds.length > 0) {
+      console.warn('[askMo] Mo cited Award IDs not in the data:', fabricatedIds);
+      debug.fabricatedIds = fabricatedIds;
+      debug.fabricatedProseOriginal = secondPassFull;
+      // Defensive scrub: replace Mo's output with an honest correction
+      // rather than show fabricated contract IDs to the user. Federal
+      // sellers act on this data. A fabricated ID is a severe trust
+      // failure. Better to show a correction than to show fake records
+      // wrapped in plausible prose.
+      const realList = rows
+        .slice(0, 5)
+        .map((r, i) => {
+          const vendor = r['Recipient Name'] || 'Unknown';
+          const amt = parseFloat(r['Award Amount']) || 0;
+          const office = r['Awarding Office']
+            || r['Awarding Sub Agency']
+            || r['Awarding Agency']
+            || '';
+          const awardId = r['Award ID'] || '';
+          const desc = (r['Description'] || '').slice(0, 120).replace(/\s+/g, ' ').trim();
+          return `${i + 1}. ${vendor} — $${(amt / 1_000_000).toFixed(1)}M at ${office}\n   Contract: ${awardId}\n   ${desc}`;
+        })
+        .join('\n\n');
+      const scrubbed = `I almost gave you fabricated contract data — I caught myself. Here are the top real records from the actual data pull instead:\n\n${realList}\n\nIf you want strategic analysis on any of these, ask me about a specific one and I'll pull its full record.`;
+      render.streamPostTagProse(scrubbed);
+      debug.fabricationScrubbed = true;
+      render.complete();
+      debug.mode = 'data';
+      return {
+        mode: 'data',
+        preTagText,
+        rows,
+        resolverInput,
+        postTagText: scrubbed,
+        debug,
+      };
+    }
 
     render.complete();
     debug.mode = 'data';

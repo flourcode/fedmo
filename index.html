@@ -3026,6 +3026,15 @@ const App = {
       lines.push('');
     }
 
+    if (d.fabricatedIds && d.fabricatedIds.length > 0) {
+      lines.push('⚠ FABRICATION WARNING — Mo cited Award IDs not in the data:');
+      for (const id of d.fabricatedIds) {
+        lines.push(`  ${id}`);
+      }
+      lines.push('  (these contracts do not exist in the rows Mo received)');
+      lines.push('');
+    }
+
     if (d.firstPassRaw) {
       lines.push('Mo first-pass raw output:');
       // Indent every line by 2 spaces for readability when pasted
