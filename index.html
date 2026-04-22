@@ -1758,21 +1758,31 @@ const Utils = {
   //
   // Returns { kind, label, blurb } where:
   //   kind   — machine key ('renewal' | 'short-term' | 'maturing' | 'spending' | 'adjacent')
-  //   label  — short display label ("Renewal", "Short-term bridge")
+  //   label  — short display label ("Likely renewal", "Short runway")
   //   blurb  — 1-sentence diagnostic in Mo's voice explaining why this
   //            classification + what it means for the seller's capture play
   //
+  // IMPORTANT: Labels and blurbs hedge. "Likely renewal" not "Renewal",
+  // "potentially" not "will", "often" not "always". A savvy BD rep may
+  // know a specific program's actual plans (the scope is being absorbed
+  // into a bigger vehicle, the sponsor is retiring, OSD just killed the
+  // budget). If we assert "this comes back on a predictable cycle" and
+  // the seller's own intel contradicts us, Mo loses credibility in one
+  // line. Better to signal pattern-match confidence without claiming
+  // certainty about outcomes we can't actually predict from contract
+  // data alone.
+  //
   // Detection rules (in priority order):
   //   1. Description keywords for RENEWAL (license, subscription, SaaS,
-  //      renewal itself, enterprise agreement). High-frequency re-buy;
-  //      seller needs to already be on the vehicle OR displace at renewal.
+  //      renewal itself, enterprise agreement). High-frequency re-buy
+  //      pattern — though any specific contract may be absorbed into a
+  //      larger deal on renewal.
   //   2. Small-dollar + <3yr (but NOT short bridge) → SPENDING. Repeat
-  //      low-dollar buys from a steady customer. Not huge wins
-  //      individually but useful for pipeline rhythm.
+  //      low-dollar buys from a steady customer.
   //   3. Duration <18 months → SHORT-TERM. Bridge contracts or truncated
-  //      base years; full recompete follow-on likely.
-  //   4. Duration 36-60 months → MATURING. Standard IDIQ/BPA lifecycle;
-  //      fresh RFP incoming.
+  //      base years — follow-on isn't guaranteed but common.
+  //   4. Duration 36-60 months → MATURING. Standard IDIQ/BPA lifecycle
+  //      window; recompete is possible but not certain.
   //   5. Otherwise → ADJACENT. Related scope but not a clean pattern fit.
   classifyPattern(contract) {
     const desc = String(contract['Description'] || '').toUpperCase();
@@ -1783,56 +1793,55 @@ const Utils = {
     const amt = parseFloat(contract['Award Amount']) || 0;
 
     // Renewal signals in the description — software licensing, subscriptions,
-    // enterprise agreements. These are NOT one-off buys; they come back.
+    // enterprise agreements. These are NOT one-off buys, though any given
+    // renewal may consolidate into a bigger vehicle.
     const renewalSignals = /\b(RENEW|SUBSCRIPTION|LICENSE|LICENSES|SAAS|SOFTWARE MAINTENANCE|ELA\b|ENTERPRISE AGREEMENT|ENTERPRISE LICENSE|ANNUAL SUPPORT|OPTION YEAR|BASE POP|MAINTENANCE AND SUPPORT)\b/;
     if (renewalSignals.test(desc)) {
       return {
         kind: 'renewal',
-        label: 'Renewal',
-        blurb: `Recurring buy — this one comes back on a predictable cycle. You want to be on the vehicle before the option year lapses.`,
+        label: 'Likely renewal',
+        blurb: `Scope reads like a recurring buy — license, subscription, or support that tends to come back. If you want to be in the conversation, get on the vehicle before the next option year decision.`,
       };
     }
 
     // Repeat-spend: small-dollar contracts in the 1-3yr range that look
-    // like steady buys from a known customer. Flagged BEFORE short-term
-    // so small-dollar short contracts get the "repeat spend" read
-    // (more accurate for a $200K/1yr buy than "short bridge about to
-    // become a $50M recompete"). The threshold is tuned for what a
-    // federal seller would actually call small — sub-$500K.
+    // like steady buys from a known customer.
     if (amt > 0 && amt < 500_000 && durationYears !== null && durationYears < 3) {
       return {
         kind: 'spending',
-        label: 'Repeat spend',
-        blurb: `Small, frequent-buy pattern. Not a huge single win but indicates a steady buyer — worth knowing for pipeline rhythm.`,
+        label: 'Small repeat buy',
+        blurb: `Small dollars, short cycle — looks like a routine buy from a steady customer. Not a single-contract win but useful signal for the buyer's rhythm.`,
       };
     }
 
-    // Short-term bridge contracts. Real capture signal: the buyer didn't
-    // lock in a 5-year IDIQ, which means a clean recompete is coming.
+    // Short-term bridge contracts. Buyer didn't lock in a 5-year IDIQ,
+    // which often means a clean recompete is coming — but bridges also
+    // get absorbed into larger vehicles or quietly extended.
     if (durationYears !== null && durationYears < 1.8) {
       const yearLabel = durationYears < 1.1 ? `${durationYears.toFixed(1)} year` : `${durationYears.toFixed(1)} years`;
       return {
         kind: 'short-term',
-        label: 'Short-term bridge',
-        blurb: `Short runway (${yearLabel}) — this is a bridge or base-only award, so expect a full recompete shortly. Good target if you can mobilize fast.`,
+        label: 'Short runway',
+        blurb: `Short PoP (${yearLabel}) — this reads like a bridge or base-only award. Bridges often lead to a clean recompete but can also quietly roll into a bigger vehicle, so worth asking the CO directly.`,
       };
     }
 
-    // Maturing — standard federal IDIQ/BPA lifecycle coming to end.
+    // Maturing — standard federal IDIQ/BPA lifecycle ending. A recompete
+    // is possible but far from guaranteed — budget cuts, scope changes,
+    // and consolidations happen.
     if (durationYears !== null && durationYears >= 3 && durationYears <= 6) {
       return {
         kind: 'maturing',
-        label: 'Maturing',
-        blurb: `Standard 3-5 year lifecycle ending. Incumbent's relationship is mature, which cuts both ways — strong past performance but also scope fatigue if the buyer's ready for change.`,
+        label: 'Recompete window',
+        blurb: `End of a standard 3-5 year cycle. Could go to recompete, extension, or consolidation — the incumbent's relationship is mature either way, which is strong past performance but also scope fatigue if the buyer's ready for a change.`,
       };
     }
 
-    // Default — the scope is there but doesn't cleanly match the other
-    // patterns. Still worth flagging as a signal.
+    // Default — related but doesn't fit a clean pattern.
     return {
       kind: 'adjacent',
       label: 'Adjacent scope',
-      blurb: `Related to the market but doesn't fit a clean renewal or maturing pattern. Worth a read on the description to see if it's your angle.`,
+      blurb: `Related to the market but doesn't fit a clean renewal or lifecycle pattern. Worth a read on the description to see if it's your angle.`,
     };
   },
 };
