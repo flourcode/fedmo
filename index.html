@@ -1,33 +1,11 @@
 <!DOCTYPE html>
-<!--
-  ════════════════════════════════════════════════════════════════════
-  Mo v2 — working copy — April 20, 2026
-  ════════════════════════════════════════════════════════════════════
-
-  v2 architecture — simpler than v1, external modules do the heavy lifting. It uses:
-    - resolver.js  (external module) for canonical-name resolution
-    - mo-stream-client.v2.js  (external module) for streaming + <data> tags
-    - index.v2.mjs  (Lambda) for the single streaming endpoint
-
-  What changed from v1:
-    - No intent router. One ask() path for everything.
-    - No client-side acronym tables (moved to resolver.js).
-    - No agency/vendor post-filters (moved to resolver.js).
-    - No separate runSearch/runRefine/runAskMo/runSellerPitch/runCompare.
-    - Mo drives via <data> tags; browser intercepts and fetches data.
-    - Two-shot streaming: Mo writes, hits <data>, pauses, browser fetches,
-      renders card, fires second Mo call grounded in real payload.
-
-  v1 lives at mo_mock.v1.html + index.v1.mjs as a frozen rollback target.
-  ════════════════════════════════════════════════════════════════════
--->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#FDFCFF" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0F0E13" media="(prefers-color-scheme: dark)">
-<title>Fedmo v2 — Federal Market Intelligence</title>
+<title>Fedmo - Federal Market Intelligence</title>
 <meta name="description" content="Talk to Mo. Know any federal market before the meeting starts.">
 
 <!-- Open Graph (LinkedIn, Slack, iMessage, Facebook, Discord) -->
@@ -52,9 +30,15 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,200..800;1,200..800&display=swap" rel="stylesheet">
-<!-- Google Analytics -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-T343V4RFHV"></script>
-<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-T343V4RFHV');</script>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-R0CRXSQJL5"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-R0CRXSQJL5');
+</script>
 <style>
 :root {
   --primary-100: #46446E;
@@ -1160,7 +1144,7 @@ body.thread-empty .mo-ask-bar {
     <div class="mo-modal-actions">
       <a class="mo-modal-btn" href="https://calendly.com/markflournoy/chat-with-mark" target="_blank" rel="noopener" onclick="App.closeAbout()">Chat with Mark</a>
     </div>
-    <div class="mo-modal-foot">Feedback, feature requests, or just want to talk federal sales? Book time with Mark, the builder of Fedmo.</div>
+    <div class="mo-modal-foot">Feedback or just want to talk federal sales? Book time with Mark.</div>
   </div>
 </div>
 
