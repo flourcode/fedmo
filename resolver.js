@@ -566,21 +566,88 @@ export function resolve(input) {
     let agencyResidue = null;
     if (!agency && !office) {
       const normTerm = norm(agencyTerm);
-      // Try each known agency alias as a substring. Prefer longer matches
-      // (so "department of defense" beats "defense") to avoid picking up
-      // short-form false-positives like "fa" inside "faa".
-      const aliasKeys = Object.keys(AGENCIES).sort((a, b) => b.length - a.length);
+      // Find ALL aliases that match the term as whole words. Prefer
+      // subtier matches over toptier matches — in composite inputs like
+      // "DoD SOCOM" or "DHS TSA," both the parent acronym and the sub
+      // acronym match. The right filter is the narrower one (the
+      // subtier). If only toptier matches exist, fall back to the
+      // longest toptier (so "department of defense" beats "defense").
+      const aliasKeys = Object.keys(AGENCIES);
+      const subtierMatches = [];
+      const toptierMatches = [];
       for (const alias of aliasKeys) {
-        // Only match at word boundaries to avoid "army" inside "armor".
         const aliasRegex = new RegExp(`(^|\\s)${alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\s|$)`);
         if (aliasRegex.test(normTerm)) {
-          agency = AGENCIES[alias];
-          // Residue = everything in the term that's NOT the matched alias.
-          // We'll push it as a keyword so USASpending biases toward the
-          // sub-slice the user named (e.g. "Office of Procurement Operations").
-          const residue = normTerm.replace(aliasRegex, ' ').trim();
-          if (residue.length >= 3) agencyResidue = residue;
-          break;
+          const entry = AGENCIES[alias];
+          const target = entry.tier === 'subtier' ? subtierMatches : toptierMatches;
+          target.push({ alias, entry, aliasRegex });
+        }
+      }
+
+      let pick = null;
+      if (subtierMatches.length > 0) {
+        // Prefer the longest subtier alias — avoids picking up a short
+        // false-positive when a longer one is present.
+        subtierMatches.sort((a, b) => b.alias.length - a.alias.length);
+        pick = subtierMatches[0];
+      } else if (toptierMatches.length > 0) {
+        toptierMatches.sort((a, b) => b.alias.length - a.alias.length);
+        pick = toptierMatches[0];
+      }
+
+      if (pick) {
+        agency = pick.entry;
+        const rawResidue = normTerm.replace(pick.aliasRegex, ' ').trim();
+
+        // ── Subtier match + parent residue → discard residue ─────
+        // If the matched alias is a subtier, any residue is almost
+        // always the parent toptier ("DoD SOCOM" → matched "socom"
+        // subtier, residue "dod"). That's redundant — the subtier
+        // filter already scopes to the parent. Pushing "dod" as an
+        // office_scope substring makes the post-filter drop every
+        // row whose Awarding Office/Sub Agency doesn't literally
+        // contain "dod" (most DoD rows show the sub-agency name
+        // like "Department of the Navy", not "dod"). This was the
+        // original bug behind "DHS CISA returns nothing" and
+        // "DoD SOCOM over-filters."
+        if (agency.tier === 'subtier') {
+          const parentToptier = agency.toptier_name || '';
+          const residueIsParent = rawResidue && (
+            norm(parentToptier).includes(rawResidue) ||
+            rawResidue === 'dod' || rawResidue === 'hhs' ||
+            rawResidue === 'dhs' || rawResidue === 'doj' ||
+            rawResidue === 'dot' || rawResidue === 'doe' ||
+            rawResidue === 'va'  || rawResidue === 'gsa' ||
+            rawResidue === 'treasury' || rawResidue === 'commerce' ||
+            rawResidue === 'interior' || rawResidue === 'labor' ||
+            rawResidue === 'energy' || rawResidue === 'justice' ||
+            rawResidue === 'state' || rawResidue === 'education' ||
+            rawResidue === 'agriculture' || rawResidue === 'transportation' ||
+            rawResidue === 'homeland security' ||
+            rawResidue === 'health and human services' ||
+            rawResidue === 'veterans affairs'
+          );
+          if (residueIsParent) {
+            // Matched subtier is the RIGHT filter. Discard residue.
+            agencyResidue = null;
+          } else if (rawResidue.length >= 3) {
+            agencyResidue = rawResidue;
+          }
+        } else {
+          // Toptier match — residue is a real office/subagency hint.
+          // Expand it through the alias table if possible so the
+          // post-filter substring check matches against the real
+          // data field values (USASpending returns full canonical
+          // names in Awarding Sub Agency, not acronyms).
+          if (rawResidue.length >= 3) {
+            const expanded = AGENCIES[rawResidue];
+            if (expanded && expanded.name) {
+              // e.g. residue "cms" → needle "centers for medicare and medicaid services"
+              agencyResidue = norm(expanded.name);
+            } else {
+              agencyResidue = rawResidue;
+            }
+          }
         }
       }
     }
