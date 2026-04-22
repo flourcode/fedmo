@@ -1410,6 +1410,77 @@ export async function buildPipelineList({ rows, count, lens, scope, endpoint }) 
 //   complete()               — called when the whole turn is done.
 // ─────────────────────────────────────────────────────────────────────
 
+// Detect whether a user's current message is a TRUE refer-back to a
+// prior turn (and therefore needs conversation history for context),
+// vs a fresh, self-contained query that should run history-free.
+//
+// Why this matters: Flash Lite anchors HARD on conversation history.
+// If a user spent 3 turns on Millennium subawards, then types "Show me
+// CACI footprint at Navy", Flash Lite often emits a Millennium-subaward
+// tag again because that's the dominant pattern in its context. The
+// resulting tag ignores the user's actual fresh question.
+//
+// Sending history-free for fresh queries is the architectural fix:
+// the model sees ONLY the user's current message and the system prompt,
+// so it has nothing to anchor on but the message itself. For real
+// refer-backs ("what about VA", "just Navy"), we still send history
+// because the message would be unintelligible without it.
+//
+// Heuristic — returns true if the message looks like a refer-back:
+//   - Short opener words: "what about", "how about", "and ", "just "
+//   - Pronouns referring to prior context: "that", "those", "this", "them"
+//   - Bare narrowing: just an agency/topic word, or starts with a comma/and
+//   - Numeric refinement: "above $5M", "under 100K"
+//
+// Conservative on the false-positive side: when in doubt, treat as
+// fresh. False negatives (treating a real follow-up as fresh) just mean
+// Mo gets less context — she may ask for clarification. False positives
+// (treating a fresh query as a follow-up) cause the bug we're fixing —
+// Flash Lite anchors on stale context.
+export function looksLikeFollowUp(question) {
+  if (!question || typeof question !== 'string') return false;
+  const q = question.trim().toLowerCase();
+  if (q.length === 0) return false;
+
+  // Very short messages (< 4 words) without a verb are usually refer-backs:
+  // "Navy", "VA", "expiring", "above $5M", "small business set-asides"
+  const wordCount = q.split(/\s+/).length;
+  if (wordCount <= 3) {
+    // But "show me X" is a 3-word fresh query — exempt clear command verbs
+    if (/^(show|find|get|pull|tell|give|list|who's|whats|what's|i sell|i cover|i rep)/i.test(q)) {
+      return false;
+    }
+    return true;
+  }
+
+  // Refer-back openers — first 1-3 words are the tell
+  const referOpeners = [
+    'what about', 'how about', 'and what', 'and how', 'and also',
+    'same but', 'same with', 'same for', 'same thing',
+    'that prime', 'that vendor', 'that agency', 'that one', 'that market',
+    'those guys', 'those primes', 'these guys', 'this market',
+    'just ', 'only ', 'narrow to', 'narrow it',
+    'now show', 'now do', 'now pull', 'now tell',
+    'instead', 'actually,', 'wait,',
+    'back to', 'go back', 'switch to',
+    'above $', 'under $', 'over $', 'below $',
+    'expiring only', 'just expiring',
+  ];
+  for (const opener of referOpeners) {
+    if (q.startsWith(opener)) return true;
+  }
+
+  // Pronoun reference patterns mid-message
+  // "show me their subs", "who competes with that one", etc.
+  if (/\b(their|those|that one|that prime|that vendor|that company|the same)\b/i.test(q)) {
+    return true;
+  }
+
+  // Otherwise — looks like a fresh, self-contained query
+  return false;
+}
+
+
 export async function askMo({ question, history, activeCardSummary, endpoint, render }) {
   const abort = new AbortController();
   let cardRef = null;
@@ -1437,8 +1508,20 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
     mode: null,              // final returned mode
   };
 
-  // History must include the user's current question at the end
-  const fullHistory = [...history, { role: 'user', content: question }];
+  // History decision: send conversation context ONLY when the user's
+  // current message reads like a refer-back ("just Navy", "what about
+  // VA", "those primes"). For fresh queries — full vendor+agency
+  // statements, smart-pill clicks, new topics — send NO history. This
+  // eliminates Flash Lite anchoring on prior tag patterns and dragging
+  // forward stale vendor / topic / attribute values.
+  //
+  // Stash the decision in debug so the trace shows whether history was
+  // sent or not, which makes anchoring failures diagnosable.
+  const isFollowUp = looksLikeFollowUp(question);
+  debug.historyMode = isFollowUp ? 'with-history' : 'fresh';
+  const fullHistory = isFollowUp
+    ? [...history, { role: 'user', content: question }]
+    : [{ role: 'user', content: question }];
 
   try {
     // ── First pass ──────────────────────────────────────────────

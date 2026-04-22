@@ -3402,6 +3402,7 @@ const App = {
     lines.push('');
     lines.push(`mode: ${d.mode || '(unknown)'}`);
     if (d.fallbackType) lines.push(`fallback: ${d.fallbackType}`);
+    if (d.historyMode) lines.push(`history: ${d.historyMode}`);
     lines.push(`rows: ${d.rowCountDirect ?? '—'} direct → ${d.rowCountFinal ?? '—'} final`);
     lines.push('');
 
