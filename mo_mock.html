@@ -1147,6 +1147,25 @@ body.thread-empty .mo-ask-bar {
   font-weight: 700;
   flex-shrink: 0;
 }
+/* Treemap inside the answer — restored from oldmo after beta feedback.
+   Users read concentration visually from this in seconds. The squarify
+   algorithm lives at the bottom of the script (renderTreemap +
+   initTreemaps + squarify). We just style the wrapper here. */
+.answer-treemap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.answer-treemap-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+  letter-spacing: var(--track-tight);
+}
+.answer-treemap .mo-treemap-host {
+  height: 180px; /* slightly shorter than the v1 card — sits better in the answer */
+}
+.answer-treemap .mo-treemap { height: 180px; }
 /* Items group — quiet whitespace separation, no nested box chrome. */
 .answer-items {
   display: flex;
@@ -3163,6 +3182,26 @@ const App = {
       }
     }
 
+    // ── Treemap — borrowed from analyzeMarket, which users loved in v1. ──
+    // Gives the seller a visual read of concentration in 3 seconds without
+    // reading a word: one dominant block = locked, tiled grid = fragmented.
+    // We only compute this when we have enough rows to make the shape
+    // meaningful; fewer than 3 distinct vendors produces a featureless
+    // rectangle.
+    let treemap = null;
+    if (enriched.length >= 3 && vendors.length >= 3) {
+      try {
+        const marketAnalysis = analyzeMarket(rows, label);
+        if (marketAnalysis && Array.isArray(marketAnalysis.treemap) && marketAnalysis.treemap.length >= 3) {
+          treemap = marketAnalysis.treemap;
+        }
+      } catch (err) {
+        // Treemap is decorative; never block the answer on a computation
+        // failure. Log once and continue with the textual answer.
+        console.warn('[answer] treemap build failed:', err);
+      }
+    }
+
     // ── Refine chips ──────────────────────────────────
     const refine = this._buildRefineChips(resolverInput, label, isExpiringQuery);
 
@@ -3172,6 +3211,7 @@ const App = {
       confirm: this._buildConfirmLine(resolverInput, label, isExpiringQuery, rows.length),
       takeaway,
       facts,
+      treemap,
       items,
       meaning,
       actions,
@@ -3282,6 +3322,24 @@ const App = {
       const facts = el('div', 'answer-facts');
       answer.facts.forEach(f => facts.appendChild(el('div', 'fact', f)));
       wrap.appendChild(facts);
+    }
+
+    // Treemap — inserted between facts and items. renderTreemap returns
+    // an HTML string with a .mo-treemap-host placeholder; initTreemaps()
+    // (called after appendChild in renderDataCard) fills it with the
+    // sized SVG. Wrapped in a labeled container so it reads as part of
+    // the answer shape, not a floating decoration.
+    if (answer.treemap && answer.treemap.length) {
+      const tmWrap = el('div', 'answer-treemap');
+      tmWrap.appendChild(el('div', 'answer-treemap-label', 'Where the money sits'));
+      const host = document.createElement('div');
+      host.innerHTML = renderTreemap(answer.treemap);
+      // renderTreemap returns a single wrapper div; move its actual node
+      // into our container rather than setting innerHTML directly, so
+      // the mo-treemap-host[data-treemap] attribute stays intact for
+      // initTreemaps to find.
+      while (host.firstChild) tmWrap.appendChild(host.firstChild);
+      wrap.appendChild(tmWrap);
     }
 
     // Items
@@ -3905,9 +3963,11 @@ const App = {
       },
 
       // Replace the loading placeholder with the disciplined answer shape.
-      // New as of Apr 22, 2026: takeaway / facts / items / meaning / actions
-      // / refine — every data-backed turn uses this exact shape. Old
-      // treemap/donut/verdict card is gone.
+      // Apr 22: takeaway / facts / treemap / items / meaning / actions /
+      // refine. Treemap restored after beta feedback — users read market
+      // concentration visually in 3 seconds from the treemap in a way the
+      // classification paragraph alone can't match. Built deterministically
+      // from the rows via analyzeMarket, inserted between facts and items.
       renderDataCard: (cardRef, rows, resolverInput) => {
         if (!cardRef) return;
         const label = this._labelForResolverInput(resolverInput);
@@ -3920,11 +3980,20 @@ const App = {
         const answer = this._buildAnswerFromRows(rows, resolverInput, label);
         cardRef.innerHTML = '';
         cardRef.appendChild(this._renderMoAnswer(answer));
+        // Treemap host was inserted as a placeholder; now that it's in the
+        // DOM, fill it with the sized SVG. Measured width matters — the
+        // squarify algorithm needs the real container width to produce
+        // clean aspect ratios.
+        if (answer.treemap) {
+          try { initTreemaps(cardRef); }
+          catch (err) { console.warn('[answer] initTreemaps failed:', err); }
+        }
         turnEls.chipData = { mode: 'data', rows, resolverInput };
         this._track('answer_render', {
           intent: answer.intent || 'slice',
           rowCount: rows.length,
           confidence: answer.confidence || 'mixed',
+          hasTreemap: !!answer.treemap,
         });
       },
 
