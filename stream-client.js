@@ -1312,15 +1312,15 @@ export async function buildPipelineList({ rows, count, lens, scope, endpoint }) 
     const expiringSoon = records.filter(r => r.daysLeft !== null && r.daysLeft <= 90).length;
 
     if (hasLens) {
-      intro = `Here's ${records.length} from ${scopeLabel}, screened for ${lens}. Expiring contracts first, then the heavy-dollar ones. That's where your time goes.`;
+      intro = `Alright, here's ${records.length} from ${scopeLabel}, screened for ${lens}. Expiring contracts first, then the heavy-dollar ones — that's where your time pays off.`;
     } else {
-      intro = `Here's ${records.length} from ${scopeLabel}. Expiring contracts first, then the heavy-dollar ones. Work from the top.`;
+      intro = `Alright, here's ${records.length} from ${scopeLabel}. Expiring first, then biggest dollars. Work from the top.`;
     }
 
     if (top && expiringSoon > 0) {
-      outro = `Start with #1 — closest to recompete, biggest move you can actually influence this quarter.`;
+      outro = `Start with #1 — closest to recompete and the biggest move you can actually influence this quarter. Go.`;
     } else if (top) {
-      outro = `Start with #1 — biggest dollars. Get in front of the PM before the recompete window opens.`;
+      outro = `Start with #1 — biggest dollars on the page. Get in front of the PM before the recompete window opens.`;
     }
   }
 
@@ -1978,11 +1978,11 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
 
       let scrubbed;
       if (topName && topShare >= 25) {
-        scrubbed = `Look at the card — ${topName} holds most of this. Your shortest path in is usually through them, or through the agency team they already work with. Trying to go around an entrenched incumbent at this concentration is expensive.`;
+        scrubbed = `Look at the card — ${topName} is holding most of this. Your shortest path in is usually through them or the agency team they already work with. Going around an entrenched incumbent at this concentration gets expensive fast.`;
       } else if (topName) {
-        scrubbed = `Look at the card — no single dominant incumbent here. That's rare, and it means the door's open. Compete on capability, not on trying to displace a relationship that doesn't exist yet.`;
+        scrubbed = `Good news on the card — no single dominant incumbent here, and that's rarer than you'd think. Means the door's actually open. Compete on capability rather than trying to displace a relationship.`;
       } else {
-        scrubbed = `Card's in front of you. Pick the contract or office that matches what you sell and let's go deeper on that one.`;
+        scrubbed = `Card's in front of you. Pick the contract or office that matches what you sell and we'll go deeper on that one.`;
       }
 
       render.streamPostTagProse(scrubbed);
