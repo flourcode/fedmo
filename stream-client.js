@@ -352,6 +352,45 @@ function trailing12Mo() {
   return [{ start_date: fmt(start), end_date: fmt(end) }];
 }
 
+// Build a keyword-fallback retry payload for a resolver input whose
+// direct subtier filter returned zero rows. This handles the USASpending
+// quirk that CISA, USCG, STRATCOM, Marines, Space Force, Secret Service,
+// JSOC, ATF, US Marshals, BOP, USPTO, and several combatant commands are
+// real to federal sellers but aren't actual awarding agencies at USASpending
+// — their contracts are awarded through the parent toptier (DHS HQ, DoD HQ,
+// DOJ Offices/Boards/Divisions) and only mention the "agency" in the
+// contract description. An agency-filter pull returns 0 rows. A keyword
+// pull against the parent toptier with [acronym, canonical name] returns
+// the actual contracts.
+//
+// Returns null if we can't build a sensible fallback (no resolved agency,
+// or the agency was already a toptier).
+function buildKeywordFallbackFilters(resolverInput, resolvedFilters) {
+  const agencies = resolvedFilters.agencies;
+  if (!Array.isArray(agencies) || agencies.length === 0) return null;
+  const a = agencies[0];
+  if (a.tier !== 'subtier' || !a.toptier_name) return null;
+
+  // Pull the user's original agency term so we can use the acronym if they
+  // typed one. Falls back to the canonical subtier name.
+  const userTerm = String(resolverInput?.agency || '').trim();
+  const keywords = [];
+  if (userTerm && userTerm.length <= 20 && /^[A-Za-z][A-Za-z0-9\s.'&\-]*$/.test(userTerm)) {
+    keywords.push(userTerm);
+  }
+  if (a.name && !keywords.some(k => k.toLowerCase() === a.name.toLowerCase())) {
+    keywords.push(a.name);
+  }
+  if (keywords.length === 0) return null;
+
+  return {
+    agencies: [{ tier: 'toptier', name: a.toptier_name, type: 'awarding' }],
+    keywords,
+    _retriedFromSubtier: a.name,
+    _retryParent: a.toptier_name,
+  };
+}
+
 export async function fetchUsaspending(resolverInput, endpoint) {
   const { filters: resolvedFilters, postFilters } = resolve(resolverInput);
   const filters = {
@@ -384,7 +423,75 @@ export async function fetchUsaspending(resolverInput, endpoint) {
     throw new Error('USASpending is having trouble right now. Give it a minute and try again.');
   }
   const body = await res.json();
-  const raw = Array.isArray(body.results) ? body.results : [];
+  let raw = Array.isArray(body.results) ? body.results : [];
+
+  // ── Smart retry for mission-program subtiers ────────────────────
+  //
+  // USASpending treats entries like CISA, USCG, STRATCOM, Marines, Space
+  // Force, Secret Service, JSOC, and several combatant commands as
+  // mission concepts rather than awarding subtiers. Direct subtier
+  // filters for these return 0 rows even though real contracts exist
+  // under their parent toptier. The fedhoo / oldgovhoo apps handle this
+  // by retrying as a keyword search when the direct pull is empty.
+  // We adopt the same strategy here.
+  //
+  // Triggers when: zero rows returned, the resolver picked a subtier
+  // agency, and the user didn't explicitly supply contradictory filters
+  // (vendor/keywords) that would make a retry unproductive.
+  let retriedFromSubtier = null;
+  if (raw.length === 0) {
+    const fallback = buildKeywordFallbackFilters(resolverInput, resolvedFilters);
+    if (fallback) {
+      // Merge user's existing topic keywords with the fallback's identity
+      // keywords. For "cyber at CISA": fallback gives [CISA, ...full name]
+      // and the user's topic already added cybersecurity keywords upstream.
+      // Combine without duplicates.
+      const mergedKeywords = [
+        ...(resolvedFilters.keywords || []),
+        ...fallback.keywords,
+      ];
+      const retryFilters = {
+        time_period: trailing12Mo(),
+        award_type_codes: CONTRACT_TYPES,
+        agencies: fallback.agencies,
+        keywords: [...new Set(mergedKeywords)],
+      };
+      // Preserve non-agency filters the resolver produced (PSC, NAICS,
+      // recipient, date refinements, etc.) — only swap the agency filter.
+      for (const key of Object.keys(resolvedFilters)) {
+        if (key !== 'agencies' && key !== 'keywords' && !retryFilters[key]) {
+          retryFilters[key] = resolvedFilters[key];
+        }
+      }
+      const retryPayload = { filters: retryFilters, fields: AWARD_FIELDS, limit: 100, sort: 'Award Amount', order: 'desc' };
+      try {
+        const retryRes = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            request_type: 'usaspending_proxy',
+            endpoint: '/search/spending_by_award/',
+            payload: retryPayload,
+          }),
+        });
+        if (retryRes.ok) {
+          const retryBody = await retryRes.json();
+          const retryRaw = Array.isArray(retryBody.results) ? retryBody.results : [];
+          if (retryRaw.length > 0) {
+            raw = retryRaw;
+            retriedFromSubtier = fallback._retriedFromSubtier;
+            // Mark every row with a flag the caller can read if it wants
+            // to render a note like "USASpending files CISA under DHS."
+            for (const r of retryRaw) r._mission_fallback = true;
+          }
+        }
+      } catch (retryErr) {
+        // Swallow — the direct query already succeeded (with zero rows).
+        // Retry is best-effort. Log for debugging.
+        console.warn('[fetchUsaspending] mission-fallback retry failed:', retryErr.message);
+      }
+    }
+  }
 
   // Data grooming. Two things happen here that the render path downstream
   // assumes have already run:
@@ -410,8 +517,21 @@ export async function fetchUsaspending(resolverInput, endpoint) {
     }
   }
 
-  // Apply post-filters (vendor scope, agency scope, amount bounds, expiring)
-  return applyPostFilters(raw, postFilters);
+  // Apply post-filters (vendor scope, agency scope, amount bounds, expiring).
+  // When we retried via mission-fallback, the post-filter's agency_scope
+  // would block all rows (the returned rows are attributed to the toptier,
+  // not the subtier). Skip that particular filter on fallback rows.
+  const filteredPostFilters = retriedFromSubtier
+    ? { ...postFilters, agency_scope: null, office_scope: null }
+    : postFilters;
+  const filtered = applyPostFilters(raw, filteredPostFilters);
+
+  // Stamp the result with the fallback marker so the caller can surface
+  // it in debug UI or add a one-liner to Mo's pre-tag prose.
+  if (retriedFromSubtier) {
+    filtered._retriedFromSubtier = retriedFromSubtier;
+  }
+  return filtered;
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -607,6 +727,13 @@ export function summarizePayloadForMo(rows, resolverInput, opts = {}) {
   if (!rows || rows.length === 0) {
     return `No contracts matched the query. Tell the user the data came back empty and suggest a different angle.`;
   }
+
+  // Mission-program fallback acknowledgment. When fetchUsaspending had to
+  // retry as a keyword search against the parent toptier (because CISA,
+  // USCG, STRATCOM, etc. aren't real USASpending subtiers), surface that
+  // fact to Mo so she can acknowledge it in a short aside instead of
+  // pretending the filter worked as typed.
+  const missionFallback = opts.missionFallback || rows._retriedFromSubtier || null;
 
   const total = rows.reduce((s, r) => s + (parseFloat(r['Award Amount']) || 0), 0);
 
@@ -891,7 +1018,11 @@ Do NOT pretend the rows represent ${pitched}'s presence. They don't.`;
     }
   }
 
-  return `Query: ${queryDesc || '(no filters)'}${framing}
+  const missionFallbackNote = missionFallback
+    ? `\n\n⚠️ DATA NOTE: The user asked about "${missionFallback}," but USASpending doesn't file "${missionFallback}" as an awarding agency — contracts for this mission flow through the parent department. The rows below came from the parent toptier with "${missionFallback}" as a keyword filter, which surfaces the real market. In your prose, include ONE short acknowledgment like "USASpending files ${missionFallback} contracts under the parent department, so these are the real ones." Don't belabor it. Then continue with the normal analysis.`
+    : '';
+
+  return `Query: ${queryDesc || '(no filters)'}${framing}${missionFallbackNote}
 Total (top ${rows.length} contracts, last 12mo): $${(total / 1_000_000).toFixed(1)}M
 Unique primes in slice: ${primeMap.size}
 Top 3 concentration: ${top3Pct}%
@@ -1491,6 +1622,18 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
     }
 
     debug.rowCountDirect = rows.length;
+
+    // Expose mission-program fallback info so the UI trace and Mo's
+    // second-pass prose can both reference it. "CISA" resolving to
+    // "DHS toptier + CISA keyword" is real behavior, not an error —
+    // USASpending files CISA under DHS OPO rather than as its own
+    // awarding subtier. When the fallback fires, the user deserves a
+    // one-line acknowledgment in prose ("USASpending files CISA
+    // contracts under DHS.") instead of the illusion that we pulled
+    // straight from an agency filter.
+    if (rows._retriedFromSubtier) {
+      debug.missionFallback = rows._retriedFromSubtier;
+    }
 
     // Diagnostic: capture field values from the top-spend row so the
     // debug trace shows exactly what USASpending returned for Awarding

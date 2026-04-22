@@ -267,7 +267,20 @@ const VENDOR_LEGAL_NAMES = {
   'zscaler':               'ZSCALER',
   'palo alto':             'PALO ALTO NETWORKS',
   'fortinet':              'FORTINET',
-  'cloudflare':            'CLOUDFLARE',
+  'cloudflare':             'CLOUDFLARE',
+
+  // CDN & edge security — needed for Akamai competitor resolution. F5 is
+  // the critical one: its acronym "F5" is 2 chars, which USASpending
+  // rejects as a keyword ("value 'F5' is below min '3' items"). The
+  // legal-name mapping below converts "F5" into "F5 NETWORKS" before it
+  // ever reaches the API, and the filter in the resolver drops any
+  // remaining <3-char forms.
+  'akamai':                'AKAMAI TECHNOLOGIES',
+  'f5':                    'F5 NETWORKS',
+  'f5 networks':           'F5 NETWORKS',
+  'fastly':                'FASTLY',
+  'imperva':               'IMPERVA',
+  'cloudfront':            'AMAZON',  // CloudFront is an AWS service, not a separate recipient
 
   'leidos':                'LEIDOS',
   'booz':                  'BOOZ ALLEN HAMILTON',
@@ -525,9 +538,20 @@ export function resolve(input) {
 
   if (vendorInputs.length > 0) {
     const legalNames = vendorInputs.map(lookupVendor);
-    // Send vendor names as keywords to USASpending (it matches keywords
-    // against recipient names as well as descriptions).
-    topics.push(...legalNames);
+    // Send vendor names as keywords to USASpending. Every keyword MUST be
+    // ≥3 characters or USASpending rejects the whole request with a 422:
+    //   {"detail":"Field 'filters|keywords' value 'F5' is below min '3'
+    //    items"}
+    // This matters for competitor lists where Mo passes in names like
+    // "F5" or "C3" — short by design. Drop any keyword under 3 chars;
+    // they'd fail validation anyway. For the truly edge case where
+    // every keyword for a vendor is too short (shouldn't happen with
+    // our legal-name table but defensive), fall back to the raw input
+    // padded if needed... actually no, just skip — a missing vendor
+    // match is better than a failed request.
+    const safeKeywords = legalNames.filter(n => String(n || '').trim().length >= 3);
+    topics.push(...safeKeywords);
+
     // Post-filter needles: include BOTH the legal name ("AMAZON WEB SERVICES")
     // AND the user's raw input ("aws"). Recipient fields on USASpending use
     // the full legal name, so the legal name is the right match there. But
