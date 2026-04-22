@@ -1303,7 +1303,15 @@ const Utils = {
   },
 
   cleanAgency(s) {
-    return (s || '').replace(/^(Department of (the )?|Office of (the )?)/i, '').trim();
+    return (s || '')
+      .replace(/^(Department of (the )?|Office of (the )?)/i, '')
+      // Strip leading office-ID prefix when it's a code (contains digits).
+      // Matches patterns like "FA8625 AFLCMC WWMK", "W52P1J ACC-RSA",
+      // "2032H5 IRS OFFICE". Leaves pure alpha names like "NAVSEA HQ"
+      // and "AFLCMC/HBBK" untouched.
+      .replace(/^[A-Z0-9]{4,8}\s+(?=[A-Z])/i, (match) => /\d/.test(match) ? '' : match)
+      .replace(/\s+/g, ' ')
+      .trim();
   },
 
   getTrailing12Mo() {
