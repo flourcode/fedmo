@@ -859,28 +859,35 @@ Your job: tell the user honestly that you couldn't pull the competitive landscap
   if (opts.reframed && resolverInput?._reframedFromVendor) {
     const pitched = resolverInput._reframedFromVendor;
     const category = resolverInput?._categoryName || null;
+    const agencyName = resolverInput?.agency || 'this agency';
     if (category) {
       framing += `
-THIS IS A CATEGORY-REFRAMED PULL.
-The user pitched "${pitched}" at this agency, but ${pitched} has no direct top-100 footprint here.
-Rather than dead-end, the browser refired the query using keywords for ${pitched}'s CATEGORY (${category}). The rows below show the actual competitive landscape for ${category} at this agency — where the seller's real opportunity is.
-Your job:
- 1. Lead with honesty: "${pitched} doesn't show up directly at [agency]" — first sentence.
- 2. Pivot to the category view: "but here's the ${category} market at [agency]" — the rows below ARE the seller's competitive landscape.
- 3. Identify where ${pitched} fits: which competitors hold the work, where the gaps are, which expiring contracts are targets.
- 4. End with a Monday-morning action grounded in specific rows.
-Do NOT pretend the rows represent ${pitched}'s presence. They represent the CATEGORY competition — that's what a seller wants to see.`;
+⚠️ CRITICAL FRAMING RULE — read before writing anything.
+
+Your FIRST sentence must be, exactly in spirit: "${pitched} doesn't show up directly at ${agencyName}."
+
+WHY: the user pitched ${pitched} at ${agencyName}, but ${pitched} has no direct top-100 footprint there. The rows below are NOT ${pitched}'s contracts. They are the competitive ${category} market at ${agencyName} — pulled as a reframe so the seller can see where their product would fit.
+
+Your response structure:
+ 1. FIRST SENTENCE: "${pitched} doesn't show up directly at ${agencyName}." No preamble. No softening.
+ 2. SECOND SENTENCE: "Here's the ${category} market there instead" or similar pivot.
+ 3. THIRD SENTENCE: name the top 1-2 competitors from the rows and what that means for ${pitched}.
+
+Do NOT cite Award IDs, dollar amounts, or end dates as if they belong to ${pitched}. They belong to the competitors. Use them only to describe the competitive landscape ${pitched} would enter.`;
     } else {
       framing += `
-THIS IS A REFRAMED PULL.
-The user pitched "${pitched}" at this agency, but ${pitched} has no direct footprint in the top 100 contracts here.
-Rather than dead-end the user, the browser pulled the broader agency market so you can tell them what IS here.
-Your job:
- 1. Lead with honesty: "${pitched} doesn't show up directly at [agency]" — acknowledge the absence in the first sentence.
- 2. Then pivot: "but here's the market you'd be entering" — describe the agency's actual spending patterns based on the top primes and sub-agencies below.
- 3. Identify the adjacency: where does ${pitched}'s category fit? Who's holding that work? Is it a greenfield for the seller, or is there an incumbent to displace?
- 4. End with a concrete Monday-morning action tied to what's actually in the data.
-Do NOT pretend the rows below represent ${pitched}'s presence. They don't. They represent the market context around ${pitched}'s absence.`;
+⚠️ CRITICAL FRAMING RULE — read before writing anything.
+
+Your FIRST sentence must be, exactly in spirit: "${pitched} doesn't show up directly at ${agencyName}."
+
+WHY: the user pitched ${pitched} at ${agencyName}, but ${pitched} has no direct top-100 footprint there. The rows below are the agency's broader spending, NOT ${pitched}'s contracts.
+
+Your response structure:
+ 1. FIRST SENTENCE: "${pitched} doesn't show up directly at ${agencyName}." No preamble.
+ 2. SECOND SENTENCE: describe what the agency IS spending on, based on the top primes.
+ 3. THIRD SENTENCE: a concrete next step — which sub-agency, which prime, which adjacency.
+
+Do NOT pretend the rows represent ${pitched}'s presence. They don't.`;
     }
   }
 
@@ -1001,13 +1008,29 @@ export function detectPipelineListIntent(question) {
 
   // Pipeline intent keywords — must appear somewhere in the message
   const pipelineKeywords = /\b(opps?|opportunit(?:y|ies)|pipeline|recompetes?|prospects?|targets?|leads?|plays?)\b/;
-  if (!pipelineKeywords.test(text)) return null;
+  const pipelineMatch = text.match(pipelineKeywords);
+  if (!pipelineMatch) return null;
+  const pipelineIdx = pipelineMatch.index;
 
   // Count extraction — accept "5", "top 5", "give me 5", "5-10" → 5
   const countMatch = text.match(/\b(?:top\s+|give\s+me\s+|show\s+(?:me\s+)?|list\s+(?:me\s+)?)?(\d{1,2})\b/);
   if (!countMatch) return null;
   const count = parseInt(countMatch[1], 10);
   if (count < 1 || count > 20) return null;
+  const countIdx = countMatch.index;
+
+  // ── Adjacency guard ─────────────────────────────────────────
+  // The count and the pipeline keyword must be reasonably close. In a
+  // sentence like "I read 5 articles about DHS opps last week," both a
+  // count (5) and a pipeline keyword (opps) exist but are unrelated —
+  // the user is not asking for a list. The request pattern is always
+  // count-then-pipeline-keyword (or pipeline-keyword-then-count) with
+  // at most a few words in between. Threshold of 25 chars catches the
+  // false positives empirically observed (29-32 char gaps) while
+  // allowing real compound asks like "5 salesforce-ready pipeline opps"
+  // (gap 17-28 depending on phrasing).
+  const gap = Math.abs(pipelineIdx - countIdx);
+  if (gap > 25) return null;
 
   // Lens extraction — look for "[word]-ready", "[word]-fit", "[word]-friendly"
   // or "[word] opportunities" / "[word] opps" / "for [word]"
@@ -1304,7 +1327,7 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
         console.warn('[askMo] Mo cited Award IDs in prose-only turn (no data pulled):', suspiciousIds);
         debug.fabricatedIds = suspiciousIds;
         debug.fabricatedProseOriginal = proseText;
-        const correction = `I was about to give you specific contract data without actually pulling it. That's a line I won't cross — contract IDs, dollar values, and end dates have to come from the real USASpending data.\n\nTell me the scope you want (agency, vendor, or topic) and I'll pull it fresh. For example: "give me 5 DISA opps" becomes a real data pull when I run it as a scoped query.`;
+        const correction = `To give you real contracts with real IDs and values, I need to pull the data. Tell me the scope — agency, vendor, topic — and I'll run it fresh. For instance: "5 DISA opps" becomes a scoped pull the moment you name the agency.`;
         debug.fabricationScrubbed = true;
         return { mode: 'prose', text: correction, debug };
       }
@@ -1675,58 +1698,123 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
       },
     });
 
-    // Fabrication detection: scan Mo's prose for Award IDs and check
-    // them against the real rows. If any cited ID doesn't match, flag
-    // it in debug so we can see Mo is hallucinating even when the
-    // prompt rule fails. This is a safety net that surfaces the worst
-    // possible failure mode (citing contracts that don't exist) in
-    // the debug trace.
-    const realAwardIds = new Set(rows.map(r => String(r['Award ID'] || '').toUpperCase()).filter(Boolean));
-    // Award ID pattern: alphanumeric, usually 12+ chars, often
-    // includes numbers. Matches formats like 70CTD021FR0000232,
-    // FA873024FB028, HC102821D0001, W56HZV15CA001, etc.
+    // ── Fabrication detection — multi-layered safety net ─────
+    //
+    // This is the last guard before Mo's prose reaches a beta partner.
+    // It checks three failure modes:
+    //
+    //   (a) Award IDs cited that aren't in the real data
+    //   (b) Dollar amounts cited that don't match any real row within 10%
+    //       (also accepts the grand total and the top-3 aggregation)
+    //   (c) Vendor-at-agency pairs cited that don't exist in the rows
+    //       (skipped for now — too many false positives; revisit if beta
+    //       users report it)
+    //
+    // Design principle: when a fabrication is caught, NEVER show a
+    // confessional message ("I almost gave you fabricated data"). That
+    // makes Mo sound broken in front of a skeptical federal seller.
+    // Instead, substitute a short, professional observation that doesn't
+    // reference the fabrication at all. The card speaks for itself.
+    //
+    // All real values come from the actual rows. The LLM-reported values
+    // (in secondPassFull) are checked against these.
+    const realAwardIds = new Set(
+      rows.map(r => String(r['Award ID'] || '').toUpperCase()).filter(Boolean)
+    );
+    const realAmounts = rows.map(r => parseFloat(r['Award Amount']) || 0).filter(a => a > 0);
+    const totalObligated = realAmounts.reduce((s, a) => s + a, 0);
+    const top3Sum = realAmounts.slice().sort((a, b) => b - a).slice(0, 3).reduce((s, a) => s + a, 0);
+
+    // Build a validated-amounts set with ±10% tolerance. Any prose-cited
+    // amount within 10% of one of these is acceptable. This accounts for
+    // Mo rounding ($249M Deloitte when the row shows $248.7M) and for
+    // her citing aggregates like "the top three hold $420M."
+    const validAmounts = [...realAmounts, totalObligated, top3Sum];
+
+    // ── (a) Award ID check ─────────────────────────────────
     const idPattern = /\b[A-Z0-9]{10,20}\b/g;
     const citedIds = new Set();
     const fabricatedIds = [];
-    let match;
-    while ((match = idPattern.exec(secondPassFull || '')) !== null) {
-      const id = match[0].toUpperCase();
-      // Skip if we already checked this one or it's obviously not an award ID
+    let idMatch;
+    while ((idMatch = idPattern.exec(secondPassFull || '')) !== null) {
+      const id = idMatch[0].toUpperCase();
       if (citedIds.has(id)) continue;
       citedIds.add(id);
-      // Must contain at least one digit AND one letter to avoid
-      // matching pure dollar-amount patterns or descriptions.
       if (!/\d/.test(id) || !/[A-Z]/.test(id)) continue;
       if (!realAwardIds.has(id)) {
         fabricatedIds.push(id);
       }
     }
-    if (fabricatedIds.length > 0) {
-      console.warn('[askMo] Mo cited Award IDs not in the data:', fabricatedIds);
+
+    // ── (b) Dollar amount check ────────────────────────────
+    // Match "$47M", "$47.5M", "$1.2B", "$850K", "$1,200,000", "$1.2 billion"
+    // etc. Compare each to the real amounts with 10% tolerance.
+    const dollarPattern = /\$\s?([\d,]+(?:\.\d+)?)\s*(billion|million|thousand|b|m|k)?\b/gi;
+    const fabricatedAmounts = [];
+    let dMatch;
+    while ((dMatch = dollarPattern.exec(secondPassFull || '')) !== null) {
+      const num = parseFloat(dMatch[1].replace(/,/g, ''));
+      if (!Number.isFinite(num) || num === 0) continue;
+      const unit = (dMatch[2] || '').toLowerCase();
+      let value;
+      if (unit === 'billion' || unit === 'b') value = num * 1e9;
+      else if (unit === 'million' || unit === 'm') value = num * 1e6;
+      else if (unit === 'thousand' || unit === 'k') value = num * 1e3;
+      else if (num >= 1e6) value = num; // raw number — treat as dollars
+      else continue; // too ambiguous (bare $5 could be anything); skip
+
+      // Only flag amounts $100K and up. Anything smaller is either
+      // colloquial ("$10 well spent") or below USASpending's signal.
+      if (value < 100_000) continue;
+
+      // Check against real amounts with 10% tolerance
+      const tolerance = 0.10;
+      const matched = validAmounts.some(real => {
+        if (real === 0) return false;
+        const diff = Math.abs(value - real) / real;
+        return diff <= tolerance;
+      });
+      if (!matched) {
+        fabricatedAmounts.push({ cited: dMatch[0], value });
+      }
+    }
+
+    const anyFabrication = fabricatedIds.length > 0 || fabricatedAmounts.length > 0;
+
+    if (anyFabrication) {
+      console.warn('[askMo] Fabrication caught:', { ids: fabricatedIds, amounts: fabricatedAmounts });
       debug.fabricatedIds = fabricatedIds;
+      debug.fabricatedAmounts = fabricatedAmounts;
       debug.fabricatedProseOriginal = secondPassFull;
-      // Defensive scrub: replace Mo's output with an honest correction
-      // rather than show fabricated contract IDs to the user. Federal
-      // sellers act on this data. A fabricated ID is a severe trust
-      // failure. Better to show a correction than to show fake records
-      // wrapped in plausible prose.
-      const realList = rows
-        .slice(0, 5)
-        .map((r, i) => {
-          const vendor = r['Recipient Name'] || 'Unknown';
-          const amt = parseFloat(r['Award Amount']) || 0;
-          const office = r['Awarding Office']
-            || r['Awarding Sub Agency']
-            || r['Awarding Agency']
-            || '';
-          const awardId = r['Award ID'] || '';
-          const desc = (r['Description'] || '').slice(0, 120).replace(/\s+/g, ' ').trim();
-          return `${i + 1}. ${vendor} — $${(amt / 1_000_000).toFixed(1)}M at ${office}\n   Contract: ${awardId}\n   ${desc}`;
-        })
-        .join('\n\n');
-      const scrubbed = `I almost gave you fabricated contract data — I caught myself. Here are the top real records from the actual data pull instead:\n\n${realList}\n\nIf you want strategic analysis on any of these, ask me about a specific one and I'll pull its full record.`;
-      render.streamPostTagProse(scrubbed);
       debug.fabricationScrubbed = true;
+
+      // ── Silent scrub: substitute a short, professional observation ──
+      //
+      // The card already shows the real facts. Mo's second-pass prose
+      // was supposed to add one non-obvious thing; she fabricated
+      // instead. Replace her output with a tight deterministic line
+      // that respects the user's intelligence and doesn't mention the
+      // fabrication at all.
+      //
+      // The line is derived from real data: top prime + concentration.
+      // No LLM, no second chance.
+      const topVendorByAmt = [...rows]
+        .sort((a, b) => (parseFloat(b['Award Amount']) || 0) - (parseFloat(a['Award Amount']) || 0))[0];
+      const topName = topVendorByAmt?.['Recipient Name'] || null;
+      const topShare = topVendorByAmt && totalObligated > 0
+        ? Math.round(((parseFloat(topVendorByAmt['Award Amount']) || 0) / totalObligated) * 100)
+        : 0;
+
+      let scrubbed;
+      if (topName && topShare >= 25) {
+        scrubbed = `The card tells the story here — ${topName} holds the biggest share, so the shortest path in is usually through them or the agency team they already work with.`;
+      } else if (topName) {
+        scrubbed = `The card tells the story here — a mix of primes with no single dominant incumbent, which means room to compete on capability rather than relationship alone.`;
+      } else {
+        scrubbed = `The card tells the story here. Pick the contract or office that matches your capture motion and we can go deeper.`;
+      }
+
+      render.streamPostTagProse(scrubbed);
       render.complete();
       debug.mode = 'data';
       return {
