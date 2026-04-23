@@ -3958,30 +3958,6 @@ const App = {
     const hasTurns = thread.querySelector('.turn-user, .turn-mo');
     if (hasTurns && greet) greet.style.display = 'none';
     if (!hasTurns && greet) greet.style.display = '';
-
-    // Populate starter chips on the empty state. These are the first
-    // things a brand-new user sees, so they teach the query shapes
-    // that work best:
-    //   - Opening pitch  ("I sell X to Y")
-    //   - Agency survey  ("Who's winning at Z")
-    //   - Refinement     (topic + agency + expiring signal)
-    //   - Subaward drill (the direction-aware phrasing we taught Mo)
-    // Clicking any chip fires this.ask(term) via the delegated click
-    // handler in init(). Starter-chip taps tracked separately as
-    // 'starter_chip' source so we can see which prompts actually
-    // onboard users vs sit unused.
-    const chipsEl = document.getElementById('greetingChips');
-    if (chipsEl && chipsEl.children.length === 0) {
-      const starters = [
-        'I sell cloud to DoD',
-        'Who\'s winning at HHS',
-        'Show me expiring Navy cybersecurity contracts',
-        'Who does GDIT subaward to',
-      ];
-      chipsEl.innerHTML = starters
-        .map(q => `<button class="mo-followup" data-ask="${Html.escapeHtml(q)}">${Html.escapeHtml(q)}</button>`)
-        .join('');
-    }
   },
 
   _updateJumpVisibility() {
