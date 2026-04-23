@@ -50,25 +50,10 @@
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Ccircle cx='20' cy='20' r='20' fill='%237CB583'/%3E%3Ccircle cx='14' cy='16' r='2.4' fill='%232D5033'/%3E%3Ccircle cx='26' cy='16' r='2.4' fill='%232D5033'/%3E%3Cpath d='M12 24 Q20 31 28 24' stroke='%232D5033' stroke-width='2.8' stroke-linecap='round' fill='none'/%3E%3C/svg%3E">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 
-<!--
-  Warm the Lambda TLS handshake during HTML parse so the first Mo
-  call skips ~1 RTT on cold 5G. Saves 200-400ms on the very first
-  turn, which is exactly the one shaping the user's impression from
-  a LinkedIn tap-in.
--->
+<!-- Warm Lambda TLS during HTML parse — saves ~1 RTT on first Mo call -->
 <link rel="preconnect" href="https://llonymyskdiakyxhlxlex7ul640hbcke.lambda-url.us-east-1.on.aws" crossorigin>
 
-<!--
-  Font: non-blocking load. The page renders immediately in the system
-  font (SF on iOS, Roboto on Android, Segoe on Windows) and Atkinson
-  Hyperlegible Next swaps in when it's downloaded. The fallback stack
-  in --font is solid so the FOUT is minor.
-
-  Pattern: rel="preload" fires the download at high priority. The
-  stylesheet link uses media="print" so the browser doesn't block
-  first paint on it, then onload flips it to media="all" which
-  applies the font. <noscript> covers users with JS disabled.
--->
+<!-- Font loads non-blocking via media=print + onload swap -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,200..800;1,200..800&display=swap">
@@ -403,6 +388,100 @@ button { cursor: pointer; }
 .mo-treemap rect { transition: opacity 120ms; }
 .mo-treemap rect:active { opacity: 0.85; }
 .mo-treemap text { pointer-events: none; font-family: var(--font); }
+
+/* ── Competitor stack-rank bar ─────────────────────────────
+   Horizontal single-row stacked bar showing market share among
+   the top 4 primes + "Others". Each segment is tappable and sends
+   a follow-up via the existing .mo-followup data-ask pattern.
+   Palette is the primary purple ramp — darkest at left (leader),
+   lightest at right (others tail). Matches the treemap's visual
+   weight without competing for attention. */
+.mo-compbar-host {
+  display: block;
+  margin: 8px 0 4px;
+}
+.mo-compbar {
+  display: flex;
+  width: 100%;
+  height: 28px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--primary-20);
+}
+.mo-compbar-seg {
+  /* Button reset so segments blend into the bar */
+  border: 0;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  /* Layout inside the segment */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  height: 100%;
+  /* A subtle right-edge divider instead of a gap — keeps the bar
+     reading as one visual unit while separating segments. */
+  box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.45);
+  transition: filter 120ms;
+  position: relative;
+}
+.mo-compbar-seg:last-child { box-shadow: none; }
+.mo-compbar-seg:active { filter: brightness(0.92); }
+.mo-compbar-seg-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #FFFFFF;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  padding: 0 4px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+/* Color ramp: darkest leader → lightest tail. Four vendors + others. */
+.mo-compbar-seg[data-rank="1"] { background: var(--primary-100); }
+.mo-compbar-seg[data-rank="2"] { background: var(--primary-80); }
+.mo-compbar-seg[data-rank="3"] { background: var(--primary-60); }
+.mo-compbar-seg[data-rank="4"] { background: var(--primary-40); }
+.mo-compbar-seg[data-rank="others"] {
+  background: var(--primary-20);
+}
+/* The "Others" segment gets darker text since the lavender bg is light */
+.mo-compbar-seg[data-rank="others"] .mo-compbar-seg-label {
+  color: var(--primary-100);
+}
+/* Legend below the bar: inline list of name + % pairs, for segments
+   too narrow to carry their label inside. Also serves as the a11y
+   fallback when labels are hidden. */
+.mo-compbar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.3;
+}
+.mo-compbar-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.mo-compbar-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.mo-compbar-legend-dot[data-rank="1"] { background: var(--primary-100); }
+.mo-compbar-legend-dot[data-rank="2"] { background: var(--primary-80); }
+.mo-compbar-legend-dot[data-rank="3"] { background: var(--primary-60); }
+.mo-compbar-legend-dot[data-rank="4"] { background: var(--primary-40); }
+.mo-compbar-legend-dot[data-rank="others"] { background: var(--primary-20); }
+.mo-compbar-legend-name { color: var(--text-body); font-weight: 500; }
+.mo-compbar-legend-pct  { color: var(--text-faint); font-variant-numeric: tabular-nums; }
 
 .mo-list { display: flex; flex-direction: column; }
 .mo-row {
@@ -1348,34 +1427,10 @@ import { askMo, detectPipelineListIntent, buildPipelineList, stripDataTags, warm
 if ('scrollRestoration' in history) { history.scrollRestoration = 'manual'; }
 
 // ════════════════════════════════════════════════════════════
-// LAZY JSON WARMUP
+// LAZY JSON WARMUP — offices.json + entities.json load lazily via
+// idle or force-warm on chip/send (see warmLazyTables calls below)
 // ════════════════════════════════════════════════════════════
-// offices.json (~33KB gz) and entities.json (~12KB gz) are no longer
-// fetched on module init. They're called in two places:
-//
-//   1. Here, on idle, so they load during whatever attention the
-//      user is paying to the greeting (reading chips, etc.) rather
-//      than blocking first paint.
-//
-//   2. In App.init()'s chip click handler (force-warm on tap), so
-//      even if idle hasn't fired, a chip tap immediately queues the
-//      JSON fetches in parallel with the Lambda call.
-//
-// By the time USASpending returns rows (typically 1-3s) for the
-// first card, the lazy tables are loaded and the treemap gets full
-// office decoding. Worst case — very fast network, slow JSON fetch,
-// first card misses enrichment — the card still renders correctly
-// at subtier level and subsequent cards self-heal.
-// ════════════════════════════════════════════════════════════
-const warmLazyTables = () => {
-  warmOffices();
-  warmEntities();
-};
-
-// Idle prefetch. On Chrome/Edge/Firefox this fires when the main
-// thread has nothing else to do. Safari lacks requestIdleCallback,
-// so we fall back to setTimeout after first paint + font load has
-// had time to complete.
+const warmLazyTables = () => { warmOffices(); warmEntities(); };
 if ('requestIdleCallback' in window) {
   requestIdleCallback(warmLazyTables, { timeout: 2500 });
 } else {
@@ -2444,6 +2499,79 @@ function buildCardSpec(m, query, sellerLens, territory) {
     };
   });
 
+  // ── Competitor stack-rank bar ─────────────────────────────────────
+  // A single horizontal stacked bar showing market share among the top
+  // 4 primes + an "Others" tail. Paired with the Top primes list below
+  // it: the bar gives instant competitive shape, the list gives detail.
+  //
+  // Two thresholds keep the bar meaningful:
+  //   1. Need at least 3 primes (else a single bar looks like a verdict,
+  //      not a stack rank).
+  //   2. Top prime must hold ≥15% of total (else the market is too
+  //      fragmented for a stacked view to read — everything becomes
+  //      near-equal slivers).
+  //
+  // Percentages here are true market share (spend / total), unlike the
+  // `pct` on each prime row which is pct-of-leader (for row widths in
+  // the list). Total comes from m.total, the full market size in scope.
+  let competitorBar = null;
+  if (vendorSorted.length >= 3 && total > 0) {
+    const leaderShare = (vendorSorted[0]?.[1].spend || 0) / total;
+    if (leaderShare >= 0.15) {
+      const topN = vendorSorted.slice(0, 4);
+      const topNSpend = topN.reduce((s, [, v]) => s + v.spend, 0);
+      const othersSpend = Math.max(0, total - topNSpend);
+
+      // Build raw segments at full precision, then reconcile percentages
+      // to ensure they sum to exactly 100 after rounding (otherwise the
+      // bar has a 1-2px gap or overflow).
+      const rawSegs = topN.map(([name, v], i) => ({
+        rank: String(i + 1),
+        name: tc(name),
+        spend: v.spend,
+        amount: Utils.money(v.spend),
+        rawPct: (v.spend / total) * 100,
+      }));
+      if (othersSpend > 0) {
+        rawSegs.push({
+          rank: 'others',
+          name: 'Others',
+          spend: othersSpend,
+          amount: Utils.money(othersSpend),
+          rawPct: (othersSpend / total) * 100,
+        });
+      }
+      // Round pct while preserving sum=100: largest-remainder method.
+      const floors = rawSegs.map(s => ({ ...s, pct: Math.floor(s.rawPct) }));
+      let remainder = 100 - floors.reduce((s, f) => s + f.pct, 0);
+      floors
+        .map((f, i) => ({ i, frac: f.rawPct - f.pct }))
+        .sort((a, b) => b.frac - a.frac)
+        .slice(0, remainder)
+        .forEach(({ i }) => { floors[i].pct += 1; });
+
+      // Drop any segment that rounded to 0% — they'd be invisible anyway
+      // and add accessibility noise (screen readers announce every button).
+      const segments = floors
+        .filter(f => f.pct > 0)
+        .map(f => ({
+          rank: f.rank,
+          name: f.name,
+          pct: f.pct,
+          amount: f.amount,
+          // Follow-up text Mo receives. The Others segment asks a different
+          // question because "tell me more about Others" is meaningless.
+          askText: f.rank === 'others'
+            ? `Who else is in this market beyond the top ${topN.length}?`
+            : `Tell me more about ${f.name}`,
+        }));
+
+      if (segments.length >= 3) {
+        competitorBar = { segments };
+      }
+    }
+  }
+
   // ── Expiring soon, up to 8, with the first 3 visible by default and the
   // rest hidden behind a "Show N more" toggle. Matches what Mo sees in her
   // payload so users can verify every contract Mo cites.
@@ -2481,6 +2609,7 @@ function buildCardSpec(m, query, sellerLens, territory) {
     stats,
     treemap,
     primes,
+    competitorBar,
     expiring,
     expiringMore,
     sourceCount: contractCount,
@@ -2683,10 +2812,6 @@ const App = {
           // chips users click most and whether to rotate them.
           const source = followup.closest('#greetingChips') ? 'starter_chip' : 'followup';
           this._track('ask', { source, text: q.slice(0, 60) });
-          // Force-warm the lazy JSON tables. Fires in parallel with the
-          // Lambda call. On cold starts where idle warmup hasn't had time
-          // to run yet, this guarantees offices.json and entities.json
-          // are in flight the moment the user commits to a query.
           warmLazyTables();
           this.ask(q);
         }
@@ -2751,8 +2876,6 @@ const App = {
     const v = (inp?.value || '').trim();
     if (!v) return;
     this._track('ask', { source: 'typed', length: v.length });
-    // Force-warm lazy tables in parallel with the Lambda call.
-    // Matches the chip-tap path so typed first queries are equally fast.
     warmLazyTables();
     this.ask(v);
     inp.value = '';
@@ -4215,6 +4338,15 @@ const App = {
       html += `<div class="mo-comp-head"><div class="mo-comp-title">Where the money is</div><div class="mo-comp-meta">last 12 months</div></div>${renderTreemap(spec.treemap)}`;
     }
 
+    // Competitor stack-rank bar. A single horizontal stacked bar showing
+    // market share among the top primes + Others. Tapping a segment sends
+    // a follow-up via the existing .mo-followup data-ask plumbing. Only
+    // renders when the spec.competitorBar object was computed (see the
+    // gating rules in deriveMarketSpec — ≥3 primes, leader ≥15%).
+    if (spec.competitorBar && spec.competitorBar.segments && spec.competitorBar.segments.length >= 3) {
+      html += renderCompetitorBar(spec.competitorBar);
+    }
+
     if (spec.primes && spec.primes.length > 0) {
       html += `<div class="mo-comp-head"><div class="mo-comp-title">Top primes</div><div class="mo-comp-meta">${spec.primes.length} shown</div></div><div class="mo-list">`;
       spec.primes.forEach(p => {
@@ -4510,6 +4642,49 @@ function worst(row, sideLength) {
       sumSq / (sideSq * it.area)
     ))
   );
+}
+
+// Renders a horizontal stacked bar showing market share. Segments are
+// buttons with the existing .mo-followup[data-ask] contract, so taps
+// flow through the app's delegated click handler — no new wiring.
+// Labels render inline only when the segment is wide enough to hold
+// them cleanly; narrow segments rely on the legend below. The legend
+// always renders as a readable detail + a11y fallback.
+function renderCompetitorBar(bar) {
+  if (!bar || !bar.segments || bar.segments.length < 3) return '';
+  // Inline-label threshold: ~12% of a 393px card = ~47px, enough for
+  // "34%" at 11px font plus padding. Below that, label is hidden and
+  // the legend carries the number.
+  const INLINE_LABEL_THRESHOLD = 12;
+  const segHtml = bar.segments.map(s => {
+    const showInline = s.pct >= INLINE_LABEL_THRESHOLD;
+    const ariaLabel = `${s.name}: ${s.pct}% (${s.amount}). Tap to ask Mo about ${s.name}.`;
+    return `<button class="mo-compbar-seg mo-followup"
+      data-ask="${Html.escapeHtml(s.askText)}"
+      data-rank="${s.rank}"
+      style="width: ${s.pct}%"
+      aria-label="${Html.escapeHtml(ariaLabel)}">
+      ${showInline ? `<span class="mo-compbar-seg-label">${s.pct}%</span>` : ''}
+    </button>`;
+  }).join('');
+
+  const legendHtml = bar.segments.map(s =>
+    `<span class="mo-compbar-legend-item">
+      <span class="mo-compbar-legend-dot" data-rank="${s.rank}"></span>
+      <span class="mo-compbar-legend-name">${Html.escapeHtml(s.name)}</span>
+      <span class="mo-compbar-legend-pct">${s.pct}%</span>
+    </span>`
+  ).join('');
+
+  const topCount = bar.segments.filter(s => s.rank !== 'others').length;
+  const hasOthers = bar.segments.some(s => s.rank === 'others');
+  const metaText = hasOthers ? `top ${topCount} + others` : `top ${topCount}`;
+
+  return `<div class="mo-compbar-host">
+    <div class="mo-comp-head"><div class="mo-comp-title">Market share</div><div class="mo-comp-meta">${metaText}</div></div>
+    <div class="mo-compbar" role="img" aria-label="Market share stacked bar">${segHtml}</div>
+    <div class="mo-compbar-legend">${legendHtml}</div>
+  </div>`;
 }
 
 function renderTreemap(items) {
