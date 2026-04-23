@@ -234,13 +234,7 @@ button { cursor: pointer; }
 .thread {
   max-width: 720px;
   margin: 0 auto;
-  /* Bottom padding gives appendUserTurn's scroll enough room to pin the
-     user bubble just under the header once the Mo turn has grown (prose
-     streaming / card rendered). At 10vh the scroll may briefly undershoot
-     during the ~few-hundred-ms window when the Mo turn is still a tiny
-     skeleton, but the eye is on the streaming prose at that moment and
-     the user bubble settles into place as layout grows. */
-  padding: 16px 12px 10vh;
+  padding: 16px 12px 24px;
 }
 
 .greeting { padding: 32px 4px 16px; }
@@ -3990,18 +3984,13 @@ const App = {
     wrap.innerHTML = `<div class="turn-user-bubble">${Html.escapeHtml(text)}</div>`;
     thread.appendChild(wrap);
     this._updateEmptyState();
-    // Scroll the user bubble to just under the header. The Mo turn will
-    // mount ~immediately after this, just below the bubble, and the user
-    // sees a clean "my question at top → Mo's avatar → prose streaming"
-    // layout. requestAnimationFrame ensures layout has settled before we
-    // measure position (replaces old 50ms setTimeout, which raced on
-    // slower devices).
-    requestAnimationFrame(() => {
-      const header = document.querySelector('.mo-header');
+    // Auto-scroll the user turn into view
+    setTimeout(() => {
+      const header = document.getElementById('moHeader');
       const headerH = header ? header.getBoundingClientRect().height : 60;
       const target = wrap.getBoundingClientRect().top + window.pageYOffset - headerH - 12;
       window.scrollTo({ top: target, behavior: 'smooth' });
-    });
+    }, 50);
   },
 
   // Build the "currently on screen" card summary that gets injected into
@@ -4046,7 +4035,7 @@ const App = {
   jumpToLatest() {
     const lastTurn = document.querySelector('.turn-user:last-of-type, .turn-mo:last-of-type');
     if (!lastTurn) return;
-    const header = document.querySelector('.mo-header');
+    const header = document.getElementById('moHeader');
     const headerH = header ? header.getBoundingClientRect().height : 60;
     const target = lastTurn.getBoundingClientRect().top + window.pageYOffset - headerH - 12;
     window.scrollTo({ top: target, behavior: 'smooth' });
