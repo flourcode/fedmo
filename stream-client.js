@@ -1130,7 +1130,18 @@ Do NOT pretend the rows represent ${pitched}'s presence. They don't.`;
     ? `\n\n⚠️ DATA NOTE: The user asked about "${missionFallback}," but USASpending doesn't file "${missionFallback}" as an awarding agency, contracts for this mission flow through the parent department. The rows below came from the parent toptier with "${missionFallback}" as a keyword filter, which surfaces the real market. In your prose, include ONE short acknowledgment like "USASpending files ${missionFallback} contracts under the parent department, so these are the real ones." Don't belabor it. Then continue with the normal analysis.`
     : '';
 
-  return `Query: ${queryDesc || '(no filters)'}${framing}${missionFallbackNote}
+  // Low-confidence note: when the fetch returned very few rows AND none
+  // of the top rows have the vendor as recipient, the keyword match was
+  // likely description-only (acronym collision). Tell Mo to treat these
+  // rows as unreliable signal and pivot to how the vendor actually sells
+  // federally (resellers, integrators) from her general knowledge rather
+  // than citing the collision rows as if they represent the market.
+  const lowConfidence = rows._lowConfidence || null;
+  const lowConfidenceNote = lowConfidence
+    ? `\n\n⚠️ LOW-CONFIDENCE DATA: The query for "${lowConfidence.vendor}" returned only ${lowConfidence.rowCount} row${lowConfidence.rowCount === 1 ? '' : 's'}, and NONE of the top rows have ${lowConfidence.vendor} as the Recipient Name. This strongly suggests the keyword matched on contract description text only (common with short acronyms like AWS / SAP / BI that collide with unrelated military or program names). Do NOT cite specific contracts from this slice as if they represent ${lowConfidence.vendor}'s federal footprint. Instead: open with one honest sentence ("${lowConfidence.vendor} doesn't show up as a direct prime in a meaningful way in USASpending — their federal volume flows through resellers and integrators"). Then draw on your general knowledge to name the real channels (Carahsoft, FCN, Four Points, DLT for AWS; DLT and Red River for SAP; etc.). Do NOT name specific dollar amounts from the card, those numbers are collision noise.`
+    : '';
+
+  return `Query: ${queryDesc || '(no filters)'}${framing}${missionFallbackNote}${lowConfidenceNote}
 Total (top ${rows.length} contracts, last 12mo): $${(total / 1_000_000).toFixed(1)}M
 Unique primes in slice: ${primeMap.size}
 Top 3 concentration: ${top3Pct}%
@@ -2099,6 +2110,43 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
     }
 
     debug.rowCountFinal = rows.length;
+
+    // ── Low-confidence detection ────────────────────────────────────
+    //
+    // For short vendor names (e.g., "AWS", "SAP", "BI"), USASpending's
+    // keyword matching can return acronym-collision rows where the
+    // description happens to contain the vendor token but the recipient
+    // is unrelated. Classic case: "<data vendor='AWS' />" returning
+    // Lockheed's Navy Aegis Weapon System contract because the
+    // description contains "AWS UPGRADED EQUIPMENT." Rendering a
+    // confident card in that state misleads the user.
+    //
+    // Signal: row count is thin AND the queried vendor's name doesn't
+    // appear in any top-5 Recipient Name. In that case the keyword hit
+    // was probably description-only, probably a collision. Flag as
+    // low-confidence so the card warns and Mo's prose frames honestly.
+    let lowConfidenceFlag = null;
+    const vendorQueried = resolverInput?.vendor
+      || (Array.isArray(resolverInput?.vendors) ? resolverInput.vendors[0] : null);
+    if (vendorQueried && rows.length > 0 && rows.length < 10) {
+      const needle = String(vendorQueried).toUpperCase();
+      if (needle.length >= 3) {
+        const top5Recipients = rows.slice(0, 5).map(r =>
+          (r['Recipient Name'] || '').toUpperCase()
+        );
+        const recipientHasVendor = top5Recipients.some(n => n.includes(needle));
+        if (!recipientHasVendor) {
+          // None of the top rows have the vendor as recipient. This is
+          // likely description-only matching → collision risk.
+          lowConfidenceFlag = {
+            reason: 'keyword_collision',
+            vendor: vendorQueried,
+            rowCount: rows.length,
+          };
+          rows._lowConfidence = lowConfidenceFlag;
+        }
+      }
+    }
 
     // Render the real card
     render.renderDataCard(cardRef, rows, resolverInput);

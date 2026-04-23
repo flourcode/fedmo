@@ -3643,6 +3643,14 @@ const App = {
           cardRef.innerHTML = '<div class="mo-empty-msg">Data came back but I couldn\'t shape it. Try rephrasing.</div>';
           return;
         }
+        // Propagate low-confidence flag from the fetched rows onto the
+        // spec so the card renderer can show a warning banner above the
+        // data. Set when the fetch returned thin results AND the queried
+        // vendor didn't appear in any top Recipient Name — i.e. classic
+        // acronym collision like AWS matching "Aegis Weapon System."
+        if (rows._lowConfidence) {
+          spec.lowConfidence = rows._lowConfidence;
+        }
         // Use the existing buildMoTurn builder, then lift out its card body
         // so we can drop it into our composite turn shell (which already
         // has its own header).
@@ -3958,6 +3966,30 @@ const App = {
     const hasTurns = thread.querySelector('.turn-user, .turn-mo');
     if (hasTurns && greet) greet.style.display = 'none';
     if (!hasTurns && greet) greet.style.display = '';
+
+    // Populate starter chips on the empty state. These are the first
+    // things a brand-new user sees, so they teach the query shapes
+    // that work best:
+    //   - Opening pitch  ("I sell X to Y")
+    //   - Agency survey  ("Who's winning at Z")
+    //   - Refinement     (topic + agency + expiring signal)
+    //   - Subaward drill (the direction-aware phrasing we taught Mo)
+    // Clicking any chip fires this.ask(term) via the delegated click
+    // handler in init(). Starter-chip taps tracked separately as
+    // 'starter_chip' source so we can see which prompts actually
+    // onboard users vs sit unused.
+    const chipsEl = document.getElementById('greetingChips');
+    if (chipsEl && chipsEl.children.length === 0) {
+      const starters = [
+        'I sell cloud to DoD',
+        'Who\'s winning at HHS',
+        'Show me expiring Navy cybersecurity contracts',
+        'Who does GDIT subaward to',
+      ];
+      chipsEl.innerHTML = starters
+        .map(q => `<button class="mo-followup" data-ask="${Html.escapeHtml(q)}">${Html.escapeHtml(q)}</button>`)
+        .join('');
+    }
   },
 
   _updateJumpVisibility() {
@@ -4119,6 +4151,7 @@ const App = {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>
+        ${spec.lowConfidence ? `<div class="mo-framing" style="background: var(--surface-subtle, #fff7e8); border-left: 3px solid var(--accent, #c97c1b); padding: 10px 12px; margin-bottom: 10px; font-size: 13px;"><strong>Low-confidence match.</strong> <strong>${Html.escapeHtml(spec.lowConfidence.vendor)}</strong> doesn't show up as a direct prime in USASpending in a meaningful way, and the ${spec.lowConfidence.rowCount} row${spec.lowConfidence.rowCount === 1 ? '' : 's'} below may be description-only keyword matches (short acronyms like AWS, SAP, BI can collide with unrelated program names). Their federal volume typically flows through resellers and integrators instead, which a direct vendor search won't surface. Numbers on this card may not reflect ${Html.escapeHtml(spec.lowConfidence.vendor)}'s real footprint.</div>` : ''}
         ${spec.framing ? `<div class="mo-framing">${Html.escapeHtml(spec.framing)}</div>` : ''}
         <div class="mo-verdict">${Html.escapeHtml(spec.verdict.text)}</div>
         <div class="mo-action">${Html.escapeHtml(spec.verdict.action)}</div>
