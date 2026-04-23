@@ -1937,7 +1937,6 @@ function analyzeSubawards(subs, marketLabel, opts = {}) {
   if (!subs || !subs.length) return null;
   const tc = s => Utils.titleCase(s);
   const direction = opts.direction === 'from' ? 'from' : 'to';
-  const autoFlipped = opts.autoFlipped === true;
 
   const primes = {}, subvendors = {}, agencies = {};
   let totalSubVal = 0;
@@ -2084,7 +2083,6 @@ function analyzeSubawards(subs, marketLabel, opts = {}) {
     avgSubSize: Utils.money(avgSubSize),
     topPrime, topPrimePct,
     direction,       // 'to' (vendor is prime) | 'from' (vendor is sub)
-    autoFlipped,     // true when asked for 'to' but got 'from' fallback
     reportingNote: 'Subaward reporting is mandatory only above $30K and often lags the prime award by months. This is a lower-bound picture, not complete.',
   };
 }
@@ -3702,13 +3700,10 @@ const App = {
           'prime_award_generated_internal_id': s.primeAwardId,
         }));
         const label = this._labelForResolverInput(resolverInput);
-        // Pull direction + autoFlipped from the row array (stamped by
-        // fetchSubawards). These drive the card framing — "subs X hires"
-        // vs "primes hiring X" — and the auto-flip banner when Direction
-        // B was empty and we silently fell back to Direction A.
+        // Pull direction from the row array (stamped by fetchSubawards).
+        // This drives the card framing — "subs X hires" vs "primes hiring X".
         const direction = subs._subawardDirection === 'from' ? 'from' : 'to';
-        const autoFlipped = subs._autoFlipped === true;
-        const spec = analyzeSubawards(rows, label, { direction, autoFlipped });
+        const spec = analyzeSubawards(rows, label, { direction });
         if (!spec) {
           cardRef.innerHTML = '<div class="mo-empty-msg">Subaward data came back but I couldn\'t shape it.</div>';
           return;
@@ -4036,7 +4031,6 @@ const App = {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>
-        ${spec.autoFlipped ? `<div class="mo-framing" style="background: var(--surface-subtle, #fff7e8); border-left: 3px solid var(--accent, #c97c1b); padding: 10px 12px; margin-bottom: 10px; font-size: 13px;"><strong>${Html.escapeHtml(spec.label)}</strong> has no reportable as-prime subawards in USASpending. Common for defense primes (Northrop, Lockheed) and for vendors who deliver most work organically. Showing <strong>${Html.escapeHtml(spec.label)}</strong>-as-a-sub instead, so you can see which primes are already hiring them.</div>` : ''}
         <div class="mo-framing">${spec.direction === 'from'
           ? `Subaward view: the primes hiring <strong>${Html.escapeHtml(spec.label)}</strong> as a sub to help deliver their own contracts.`
           : `Subaward view: the subs <strong>${Html.escapeHtml(spec.label)}</strong> is hiring to help deliver their prime contracts.`}</div>

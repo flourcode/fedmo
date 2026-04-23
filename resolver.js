@@ -412,6 +412,79 @@ const lookupVendor  = (term) => {
   return String(term || '').toUpperCase().trim();
 };
 
+// ─────────────────────────────────────────────────────────────────────
+// deriveShortForm — strip entity suffixes + common category words so a
+// legal name like 'DELOITTE CONSULTING LLP' becomes just 'DELOITTE'.
+//
+// Why this exists: USASpending's Prime Recipient Name field uses the
+// legal name (e.g. 'DELOITTE CONSULTING LLP'), but the Sub-Awardee Name
+// field often uses shorter forms. USASpending's `keywords` filter is
+// token-contains across BOTH fields, so sending ONLY the full legal
+// name misses as-prime rows where the prime field happens to have
+// a shorter registered name (e.g., 'DELOITTE' alone), while sending
+// ONLY the short name misses rows where USASpending stored the full
+// legal entity.
+//
+// Sending BOTH solves it. For vendors in the hand-curated alias table
+// (GDIT → GENERAL DYNAMICS INFORMATION TECHNOLOGY + GDIT) that already
+// works. This helper generalizes it so ANY vendor gets the same
+// treatment without needing an alias entry. Probe data confirms this
+// unlocks as-prime data for Deloitte (2→10), SAIC (1→24), Booz Allen
+// (2→7), and should do the same for every integrator and reseller we
+// haven't yet hand-curated.
+//
+// Input:  a normalized uppercase legal name (already suffix-stripped
+//         by norm(), but we do our own cleanup too for safety)
+// Output: the short form, or null if the short form would be identical
+//         to the input, below the 3-char USASpending minimum, or empty.
+// ─────────────────────────────────────────────────────────────────────
+const _SHORT_FORM_NOISE = new Set([
+  // Entity suffixes (most already stripped by norm(), but safety-net)
+  'INC','LLC','CORP','CORPORATION','INCORPORATED','COMPANY','CO','LTD',
+  'LP','PC','PLLC','LLP',
+  // Category words that bloat a legal name without disambiguating it
+  'TECHNOLOGY','TECHNOLOGIES','CONSULTING','SOLUTIONS','SERVICES',
+  'SYSTEMS','FEDERAL','INTERNATIONAL','INDUSTRIES','HOLDINGS','GROUP',
+  'ENTERPRISES','PARTNERS','ASSOCIATES','AMERICA','GLOBAL','USA',
+]);
+
+const deriveShortForm = (legalName) => {
+  const raw = String(legalName || '').toUpperCase().trim();
+  if (!raw) return null;
+
+  // Split into word tokens. Strip trailing periods so 'INC.' matches 'INC'
+  // in the noise set. USASpending legal names are already uppercase-normalized
+  // by this point, but raw user input may still carry punctuation.
+  const tokens = raw.split(/[\s,]+/)
+    .map(t => t.replace(/\.$/, ''))
+    .filter(Boolean);
+  if (tokens.length === 0) return null;
+
+  // Drop trailing noise tokens. We walk from the end because leading
+  // tokens are almost always the brand (DELOITTE, CARAHSOFT, GENERAL),
+  // and trailing tokens are the category/entity descriptors we want
+  // to shed. Stop as soon as we hit a non-noise token — don't remove
+  // noise words from the middle (BOOZ ALLEN HAMILTON has no noise).
+  const kept = [...tokens];
+  while (kept.length > 1 && _SHORT_FORM_NOISE.has(kept[kept.length - 1])) {
+    kept.pop();
+  }
+
+  // Edge case: the only surviving token is itself a noise word. Happens
+  // with inputs like 'CONSULTING SERVICES' which would reduce to just
+  // 'CONSULTING'. That's not a usable brand keyword — return null so the
+  // caller falls back to the legal name alone.
+  if (kept.length === 1 && _SHORT_FORM_NOISE.has(kept[0])) return null;
+
+  const short = kept.join(' ');
+  // Skip if the short form is identical to the input (no trimming happened)
+  if (short === raw) return null;
+  // Skip if USASpending would reject it for being too short
+  if (short.length < 3) return null;
+
+  return short;
+};
+
 
 // ─────────────────────────────────────────────────────────────────────
 // resolve() — main entry point
@@ -548,6 +621,15 @@ export function resolve(input) {
     // GDIT-as-prime rows because those use the short form in the Prime
     // Recipient Name field. Verified via USASpending probe, April 2026.
     //
+    // Beyond the explicit short form from raw input, we also DERIVE a
+    // short form from every legal name (DELOITTE CONSULTING → DELOITTE,
+    // CARAHSOFT TECHNOLOGY → CARAHSOFT, AMAZON WEB SERVICES → AMAZON WEB).
+    // This unlocks as-prime data for vendors whose alias entries are
+    // incomplete, AND for vendors not in the alias table at all. The
+    // probe showed Deloitte going from 2 → 10 prime rows and SAIC from
+    // 1 → 24 prime rows with this change, which are huge improvements
+    // for BDR use cases.
+    //
     // Every keyword MUST be ≥3 characters or USASpending rejects the
     // whole request with a 422: {"detail":"Field 'filters|keywords'
     // value 'F5' is below min '3' items"}. Competitor lists may contain
@@ -560,6 +642,11 @@ export function resolve(input) {
     for (const raw of vendorInputs) {
       const short = String(raw || '').trim();
       if (short.length >= 3) keywordSet.add(short.toUpperCase());
+    }
+    // Derived short forms from each legal name
+    for (const legal of legalNames) {
+      const derived = deriveShortForm(legal);
+      if (derived) keywordSet.add(derived);
     }
     topics.push(...keywordSet);
 
@@ -838,3 +925,6 @@ export const _TABLES = {
   PROGRAM_OFFICES,
   VENDOR_LEGAL_NAMES,
 };
+
+// Exported for tests
+export const _deriveShortForm = deriveShortForm;

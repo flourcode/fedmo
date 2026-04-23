@@ -710,29 +710,14 @@ export async function fetchSubawards(resolverInput, endpoint) {
   // preserves backward compat with tags that don't set subaward_dir.
   const requestedDir = resolverInput?._subawardDir === 'from' ? 'from' : 'to';
 
-  let rows = filterByDirection(shaped, requestedDir);
+  const rows = filterByDirection(shaped, requestedDir);
   rows._subawardDirection = requestedDir;
 
-  // ── Empty-Direction-B auto-flip ───────────────────────────────────
-  //
-  // When a user asks "who does Northrop subaward to" (Direction B) and
-  // Northrop has zero as-prime rows in USASpending (the defense-prime
-  // case), showing "no data" is technically correct but leaves the user
-  // stuck. Better: silently flip to Direction A and stamp a flag so the
-  // card can show a banner explaining "We couldn't find subs under
-  // Northrop in USASpending. Here's where Northrop shows up as a sub
-  // to other primes instead."
-  //
-  // We only auto-flip on the default Direction B path. If the user
-  // explicitly asked for Direction A, empty is empty.
-  if (rows.length === 0 && requestedDir === 'to' && shaped.length > 0) {
-    const flipRows = filterByDirection(shaped, 'from');
-    if (flipRows.length > 0) {
-      rows = flipRows;
-      rows._subawardDirection = 'from';
-      rows._autoFlipped = true;  // UI + Mo prose use this to explain
-    }
-  }
+  // No auto-flip. If the user asks Direction B and there's nothing,
+  // show nothing. Honest beats magical — a user who wants the other
+  // direction can ask for it explicitly. Previously we silently
+  // flipped B→A and stamped _autoFlipped, which misled users about
+  // what they were looking at and added a confusing banner.
 
   return rows;
 }
@@ -742,7 +727,15 @@ export async function fetchSubawards(resolverInput, endpoint) {
 // sub spend, top subs by take.
 export function summarizeSubawardsForMo(subs, resolverInput) {
   if (!subs || subs.length === 0) {
-    return `No subaward records for this vendor in either direction (as prime OR as sub) in the last 12 months. USASpending subaward reporting is sparse (mandatory only above $30K, lags by months), and many defense/classified contracts don't report at all. Tell the seller this plainly in 1-2 sentences, then suggest they look at the vendor's prime-level contracts for recompete signals instead.`;
+    const vendor = resolverInput?.vendor || (resolverInput?.vendors && resolverInput.vendors[0]) || 'this vendor';
+    const dir = resolverInput?._subawardDir === 'from' ? 'from' : 'to';
+    const oppositeQuery = dir === 'to'
+      ? `"who subawards to ${vendor}"`
+      : `"who does ${vendor} subaward to"`;
+    const directionExplainer = dir === 'to'
+      ? `as a prime hiring subs`
+      : `as a sub hired by primes`;
+    return `No subaward records found for ${vendor} ${directionExplainer} in the last 12 months. USASpending subaward reporting is sparse (mandatory only above $30K, lags by months), and many defense/classified contracts don't report at all. Tell the seller this plainly in 1-2 sentences. Then offer two concrete next moves: (a) ask ${oppositeQuery} to see the opposite direction, (b) look at ${vendor}'s prime-level contracts for recompete signals. Don't pad or over-explain — short and useful beats long.`;
   }
   const total = subs.reduce((s, r) => s + (r.amount || 0), 0);
 
@@ -791,17 +784,13 @@ export function summarizeSubawardsForMo(subs, resolverInput) {
   const vendorName = resolverInput?.vendor
     || (Array.isArray(resolverInput?.vendors) ? resolverInput.vendors[0] : null);
   const direction = subs._subawardDirection === 'from' ? 'from' : 'to';
-  const wasAutoFlipped = subs._autoFlipped === true;
 
   let directionBlock = '';
   if (vendorName && direction === 'to') {
     directionBlock = `
 DIRECTION: ${vendorName} is the PRIME. These subawards show who ${vendorName} is awarding sub-work TO (downstream). The seller wants to know these subs so they can (a) displace a weak incumbent sub with a better capability, (b) partner with an established sub who's already in ${vendorName}'s delivery chain, or (c) offer ${vendorName} an adjacent value-added service the current subs don't provide. Coach them accordingly.`;
   } else if (vendorName && direction === 'from') {
-    const flipIntro = wasAutoFlipped
-      ? `\nIMPORTANT: ${vendorName} has NO reportable as-prime subawards in USASpending (common for defense primes like Northrop, Lockheed — their prime-side sub reporting is sparse). The user asked about ${vendorName}'s subs, but we had to flip the view to show where ${vendorName} appears as a sub to OTHER primes instead. Tell them this plainly in 1-2 sentences before interpreting, so the data shift is clear.\n`
-      : '';
-    directionBlock = `${flipIntro}
+    directionBlock = `
 DIRECTION: ${vendorName} is the SUB. These subawards show primes hiring ${vendorName} to help deliver their own contracts. The seller wants to know these primes so they can (a) team with ${vendorName}'s existing prime customers to reach similar work, (b) pitch those primes directly as an adjacent capability (if they're already buying ${vendorName}, they're buying in this category), or (c) understand ${vendorName}'s role in the delivery chain before trying to approach them.`;
   }
 
