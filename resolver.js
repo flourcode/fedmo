@@ -595,12 +595,36 @@ export function resolve(input) {
     .filter(Boolean);
 
   const topics = [];
+  const userTopicNeedles = [];  // client-side relevance check: at least ONE
+                                // of these must literally appear in the
+                                // description or recipient name for a row
+                                // to pass the post-filter. This is the
+                                // safety net against USASpending's
+                                // token-fuzzy match pulling in irrelevant
+                                // contracts (see note at applyPostFilters).
   for (const t of rawTopics) {
     const lower = t.toLowerCase();
     if (TOPIC_EXPANSIONS[lower]) {
-      topics.push(...TOPIC_EXPANSIONS[lower]);
+      const expansions = TOPIC_EXPANSIONS[lower];
+      topics.push(...expansions);
+      // For the post-filter, use the EXPANSIONS as needles too — a topic
+      // like "AI" expands to ['artificial intelligence', 'machine learning',
+      // 'generative AI'] and a row is relevant if ANY of those appears.
+      userTopicNeedles.push(...expansions);
     } else if (t.length >= 3) {
       topics.push(t);
+      // Also push individual WORDS from the topic string. A topic like
+      // "CSP engineering services" gets split into ['CSP', 'engineering',
+      // 'services']. We require at least one (with min length 3) to
+      // appear in description OR recipient. Without this split, the
+      // post-filter only matches the full phrase, which is too strict.
+      const parts = String(t)
+        .split(/\s+/)
+        .map(p => p.replace(/[^\w-]/g, '').trim())
+        .filter(p => p.length >= 3);
+      userTopicNeedles.push(...parts);
+      // Also keep the full phrase as a needle in case it appears verbatim
+      userTopicNeedles.push(t);
     }
     // else: silently drop short unknown strings (USASpending would 422 on them)
   }
@@ -828,6 +852,22 @@ export function resolve(input) {
     filters.keywords = [...new Set(topics)]; // dedupe
   }
 
+  // ── Topic relevance post-filter ─────────────────────────────────
+  // The user-typed topic words (split + expanded) become a requirement:
+  // at least one needle must literally appear in the description or
+  // recipient name for the row to survive applyPostFilters. This is a
+  // safety net against USASpending's fuzzy keyword matcher returning
+  // contracts that match on common-word tokens instead of the topic.
+  // Example: user says "CSP engineering services at Army" — without
+  // this filter, USASpending returns $14B of Army industrial operations
+  // that have "engineering" or "services" somewhere but nothing to do
+  // with CSP. With this filter, only rows with CSP / engineering /
+  // services in their actual text pass through.
+  if (userTopicNeedles.length > 0) {
+    const dedupedUpper = [...new Set(userTopicNeedles.map(n => String(n).toUpperCase().trim()))].filter(Boolean);
+    if (dedupedUpper.length > 0) postFilters.topic_scope = dedupedUpper;
+  }
+
   // ── NAICS / PSC ─────────────────────────────────────────────────
   const naicsList = []
     .concat(Array.isArray(input.naics) ? input.naics : input.naics ? [input.naics] : [])
@@ -920,6 +960,24 @@ export function applyPostFilters(rows, postFilters) {
       const recipient = (r['Recipient Name'] || '').toLowerCase();
       const description = (r['Description'] || '').toLowerCase();
       return needles.some(n => recipient.includes(n) || description.includes(n));
+    });
+  }
+
+  // Topic relevance post-filter. Applies ONLY when no vendor_scope is set;
+  // if the user asked about a specific vendor, the vendor scope already
+  // acts as relevance. For vendor-less queries (topic+agency, like "cloud
+  // at DoD" or "CSP engineering services at Army"), require at least one
+  // user-typed topic needle to actually appear in description or recipient
+  // name. Without this, USASpending's token-fuzzy keyword matcher returns
+  // contracts whose text doesn't literally contain the topic words — the
+  // CSP case where Army industrial ops ($14B KBR) surfaced on a CSP query
+  // because "engineering" and "services" fuzzy-matched.
+  if (!postFilters.vendor_scope && postFilters.topic_scope && postFilters.topic_scope.length > 0) {
+    const topicNeedles = postFilters.topic_scope.map(n => n.toLowerCase());
+    out = out.filter(r => {
+      const recipient = (r['Recipient Name'] || '').toLowerCase();
+      const description = (r['Description'] || '').toLowerCase();
+      return topicNeedles.some(n => recipient.includes(n) || description.includes(n));
     });
   }
 
