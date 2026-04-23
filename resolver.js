@@ -366,6 +366,164 @@ function lookupVendorExcludes(raw) {
 
 
 // ─────────────────────────────────────────────────────────────────────
+// TERRITORIES — seller shorthand for agency groupings (FedHealth, FedFin…)
+// ─────────────────────────────────────────────────────────────────────
+//
+// Federal sellers routinely carve the market into "territories" — groups
+// of agencies that share a buyer persona. A FedHealth rep sells to HHS
+// and VA (and all their subtiers: CMS, CDC, FDA, NIH, VHA, etc). A
+// FedFin rep sells to Treasury, FDIC, SEC, SBA, etc. A FedCiv rep
+// covers the remaining civilian departments.
+//
+// This table captures the canonical groupings used in the fedhoo UI's
+// territory-filter dropdown. When a user says "I sell cloud to
+// FedHealth" or "cloud at FedCiv", Mo emits territory="fedhealth"
+// (or "fedciv" / "fedfin" / "feddod"), and the resolver expands that
+// into an agencies-array sent directly to USASpending's API filter —
+// not a post-filter. This means the top-100 rows USASpending returns
+// are ALREADY scoped to the territory before any client-side filtering.
+//
+// Terminology aliases are handled in lookupTerritory(): 'fedhealth',
+// 'fed health', 'federal health', 'health sector' all resolve to the
+// same canonical key. Short forms without the 'fed' prefix also work
+// ('civilian' → fedciv, 'defense' → feddod).
+//
+// FedHealth requires special handling: USASpending sometimes files HHS
+// subtier contracts under the subtier directly (Centers for Medicare
+// and Medicaid Services, Food and Drug Administration, etc.) rather
+// than rolling them up to 'Department of Health and Human Services' at
+// the toptier level. Same for VA. So we explicitly list the major
+// subtiers alongside the toptier to catch both filing styles.
+const TERRITORIES = {
+  feddod: {
+    label: 'FedDoD',
+    agencies: [
+      { type: 'awarding', tier: 'toptier', name: 'Department of Defense' },
+      { type: 'awarding', tier: 'toptier', name: 'Corps of Engineers - Civil Works' },
+      { type: 'awarding', tier: 'toptier', name: 'Defense Nuclear Facilities Safety Board' },
+      { type: 'awarding', tier: 'toptier', name: 'Armed Forces Retirement Home' },
+      { type: 'awarding', tier: 'toptier', name: 'American Battle Monuments Commission' },
+    ],
+  },
+  fedciv: {
+    label: 'FedCiv',
+    agencies: [
+      'Department of Homeland Security',
+      'General Services Administration',
+      'Social Security Administration',
+      'Department of Agriculture',
+      'Office of Personnel Management',
+      'Department of Education',
+      'Department of Transportation',
+      'Department of Energy',
+      'Department of Housing and Urban Development',
+      'Department of Labor',
+      'Department of Justice',
+      'Department of the Interior',
+      'Department of State',
+      'Department of Commerce',
+      'National Aeronautics and Space Administration',
+      'Environmental Protection Agency',
+      'Federal Communications Commission',
+      'Agency for International Development',
+      'National Science Foundation',
+      'Nuclear Regulatory Commission',
+      'Railroad Retirement Board',
+      'National Archives and Records Administration',
+      'Peace Corps',
+      'Equal Employment Opportunity Commission',
+      'Executive Office of the President',
+    ].map(name => ({ type: 'awarding', tier: 'toptier', name })),
+  },
+  fedhealth: {
+    label: 'FedHealth',
+    agencies: [
+      // Toptier entries
+      { type: 'awarding', tier: 'toptier', name: 'Department of Health and Human Services' },
+      { type: 'awarding', tier: 'toptier', name: 'Department of Veterans Affairs' },
+      { type: 'awarding', tier: 'toptier', name: 'United States Court of Appeals for Veterans Claims' },
+      { type: 'awarding', tier: 'toptier', name: 'Patient-Centered Outcomes Research Trust Fund' },
+      // HHS subtiers that file independently
+      { type: 'awarding', tier: 'subtier', name: 'Centers for Medicare and Medicaid Services',               toptier_name: 'Department of Health and Human Services' },
+      { type: 'awarding', tier: 'subtier', name: 'Centers for Disease Control and Prevention',               toptier_name: 'Department of Health and Human Services' },
+      { type: 'awarding', tier: 'subtier', name: 'Food and Drug Administration',                             toptier_name: 'Department of Health and Human Services' },
+      { type: 'awarding', tier: 'subtier', name: 'National Institutes of Health',                            toptier_name: 'Department of Health and Human Services' },
+      { type: 'awarding', tier: 'subtier', name: 'Health Resources and Services Administration',             toptier_name: 'Department of Health and Human Services' },
+      { type: 'awarding', tier: 'subtier', name: 'Substance Abuse and Mental Health Services Administration',toptier_name: 'Department of Health and Human Services' },
+      { type: 'awarding', tier: 'subtier', name: 'Agency for Healthcare Research and Quality',               toptier_name: 'Department of Health and Human Services' },
+      { type: 'awarding', tier: 'subtier', name: 'Indian Health Service',                                    toptier_name: 'Department of Health and Human Services' },
+      { type: 'awarding', tier: 'subtier', name: 'Administration for Community Living',                      toptier_name: 'Department of Health and Human Services' },
+      { type: 'awarding', tier: 'subtier', name: 'Administration for Children and Families',                 toptier_name: 'Department of Health and Human Services' },
+      // VA subtiers that file independently
+      { type: 'awarding', tier: 'subtier', name: 'Veterans Health Administration',                           toptier_name: 'Department of Veterans Affairs' },
+      { type: 'awarding', tier: 'subtier', name: 'Veterans Benefits Administration',                         toptier_name: 'Department of Veterans Affairs' },
+      { type: 'awarding', tier: 'subtier', name: 'National Cemetery Administration',                         toptier_name: 'Department of Veterans Affairs' },
+    ],
+  },
+  fedfin: {
+    label: 'FedFin',
+    agencies: [
+      'Department of the Treasury',
+      'Pension Benefit Guaranty Corporation',
+      'Federal Deposit Insurance Corporation',
+      'Consumer Financial Protection Bureau',
+      'Small Business Administration',
+      'Government Accountability Office',
+      'Commodity Futures Trading Commission',
+      'Export-Import Bank of the United States',
+      'Farm Credit System Insurance Corporation',
+      'U.S. International Development Finance Corporation',
+      'International Trade Commission',
+      'Federal Trade Commission',
+      'National Credit Union Administration',
+    ].map(name => ({ type: 'awarding', tier: 'toptier', name })),
+  },
+};
+
+// Alias table: seller shorthand → canonical territory key
+const TERRITORY_ALIASES = {
+  // FedHealth
+  'fedhealth':        'fedhealth',
+  'fed health':       'fedhealth',
+  'federal health':   'fedhealth',
+  'fed healthcare':   'fedhealth',
+  'federal healthcare':'fedhealth',
+  'health sector':    'fedhealth',
+  'healthcare sector':'fedhealth',
+  'fedhlth':          'fedhealth',
+  // FedFin
+  'fedfin':           'fedfin',
+  'fed fin':          'fedfin',
+  'federal financial':'fedfin',
+  'federal financials':'fedfin',
+  'fed financial':    'fedfin',
+  'fed financials':   'fedfin',
+  'financial sector': 'fedfin',
+  'fed banking':      'fedfin',
+  // FedCiv
+  'fedciv':           'fedciv',
+  'fed civ':          'fedciv',
+  'fed civilian':     'fedciv',
+  'federal civilian': 'fedciv',
+  'civilian':         'fedciv',
+  'civilian agencies':'fedciv',
+  // FedDoD
+  'feddod':           'feddod',
+  'fed dod':          'feddod',
+  'dod sector':       'feddod',
+  'defense sector':   'feddod',
+  'federal defense':  'feddod',
+  'pentagon sector':  'feddod',
+};
+
+function lookupTerritory(raw) {
+  const n = norm(raw);
+  const key = TERRITORY_ALIASES[n];
+  return key ? { key, ...TERRITORIES[key] } : null;
+}
+
+
+// ─────────────────────────────────────────────────────────────────────
 // Utility: normalize + lookup
 // ─────────────────────────────────────────────────────────────────────
 
@@ -786,6 +944,42 @@ export function resolve(input) {
     if (allExcludes.size > 0) postFilters.vendor_excludes = [...allExcludes];
   }
 
+  // ── Territory resolution ───────────────────────────────────────
+  // Federal sellers use shorthand like "FedHealth", "FedFin", "FedCiv"
+  // to describe agency groupings that share a buyer persona. If the
+  // caller provides input.territory, or if input.agency is actually a
+  // territory alias, expand it into the agencies-array and send it
+  // directly to USASpending's filter (pre-filter, not post-filter —
+  // this means the top-100 rows USASpending returns are already scoped
+  // to the territory before any client-side narrowing).
+  //
+  // Both territory + agency? That's the "Navy in FedHealth" case —
+  // apply the intersection logic from fedhoo: if the agency is within
+  // the territory, narrow to just that agency; if outside, keep
+  // territory as the filter and add the agency name as a keyword.
+  let territory = null;
+  if (input.territory) {
+    territory = lookupTerritory(input.territory);
+  }
+  // Also detect when the user typed a territory alias in the agency field
+  // ('FedHealth cloud' → Mo may emit agency="FedHealth")
+  if (!territory && input.agency) {
+    const maybeTerritory = lookupTerritory(input.agency);
+    if (maybeTerritory) {
+      territory = maybeTerritory;
+      // Clear input.agency so the regular agency path below doesn't also fire
+      input = { ...input, agency: null };
+    }
+  }
+  if (territory) {
+    filters.agencies = territory.agencies;
+    postFilters.territory_scope = territory.key;
+    // The agency_scope post-filter expects a single agency; for territory
+    // mode we carry the full list as territory_scope and skip the
+    // single-agency post-filter. USASpending's pre-filter already scoped
+    // the rows correctly so no additional post-filter narrowing needed.
+  }
+
   // ── Agency resolution ──────────────────────────────────────────
   // If the agency input is a known program office, we emit both the parent
   // subtier agency filter AND add the office acronym + full name as keywords.
@@ -892,8 +1086,35 @@ export function resolve(input) {
     }
 
     if (agency) {
-      filters.agencies = [{ ...agency, type: 'awarding' }];
-      postFilters.agency_scope = agency;
+      if (territory) {
+        // Both territory AND a specific agency were provided.
+        // Intersection logic from fedhoo._applySectorFilter.
+        const territoryNames = new Set(
+          territory.agencies.map(a => (a.name || '').toLowerCase())
+        );
+        const agencyNameLc = (agency.name || '').toLowerCase();
+        if (territoryNames.has(agencyNameLc)) {
+          // Agency is within the territory — narrow to just this agency
+          filters.agencies = [{ ...agency, type: 'awarding' }];
+          postFilters.agency_scope = agency;
+          // Clear the territory scope since we've narrowed past it
+          delete postFilters.territory_scope;
+        } else {
+          // Agency is outside the territory (e.g. "Navy within FedHealth").
+          // Keep the territory as the agency filter, and add the agency
+          // name as a keyword so USASpending returns territory rows that
+          // mention this agency in their description or recipient.
+          // Do NOT set agency_scope post-filter — that would reject every
+          // row whose Awarding Agency isn't Navy (i.e. all of them, since
+          // all returned rows are HHS/VA). The keyword+territory combo is
+          // already the right scoping.
+          if (agency.name) topics.push(agency.name);
+          // territory_scope stays — card will show intersection label
+        }
+      } else {
+        filters.agencies = [{ ...agency, type: 'awarding' }];
+        postFilters.agency_scope = agency;
+      }
       if (agencyResidue) {
         // Post-filter only — no keyword push. Adding the residue as a
         // USASpending keyword forces the API to match it against the
