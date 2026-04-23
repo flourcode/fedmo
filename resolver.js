@@ -328,6 +328,44 @@ const VENDOR_LEGAL_NAMES = {
 
 
 // ─────────────────────────────────────────────────────────────────────
+// VENDOR_EXCLUDES — per-vendor collision phrases to reject at post-filter
+// ─────────────────────────────────────────────────────────────────────
+//
+// Some vendor names collide with unrelated federal contract phrases
+// even after word-boundary matching. The word "SAP" is a 3-letter
+// acronym that appears as a WHOLE WORD in:
+//   - SAP (the vendor, ERP/HANA/Ariba work)
+//   - Substance Abuse Program (SAP) — Army National Guard, DoD health
+//   - Special Access Program (SAP) — classified DoD contracting
+// Word-boundary match can't distinguish these. A post-filter reject
+// list bolted on after the vendor match handles it.
+//
+// Keyed by the raw user input (lowercased) or the legal alias. When a
+// vendor query resolves through lookupVendor, we check for an excludes
+// entry and stash the list in postFilters.vendor_excludes. The
+// post-filter then drops any row whose description or recipient
+// contains any excluded phrase, regardless of vendor-scope match.
+//
+// Keep exclude phrases SHORT and SPECIFIC. "ABUSE" alone would be too
+// broad; "SUBSTANCE ABUSE" is targeted. Phrases are matched via
+// word-boundary regex just like needles, so "SAP" in excludes (don't
+// do this) would nuke the whole query.
+const VENDOR_EXCLUDES = {
+  'sap': [
+    'SUBSTANCE ABUSE',
+    'SPECIAL ACCESS PROGRAM',
+    'SPECIAL ACCESS PROGRAMS',
+    'SUICIDE PREVENTION',        // often bundled with SAP (Substance Abuse Program, Suicide Prevention)
+    'CHAUVENET HALL',            // Navy academy building; "SAP 2025 for Chauvenet" is facility, not vendor
+  ],
+};
+function lookupVendorExcludes(raw) {
+  const n = norm(raw);
+  return VENDOR_EXCLUDES[n] || null;
+}
+
+
+// ─────────────────────────────────────────────────────────────────────
 // Utility: normalize + lookup
 // ─────────────────────────────────────────────────────────────────────
 
@@ -734,6 +772,18 @@ export function resolve(input) {
     postFilters.vendor_legal_names = legalNames
       .filter(n => String(n || '').trim().length >= 3)
       .map(n => String(n).toUpperCase());
+
+    // Per-vendor excludes: collision-prone vendor names (SAP, etc.) can
+    // carry a list of phrases that should REJECT a row even if the
+    // vendor-scope word-boundary match passed. "SAP" matches both the
+    // vendor and "Substance Abuse Program (SAP)"; the excludes list lets
+    // us drop the substance-abuse rows without losing real SAP ERP work.
+    const allExcludes = new Set();
+    for (const raw of vendorInputs) {
+      const excludes = lookupVendorExcludes(raw);
+      if (excludes) excludes.forEach(e => allExcludes.add(e));
+    }
+    if (allExcludes.size > 0) postFilters.vendor_excludes = [...allExcludes];
   }
 
   // ── Agency resolution ──────────────────────────────────────────
@@ -1023,6 +1073,22 @@ export function applyPostFilters(rows, postFilters) {
       const recipient = r['Recipient Name'] || '';
       const description = r['Description'] || '';
       return needles.some(n => needleMatches(recipient, n) || needleMatches(description, n));
+    });
+  }
+
+  // Per-vendor collision excludes. Runs AFTER vendor_scope accepts a row,
+  // rejecting rows where the description or recipient contains a known
+  // collision phrase. Example: 'SAP' vendor_scope accepts both real SAP
+  // ERP rows AND 'Army Substance Abuse Program (SAP)' rows. The excludes
+  // list for 'sap' contains 'SUBSTANCE ABUSE', which drops the collision
+  // rows without affecting legitimate SAP rows. See VENDOR_EXCLUDES at
+  // the top of this file for the curated collision lists.
+  if (postFilters.vendor_excludes && postFilters.vendor_excludes.length > 0) {
+    const excludes = postFilters.vendor_excludes;
+    out = out.filter(r => {
+      const recipient = r['Recipient Name'] || '';
+      const description = r['Description'] || '';
+      return !excludes.some(e => needleMatches(recipient, e) || needleMatches(description, e));
     });
   }
 
