@@ -1826,8 +1826,10 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
             </div>
           `;
         }
-        // Stash chipData so smart pills still fire with context
-        turnEls.chipData = { mode: 'no_subaward_data', rows: [], resolverInput };
+        // (No chipData stash here — that's done by oldmo.html's turn
+        // renderer for the happy path. For the no-data path, smart pills
+        // still fire via the second-pass response; no manual stash
+        // needed from this layer.)
 
         debug.mode = 'no_subaward_data';
         debug.fallbackType = 'no_data';
