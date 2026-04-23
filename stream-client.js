@@ -1796,13 +1796,69 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
       debug.rowCountDirect = subs ? subs.length : 0;
 
       if (!subs || subs.length === 0) {
-        // Subaward data is legitimately sparse in federal. Not every
-        // contract has visible sub-tier reporting. Tell the user honestly
-        // instead of rendering an empty card.
-        render.renderError(`No subaward activity found for this vendor in either direction (as prime or as sub) in the last 12 months. USASpending subaward reporting is sparse by design — mandatory only above $30K, often lags the prime award by months, and classified or defense-sensitive contracts frequently don't report at all. Try looking at their prime-level contracts instead.`);
+        // Subaward data is legitimately sparse. Instead of rendering an
+        // empty card and returning (which kills Mo's second-pass prose),
+        // render a tiny "no data" state and let the second-pass fire
+        // with the direction-aware summary so Mo can coach the user
+        // toward the opposite direction or prime-level view.
+        const vName = resolverInput?.vendor
+          || (Array.isArray(resolverInput?.vendors) ? resolverInput.vendors[0] : null)
+          || 'this vendor';
+        const dir = resolverInput?._subawardDir === 'from' ? 'from' : 'to';
+        const dirLabel = dir === 'to'
+          ? `as a prime hiring subs`
+          : `as a sub hired by primes`;
+        const oppositeQuery = dir === 'to'
+          ? `"who subawards to ${vName}"`
+          : `"who does ${vName} subaward to"`;
+        // Render a simple "no data" panel in the card slot. Not an error,
+        // not a scary banner — just honest framing plus a concrete next
+        // move for the user.
+        if (cardRef) {
+          cardRef.innerHTML = `
+            <div class="turn-mo-card" style="padding: 20px 22px;">
+              <div class="mo-framing">
+                No subaward records found for <strong>${vName}</strong> ${dirLabel} in the last 12 months. USASpending subaward reporting is sparse — mandatory only above $30K and lags the prime award by months, and classified contracts often don't report at all.
+              </div>
+              <div style="margin-top: 12px; font-size: 14px; color: var(--text-body); line-height: 1.55;">
+                Try asking ${oppositeQuery} to see the opposite direction, or look at <strong>${vName}</strong>'s prime-level contracts.
+              </div>
+            </div>
+          `;
+        }
+        // Stash chipData so smart pills still fire with context
+        turnEls.chipData = { mode: 'no_subaward_data', rows: [], resolverInput };
+
         debug.mode = 'no_subaward_data';
         debug.fallbackType = 'no_data';
         debug.rowCountFinal = 0;
+
+        // Fire Mo's second pass with the direction-aware summary so she
+        // can add a sentence or two of strategic coaching beneath the
+        // empty state. summarizeSubawardsForMo returns a direction-aware
+        // instruction block when subs is empty.
+        const noDataSummary = summarizeSubawardsForMo([], resolverInput);
+        const historyForSecondCall = [
+          ...fullHistory,
+          { role: 'model', content: preTagText + '\n\n[no subaward data; see card]' },
+        ];
+        const secondAbort = new AbortController();
+        await streamOnce({
+          endpoint,
+          history: historyForSecondCall,
+          activeCardSummary,
+          payloadSummary: noDataSummary,
+          abortController: secondAbort,
+          onChunk: (accumulated) => {
+            const { cleaned, hasPartial } = stripDataTags(accumulated);
+            if (hasPartial) return;
+            render.streamPostTagProse(cleaned);
+          },
+        }).catch(err => {
+          // Non-fatal; just skip the second pass if it errors out.
+          console.warn('[askMo] second-pass on no_subaward_data failed:', err);
+        });
+
         return { mode: 'no_subaward_data', resolverInput, debug };
       }
 
