@@ -2119,12 +2119,15 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
     // is unrelated. Classic case: "<data vendor='AWS' />" returning
     // Lockheed's Navy Aegis Weapon System contract because the
     // description contains "AWS UPGRADED EQUIPMENT." Rendering a
-    // confident card in that state misleads the user.
+    // confident card in that state misleads the user, even with a
+    // warning banner, because the big $-value stats sit right next to
+    // the warning and pull the eye.
     //
     // Signal: row count is thin AND the queried vendor's name doesn't
-    // appear in any top-5 Recipient Name. In that case the keyword hit
-    // was probably description-only, probably a collision. Flag as
-    // low-confidence so the card warns and Mo's prose frames honestly.
+    // appear in any top-5 Recipient Name. When that happens, we replace
+    // the whole card with a sparse "channel-only" explanation. No
+    // misleading stats, no misleading top-primes list. Just honest
+    // prose + pivots.
     let lowConfidenceFlag = null;
     const vendorQueried = resolverInput?.vendor
       || (Array.isArray(resolverInput?.vendors) ? resolverInput.vendors[0] : null);
@@ -2136,8 +2139,6 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
         );
         const recipientHasVendor = top5Recipients.some(n => n.includes(needle));
         if (!recipientHasVendor) {
-          // None of the top rows have the vendor as recipient. This is
-          // likely description-only matching → collision risk.
           lowConfidenceFlag = {
             reason: 'keyword_collision',
             vendor: vendorQueried,
@@ -2148,8 +2149,20 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
       }
     }
 
-    // Render the real card
-    render.renderDataCard(cardRef, rows, resolverInput);
+    // If collision detected, suppress the full card and render a sparse
+    // channel-explanation state. Mo's second-pass prose still runs
+    // (skipping the card doesn't skip the prose path), and smart pills
+    // still fire from chipData.
+    if (lowConfidenceFlag) {
+      debug.mode = 'low_confidence';
+      render.renderLowConfidenceCard(cardRef, lowConfidenceFlag, resolverInput);
+      // Skip the data card render — but DO continue to the second pass
+      // so Mo gets to fill in the strategic context with her general
+      // knowledge about how the vendor actually sells federally.
+    } else {
+      // Render the real card
+      render.renderDataCard(cardRef, rows, resolverInput);
+    }
 
     // Build a payload summary for Mo's grounded interpretation. The
     // `reframed` flag tells Mo that the pull she's about to interpret
