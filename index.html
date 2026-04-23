@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <!--
   ════════════════════════════════════════════════════════════════════
-  Mo v2 — working copy — April 20, 2026
+  Mo v2, working copy. April 20, 2026
   ════════════════════════════════════════════════════════════════════
 
-  v2 architecture — simpler than v1, external modules do the heavy lifting. It uses:
+  v2 architecture, simpler than v1, external modules do the heavy lifting. It uses:
     - resolver.js  (external module) for canonical-name resolution
     - mo-stream-client.v2.js  (external module) for streaming + <data> tags
     - index.v2.mjs  (Lambda) for the single streaming endpoint
@@ -33,17 +33,17 @@
 <!-- Open Graph (LinkedIn, Slack, iMessage, Facebook, Discord) -->
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Fedmo">
-<meta property="og:title" content="Fedmo — Federal Market Intelligence">
+<meta property="og:title" content="Fedmo. Federal Market Intelligence.">
 <meta property="og:description" content="Talk to Mo. Know any federal market before the meeting starts.">
 <meta property="og:url" content="https://fedmo.com/">
 <meta property="og:image" content="https://fedmo.com/og-image.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="Fedmo — talk to Mo, built on USASpending.">
+<meta property="og:image:alt" content="Fedmo. Talk to Mo, built on USASpending.">
 
 <!-- Twitter / X -->
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Fedmo — Federal Market Intelligence">
+<meta name="twitter:title" content="Fedmo. Federal Market Intelligence.">
 <meta name="twitter:description" content="Talk to Mo. Know any federal market before the meeting starts.">
 <meta name="twitter:image" content="https://fedmo.com/og-image.png">
 
@@ -82,7 +82,7 @@
   --border:      #E3E3F1;
   --border-soft: #EFEEF7;
 
-  /* Spacing scale — every spacing value in the product should come from here.
+  /* Spacing scale, every spacing value in the product should come from here.
      Keeps vertical and horizontal rhythm on a consistent 4/8/12/16/20/24 grid. */
   --s-1:  4px;
   --s-2:  8px;
@@ -117,8 +117,8 @@ body {
   min-height: 100%;
   padding-bottom: calc(96px + env(safe-area-inset-bottom));
   /* Prevent horizontal overflow if a single child sneaks past its container.
-     Chips, long vendor names, contract IDs — anything that could push past
-     viewport width — gets clipped rather than triggering horizontal scroll
+     Chips, long vendor names, contract IDs, anything that could push past
+     viewport width, gets clipped rather than triggering horizontal scroll
      on the whole page, which feels broken on mobile. */
   overflow-x: hidden;
   /* Stop iOS from auto-inflating text when rotating to landscape.
@@ -130,11 +130,11 @@ body {
   overscroll-behavior-y: contain;
 }
 
-/* Interactive controls never select on tap — that's almost always a mistake
+/* Interactive controls never select on tap, that's almost always a mistake
    in mobile UIs, where a long-press on a button is meant to trigger the
    button's action, not a text-selection menu. But we DELIBERATELY leave
    everything else selectable: prose, vendor names, contract IDs, dollar
-   amounts, agencies — federal sellers need to copy these into CRMs,
+   amounts, agencies, federal sellers need to copy these into CRMs,
    emails, and notes, so blocking selection would be actively hostile. */
 button, .mo-chip, .mo-card-action, .mo-header-action, .mo-followup, .mo-post-stream-chip,
 .mo-tell-more-btn, .mo-show-more, .mo-jump-latest, .mo-modal-btn, .mo-modal-close {
@@ -486,7 +486,7 @@ button { cursor: pointer; }
 .mo-exp-pattern-spending   { background: var(--border-soft); color: var(--text-muted); }
 .mo-exp-pattern-adjacent   { background: var(--border-soft); color: var(--text-muted); }
 .mo-exp-pattern-blurb {
-  /* Inline flow with the pill — single text stream, no wasted columns */
+  /* Inline flow with the pill, single text stream, no wasted columns */
 }
 
 .mo-prose {
@@ -524,7 +524,7 @@ button { cursor: pointer; }
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
-  /* Buttons shouldn't be selectable when tapped — text selection on a
+  /* Buttons shouldn't be selectable when tapped, text selection on a
      button feels like a bug. But prose, vendor names, and contract IDs
      elsewhere in the app ARE selectable because users need to copy them. */
   -webkit-user-select: none;
@@ -543,7 +543,7 @@ button { cursor: pointer; }
 }
 .greeting-examples .mo-followup { height: 40px; padding: 0 20px; font-size: 15px; }
 
-/* Also-try variant — lighter-weight outlined chips that read as "optional
+/* Also-try variant, lighter-weight outlined chips that read as "optional
    lateral moves" vs the filled primary followup chips. Visually calmer so
    the main followups still draw the eye first. */
 .mo-followup-alt {
@@ -563,7 +563,7 @@ button { cursor: pointer; }
   transform: scale(0.97);
 }
 
-/* Smart pills — LLM-generated followups. Fade in sequentially (animation-delay
+/* Smart pills. LLM-generated followups. Fade in sequentially (animation-delay
    is inlined per-pill by _renderSmartPills) so they feel like they're arriving
    thoughtfully, not popping in all at once. Subtle upward drift reinforces the
    'Mo just thought of something' beat. */
@@ -606,10 +606,10 @@ button { cursor: pointer; }
   margin-right: 2px;
 }
 
-/* Post-response followup chips — sit under Mo's prose after a data-backed
+/* Post-response followup chips, sit under Mo's prose after a data-backed
    turn. Designed to feel like a continuation of the conversation, not a
    separate UI. No header, no label, no border above. Chips only render
-   when generateFollowupChips returned any — empty row collapses to 0px
+   when generateFollowupChips returned any, empty row collapses to 0px
    via :empty so there's no phantom whitespace on coaching/error turns. */
 .mo-followup-row {
   display: flex;
@@ -621,7 +621,7 @@ button { cursor: pointer; }
   display: none;
 }
 
-/* Qualifier message — when Mo can't confidently answer a vendor pitch,
+/* Qualifier message, when Mo can't confidently answer a vendor pitch,
    she asks "what does this product do?" instead of rendering wrong data.
    Visual language should feel like Mo talking, not a form or error.
    Indents slightly from the card rail so it's recognizable as a
@@ -643,10 +643,10 @@ button { cursor: pointer; }
   color: var(--text);
 }
 
-/* Debug panel — collapsed developer trace, one per turn. Designed to
+/* Debug panel, collapsed developer trace, one per turn. Designed to
    disappear into the background during normal use but expose complete
    ground truth when diagnostics are needed. Uses <details>/<summary>
-   for native collapse behavior — no JS state to manage. */
+   for native collapse behavior, no JS state to manage. */
 .mo-debug-slot {
   margin-top: 14px;
 }
@@ -774,7 +774,7 @@ button { cursor: pointer; }
   30% { opacity: 1; transform: translateY(-2px); }
 }
 
-/* About modal — opens from the hamburger in the header */
+/* About modal, opens from the hamburger in the header */
 .mo-modal-backdrop {
   position: fixed;
   inset: 0;
@@ -868,7 +868,7 @@ button { cursor: pointer; }
   margin-top: 12px;
 }
 
-/* Jump to latest — appears when user scrolls up away from the bottom card */
+/* Jump to latest, appears when user scrolls up away from the bottom card */
 .mo-jump-latest {
   position: fixed;
   bottom: calc(96px + env(safe-area-inset-bottom));
@@ -906,7 +906,7 @@ button { cursor: pointer; }
   left: 0; right: 0; bottom: 0;
   z-index: 60;
   background: var(--bg-screen);
-  /* No top border — the pill-shaped ask-bar-inner below has enough visual
+  /* No top border, the pill-shaped ask-bar-inner below has enough visual
      definition on its own, and the extra horizontal rule was chopping the
      thread into two pieces. This is a chat, not a form. */
   padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
@@ -1093,7 +1093,7 @@ body.thread-empty .mo-ask-bar {
   transform: scale(0.97);
 }
 /* Filled variant for cases that want a primary-action feel (unused on
-   expiring-row View now — kept for backward compatibility with any path
+   expiring-row View now, kept for backward compatibility with any path
    that still references it). */
 .mo-action-link-primary {
   background: var(--primary-20);
@@ -1130,7 +1130,7 @@ body.thread-empty .mo-ask-bar {
 .mo-inline-link:hover { text-decoration-color: var(--primary-100); }
 .mo-inline-link:active { color: var(--primary-100); background: var(--primary-20); border-radius: 3px; padding: 0 2px; margin: 0 -2px; }
 
-/* "Tell me more" expander — Mo's prose, on demand only */
+/* "Tell me more" expander. Mo's prose, on demand only */
 .mo-tell-more {
   margin-top: 16px;
   padding-top: 16px;
@@ -1164,11 +1164,11 @@ body.thread-empty .mo-ask-bar {
 .mo-tell-more-prose p { margin: 0 0 12px; }
 .mo-tell-more-prose p:last-child { margin-bottom: 0; }
 .mo-tell-more-prose strong { color: var(--text-title); font-weight: 600; }
-/* When a prose slot has no content — e.g. Mo wrote a coaching response
-   with no <data> tag, so the post-tag slot stays empty — hide it entirely
+/* When a prose slot has no content, e.g. Mo wrote a coaching response
+   with no <data> tag, so the post-tag slot stays empty, hide it entirely
    rather than showing a blank tinted bar. */
 .mo-tell-more-prose:empty { display: none; }
-/* Same for the card slot — coaching responses don't render a data card,
+/* Same for the card slot, coaching responses don't render a data card,
    so the empty wrapper should collapse rather than taking visual space. */
 .mo-card-slot:empty { display: none; }
 /* Non-empty card slot: breathe a bit between Mo's opening prose and the
@@ -1177,7 +1177,7 @@ body.thread-empty .mo-ask-bar {
    consistent top-to-bottom. */
 .mo-card-slot:not(:empty) { margin-top: 12px; }
 
-/* Empty state — Mo can't find anything */
+/* Empty state. Mo can't find anything */
 .mo-empty {
   display: flex;
   flex-direction: column;
@@ -1190,7 +1190,7 @@ body.thread-empty .mo-ask-bar {
   line-height: 1.5;
 }
 
-/* Vehicle / channel pill — small, in-prose tags */
+/* Vehicle / channel pill, small, in-prose tags */
 .mo-tag {
   display: inline-flex;
   align-items: center;
@@ -1257,7 +1257,7 @@ body.thread-empty .mo-ask-bar {
   </div>
 </header>
 
-<!-- About modal — opens from the hamburger -->
+<!-- About modal, opens from the hamburger -->
 <div class="mo-modal-backdrop" id="aboutBackdrop" onclick="App.closeAbout()"></div>
 <div class="mo-modal" id="aboutModal" role="dialog" aria-labelledby="aboutTitle" aria-hidden="true">
   <div class="mo-modal-header">
@@ -1273,7 +1273,7 @@ body.thread-empty .mo-ask-bar {
   <div class="mo-modal-body">
     <p>Tell Mo what you sell or which territory you cover. Mo pulls the data, explains the situation in a few sentences, and tells you what to do next.</p>
     <p>Every number Mo cites comes from USASpending and you can tap any contract to verify.</p>
-    <p>Ask about any vendor, agency, or topic at any time. Pivot freely — talking about AWS at DoD and want to jump to textile suppliers at NASA? Just ask. Mo treats each question on its own terms and only carries context when you explicitly refer back to something ("what about VA", "just Navy").</p>
+    <p>Ask about any vendor, agency, or topic at any time. Pivot freely. Talking about AWS at DoD and want to jump to textile suppliers at NASA? Just ask. Mo treats each question on its own terms and only carries context when you explicitly refer back to something ("what about VA", "just Navy").</p>
     <div class="mo-modal-actions">
       <a class="mo-modal-btn" href="https://calendly.com/markflournoy/chat-with-mark" target="_blank" rel="noopener" onclick="App.closeAbout()">Chat with Mark</a>
     </div>
@@ -1291,7 +1291,7 @@ body.thread-empty .mo-ask-bar {
       </div>
     </div>
     <div class="greeting-examples" id="greetingChips"></div>
-    <div class="greeting-hint">Or type anything — a vendor, agency, topic, or full question.</div>
+    <div class="greeting-hint">Or type anything. A vendor, agency, topic, or full question.</div>
   </div>
 </div>
 
@@ -1318,18 +1318,18 @@ body.thread-empty .mo-ask-bar {
 import { resolve, applyPostFilters } from './resolver.js';
 import { askMo, detectPipelineListIntent, buildPipelineList, stripDataTags } from './stream-client.js';
 
-// Always start at the top on reload — disable the browser's default scroll
+// Always start at the top on reload, disable the browser's default scroll
 // restoration which remembers where the user was before reload. That behavior
 // is fine for articles but wrong for a chat app where the greeting is the
 // intended entry point.
 if ('scrollRestoration' in history) { history.scrollRestoration = 'manual'; }
 
 // ════════════════════════════════════════════════════════════
-// DATA LAYER — v2
+// DATA LAYER, v2
 // ════════════════════════════════════════════════════════════
 // The old multi-endpoint dispatcher (mo_route, mo_brief, mo_chat,
 // mo_search_expand, mo_suggest_chips) is gone. v2 talks to one
-// streaming endpoint — mo_stream — via askMo() from the imported
+// streaming endpoint, mo_stream, via askMo() from the imported
 // client module. Canonical-name resolution happens in resolver.js.
 //
 // usaspending_proxy is still used (via stream-client) for the
@@ -1340,7 +1340,7 @@ const AI_ENDPOINT = 'https://llonymyskdiakyxhlxlex7ul640hbcke.lambda-url.us-east
 
 // Debug logging flag. Flip to true in dev to see filter payloads, intent
 // routing, audit results, and subaward retry attempts in the console.
-// Keep false in production — users opening DevTools shouldn't see raw
+// Keep false in production, users opening DevTools shouldn't see raw
 // internal state in their console.
 //
 // console.warn and console.error are always on regardless of this flag,
@@ -1350,21 +1350,21 @@ const DEBUG = false;
 const debug = (...args) => { if (DEBUG) console.debug(...args); };
 
 // ════════════════════════════════════════════════════════════
-// ✏️  EDIT HERE — starter chips shown on the cold-start greeting
+// ✏️  EDIT HERE, starter chips shown on the cold-start greeting
 // ════════════════════════════════════════════════════════════
 // Each chip is one suggestion the user can tap to kick off a conversation.
 // The text below appears as both the visible label AND the question sent
-// to Mo — so rewrite freely and it stays consistent.
+// to Mo, so rewrite freely and it stays consistent.
 //
 // Ideal mix: 1 pitch-style ("I sell X to Y"), 1 market-intel
 // ("Who's winning at Z"), 1 coaching ("Who should I team with at W").
 // Covers the three main modes of the app in one row.
 //
 // Use a specific named vendor in the pitch chip (AWS, Splunk, Sonatype)
-// rather than a generic topic like "cyber" — seller pitches work best
+// rather than a generic topic like "cyber", seller pitches work best
 // with vendor= in the data tag, and a vendor name primes Mo correctly.
 //
-// 3 chips is the sweet spot — fits mobile in one row without clipping.
+// 3 chips is the sweet spot, fits mobile in one row without clipping.
 // Add a 4th only if they all stay short (≤ 25 chars each).
 //
 const GREETING_CHIPS = [
@@ -1669,7 +1669,7 @@ const Utils = {
   },
 
   // Suffixes/trailing tokens that almost always hurt LinkedIn matching.
-  // Conservative — only strip obvious legal and geographic tails.
+  // Conservative, only strip obvious legal and geographic tails.
   _LINKEDIN_STRIP_TRAILING: [
     'INC', 'LLC', 'LTD', 'CORP', 'CORPORATION', 'CO', 'COMPANY',
     'PLC', 'LLP', 'LP', 'LIMITED', 'HOLDINGS', 'GROUP',
@@ -1682,10 +1682,10 @@ const Utils = {
     if (!vendorName) return '';
     const upper = vendorName.toUpperCase().trim();
 
-    // Exact brand map match — highest confidence
+    // Exact brand map match, highest confidence
     if (this._LINKEDIN_BRAND_MAP[upper]) return this._LINKEDIN_BRAND_MAP[upper];
 
-    // Try without legal suffix chunks — match any brand-map key that's
+    // Try without legal suffix chunks, match any brand-map key that's
     // a prefix of the normalized name
     for (const [legalName, brand] of Object.entries(this._LINKEDIN_BRAND_MAP)) {
       if (upper.startsWith(legalName + ' ') || upper.startsWith(legalName + ',')) {
@@ -1745,7 +1745,7 @@ const Utils = {
     return { pscCodes, naicsCodes, keywordTerms, allTerms: terms, andGroups };
   },
 
-  // Vehicle detection — what GWAC/IDIQ does this contract live on?
+  // Vehicle detection, what GWAC/IDIQ does this contract live on?
   VEHICLE_MAP: {
     'NNG':       { short: 'SEWP V',     full: 'NASA SEWP V' },
     'GS00Q':     { short: 'CIO-SP4',    full: 'NIH CIO-SP4' },
@@ -1778,8 +1778,8 @@ const Utils = {
   },
 
   // USASpending descriptions come in all-caps ("AWS CLOUD SERVICES", "SBOM
-  // OPTIMIZATION SUPPORT"). Federal prose is acronym-heavy — JWCC, DISA,
-  // CMMC, IDIQ, SBOM — and lowercasing them produces more casualties than
+  // OPTIMIZATION SUPPORT"). Federal prose is acronym-heavy. JWCC, DISA,
+  // CMMC, IDIQ, SBOM, and lowercasing them produces more casualties than
   // wins. ("JWCC amazon web services" reads worse than the original.)
   //
   // Force uppercase for consistent rendering. Matches how USASpending
@@ -1792,14 +1792,14 @@ const Utils = {
   },
 
   // Classify an expiring contract by its likely recompete pattern. Pure
-  // function of the contract's own facts — no historical lookups. Adapted
+  // function of the contract's own facts, no historical lookups. Adapted
   // from the govhoo approach because this single signal is what tells a
   // seller whether to chase a contract or wait for its follow-on.
   //
   // Returns { kind, label, blurb } where:
-  //   kind   — machine key ('renewal' | 'short-term' | 'maturing' | 'spending' | 'adjacent')
-  //   label  — short display label ("Likely renewal", "Short runway")
-  //   blurb  — 1-sentence diagnostic in Mo's voice explaining why this
+  //   kind  , machine key ('renewal' | 'short-term' | 'maturing' | 'spending' | 'adjacent')
+  //   label , short display label ("Likely renewal", "Short runway")
+  //   blurb , 1-sentence diagnostic in Mo's voice explaining why this
   //            classification + what it means for the seller's capture play
   //
   // IMPORTANT: Labels and blurbs hedge. "Likely renewal" not "Renewal",
@@ -1815,12 +1815,12 @@ const Utils = {
   // Detection rules (in priority order):
   //   1. Description keywords for RENEWAL (license, subscription, SaaS,
   //      renewal itself, enterprise agreement). High-frequency re-buy
-  //      pattern — though any specific contract may be absorbed into a
+  //      pattern, though any specific contract may be absorbed into a
   //      larger deal on renewal.
   //   2. Small-dollar + <3yr (but NOT short bridge) → SPENDING. Repeat
   //      low-dollar buys from a steady customer.
   //   3. Duration <18 months → SHORT-TERM. Bridge contracts or truncated
-  //      base years — follow-on isn't guaranteed but common.
+  //      base years, follow-on isn't guaranteed but common.
   //   4. Duration 36-60 months → MATURING. Standard IDIQ/BPA lifecycle
   //      window; recompete is possible but not certain.
   //   5. Otherwise → ADJACENT. Related scope but not a clean pattern fit.
@@ -1832,7 +1832,7 @@ const Utils = {
     const durationYears = durationDays ? durationDays / 365 : null;
     const amt = parseFloat(contract['Award Amount']) || 0;
 
-    // Renewal signals in the description — software licensing, subscriptions,
+    // Renewal signals in the description, software licensing, subscriptions,
     // enterprise agreements. These are NOT one-off buys, though any given
     // renewal may consolidate into a bigger vehicle.
     const renewalSignals = /\b(RENEW|SUBSCRIPTION|LICENSE|LICENSES|SAAS|SOFTWARE MAINTENANCE|ELA\b|ENTERPRISE AGREEMENT|ENTERPRISE LICENSE|ANNUAL SUPPORT|OPTION YEAR|BASE POP|MAINTENANCE AND SUPPORT)\b/;
@@ -1840,7 +1840,7 @@ const Utils = {
       return {
         kind: 'renewal',
         label: 'Likely renewal',
-        blurb: `Scope reads like a recurring buy — license, subscription, or support that tends to come back. If you want to be in the conversation, get on the vehicle before the next option year decision.`,
+        blurb: `Scope reads like a recurring buy, license, subscription, or support that tends to come back. If you want to be in the conversation, get on the vehicle before the next option year decision.`,
       };
     }
 
@@ -1850,34 +1850,34 @@ const Utils = {
       return {
         kind: 'spending',
         label: 'Small repeat buy',
-        blurb: `Small dollars, short cycle — looks like a routine buy from a steady customer. Not a single-contract win but useful signal for the buyer's rhythm.`,
+        blurb: `Small dollars, short cycle, looks like a routine buy from a steady customer. Not a single-contract win but useful signal for the buyer's rhythm.`,
       };
     }
 
     // Short-term bridge contracts. Buyer didn't lock in a 5-year IDIQ,
-    // which often means a clean recompete is coming — but bridges also
+    // which often means a clean recompete is coming, but bridges also
     // get absorbed into larger vehicles or quietly extended.
     if (durationYears !== null && durationYears < 1.8) {
       const yearLabel = durationYears < 1.1 ? `${durationYears.toFixed(1)} year` : `${durationYears.toFixed(1)} years`;
       return {
         kind: 'short-term',
         label: 'Short runway',
-        blurb: `Short PoP (${yearLabel}) — this reads like a bridge or base-only award. Bridges often lead to a clean recompete but can also quietly roll into a bigger vehicle, so worth asking the CO directly.`,
+        blurb: `Short PoP (${yearLabel}), this reads like a bridge or base-only award. Bridges often lead to a clean recompete but can also quietly roll into a bigger vehicle, so worth asking the CO directly.`,
       };
     }
 
-    // Maturing — standard federal IDIQ/BPA lifecycle ending. A recompete
-    // is possible but far from guaranteed — budget cuts, scope changes,
+    // Maturing, standard federal IDIQ/BPA lifecycle ending. A recompete
+    // is possible but far from guaranteed, budget cuts, scope changes,
     // and consolidations happen.
     if (durationYears !== null && durationYears >= 3 && durationYears <= 6) {
       return {
         kind: 'maturing',
         label: 'Recompete window',
-        blurb: `End of a standard 3-5 year cycle. Could go to recompete, extension, or consolidation — the incumbent's relationship is mature either way, which is strong past performance but also scope fatigue if the buyer's ready for a change.`,
+        blurb: `End of a standard 3-5 year cycle. Could go to recompete, extension, or consolidation, the incumbent's relationship is mature either way, which is strong past performance but also scope fatigue if the buyer's ready for a change.`,
       };
     }
 
-    // Default — related but doesn't fit a clean pattern.
+    // Default, related but doesn't fit a clean pattern.
     return {
       kind: 'adjacent',
       label: 'Adjacent scope',
@@ -2015,7 +2015,7 @@ function analyzeSubawards(subs, marketLabel) {
   const subCount = subSorted.length;
   const avgSubSize = subs.length > 0 ? totalSubVal / subs.length : 0;
 
-  // Verdict — matches govhoo's logic but in Mo's voice
+  // Verdict, matches govhoo's logic but in Mo's voice
   let face, verdict, action;
   const isConcentrated = topPrimePct >= 50;
   const hasManyPrimes = primeCount >= 3;
@@ -2035,17 +2035,17 @@ function analyzeSubawards(subs, marketLabel) {
     action = `${topPrime} is your path in. Talk to their team.`;
   } else {
     face = 'watch';
-    verdict = `Light sub activity — ${subs.length} reported subawards across ${primeCount} primes.`;
+    verdict = `Light sub activity, with ${subs.length} reported subawards across ${primeCount} primes.`;
     action = `Thin data here. Worth a call to any of the primes to understand their teaming.`;
   }
 
-  // Teaming signals — the useful stuff beyond the verdict
+  // Teaming signals, the useful stuff beyond the verdict
   const signals = [];
   if (topPrimeData.subs.size >= 3) {
-    signals.push(`${topPrime} works with ${topPrimeData.subs.size} different subs — they actively build teams. If you have a niche capability, approach their capture team directly.`);
+    signals.push(`${topPrime} works with ${topPrimeData.subs.size} different subs, they actively build teams. If you have a niche capability, approach their capture team directly.`);
   }
   if (topSubData.primes.size >= 2) {
-    signals.push(`${topSub} subs to ${topSubData.primes.size} different primes — the most connected sub in this market. Study what they do or partner with them.`);
+    signals.push(`${topSub} subs to ${topSubData.primes.size} different primes, the most connected sub in this market. Study what they do or partner with them.`);
   }
   const multiPrimeSubs = subSorted.filter(([, d]) => d.primes.size >= 2);
   if (multiPrimeSubs.length >= 2) {
@@ -2086,7 +2086,7 @@ function analyzeSubawards(subs, marketLabel) {
 }
 
 // ── buildCardSpec: turn marketMetrics into card data ────────
-// Pure function — knows nothing about the DOM. Returns the
+// Pure function, knows nothing about the DOM. Returns the
 // structured spec the renderer consumes. Replaces the prose-
 // writing parts of renderMarketSignals with a fact extractor.
 function buildCardSpec(m, query, sellerLens, territory) {
@@ -2110,7 +2110,7 @@ function buildCardSpec(m, query, sellerLens, territory) {
 
   // Channel detection
   // Known federal resellers/VARs. Used to tell "indirect via reseller"
-  // apart from "indirect via systems integrator" — different verdicts apply.
+  // apart from "indirect via systems integrator", different verdicts apply.
   // Entries are uppercase, post-normalization (suffixes stripped).
   const KNOWN_VARS = new Set([
     'CARAHSOFT','CARAHSOFT TECHNOLOGY','GOVPLACE','FCN','THUNDERCAT',
@@ -2138,11 +2138,11 @@ function buildCardSpec(m, query, sellerLens, territory) {
     const tvAgencyCount = tvData.agencies?.size || 0;
     if (tvPct >= 50 && tvAgencyCount >= 3) {
       face = 'open';
-      verdict = `${tv} has this one pretty well locked down — ${tvPct}% across ${tvAgencyCount} agencies.`;
+      verdict = `${tv} has this one pretty well locked down, holding ${tvPct}% across ${tvAgencyCount} agencies.`;
       action = `Defend the expiring contracts and look for adjacent agency expansion.`;
     } else if (tvPct >= 30) {
       face = 'watch';
-      verdict = `${tv} is established here — ${tvPct}% of spend across ${tvAgencyCount} agencies.`;
+      verdict = `${tv} is established here, with ${tvPct}% of spend across ${tvAgencyCount} agencies.`;
       action = `${tvAgencyCount <= 2 ? 'Watch the concentration risk. ' : ''}Look at the next agency to expand into.`;
     } else {
       face = 'locked';
@@ -2157,27 +2157,27 @@ function buildCardSpec(m, query, sellerLens, territory) {
   } else if (isConcentrated && isActive) {
     face = 'watch';
     verdict = `${topVendor} and a few others hold ${top3Pct}% of this market.`;
-    action = `You'll usually find a way in through them, not around them.`;
+    action = `You'll usually find a way in through them rather than around them.`;
   } else if (isConcentrated) {
     face = 'locked';
     verdict = `This market is concentrated and there's not much new activity right now.`;
-    action = `Plan for a longer cycle. Industry days, RFIs, partnerships.`;
+    action = `Plan for a longer cycle, with industry days, RFIs, and partnerships.`;
   } else if (isActive && isFragmented) {
     face = 'open';
-    verdict = `This market is pretty open — ${vendorCount} vendors, no single dominant incumbent.`;
+    verdict = `This market is fairly open, with ${vendorCount} vendors and no dominant incumbent.`;
     action = exp90Val > 0
       ? `Start with the ${(m.expiring||[]).length} contracts expiring in the next 90 days.`
       : `A good place to start.`;
   } else {
     face = 'watch';
-    verdict = `This market is active but competitive. You'll need a clear angle.`;
+    verdict = `This market is active and competitive, with ${vendorCount} vendors competing for share.`;
     action = `Find the gap the incumbents aren't covering.`;
   }
 
   // Seller-aware action override.
   //
   // In v2, if the caller passed sellerLens (because the user pitched what
-  // they sell), we always run this block — regardless of queryType. The v1
+  // they sell), we always run this block, regardless of queryType. The v1
   // `queryType !== 'vendor'` guard was from a world where "show me Leidos"
   // was a vendor query with no seller context; in v2, sellerLens is only
   // passed when the user IS the seller, so the seller-aware verdict is
@@ -2196,7 +2196,7 @@ function buildCardSpec(m, query, sellerLens, territory) {
   //      sold; she should say AWS's indirect footprint is $260M and the
   //      seller needs to partner with GDIT.
   //
-  // The indirect-footprint sum isn't perfectly clean — a row's full amount
+  // The indirect-footprint sum isn't perfectly clean, a row's full amount
   // goes to the "indirect" bucket even though only a slice is actually AWS
   // consumption. But it's directionally honest for the verdict.
   if (sellerLens) {
@@ -2236,7 +2236,7 @@ function buildCardSpec(m, query, sellerLens, territory) {
     const productInMarket = totalSellerSpend > 0;
 
     // Is the top indirect prime a reseller/VAR or a systems integrator?
-    // This decides which indirect verdict we use — reseller means the seller
+    // This decides which indirect verdict we use, reseller means the seller
     // is ALREADY winning through them (defend/expand), integrator means the
     // seller is embedded in a larger program (partner on recompete).
     let topIndirectIsReseller = false;
@@ -2254,12 +2254,12 @@ function buildCardSpec(m, query, sellerLens, territory) {
       // Tautology guard: when the user pitched a product AND the query
       // is filtered to that product's contracts, sellerShare approaches
       // 100% trivially. Saying "AWS is winning here, 100% of this slice"
-      // is circular — of course AWS wins the AWS-filtered slice. Surface
+      // is circular, of course AWS wins the AWS-filtered slice. Surface
       // something diagnostic instead: WHERE the volume concentrates.
       //
       // Top agency + top prime (direct or reseller) tells the seller what
       // the footprint actually looks like. If there's material expiring,
-      // note it — that's the move.
+      // note it, that's the move.
       face = 'open';
       const topAgencyShort = topAgency || 'a single agency';
       const topPrimeName = tc(vendorSorted[0]?.[0] || sellerLens);
@@ -2268,14 +2268,14 @@ function buildCardSpec(m, query, sellerLens, territory) {
       if (isSellerPrime) {
         verdict = `${sellerLens}'s direct footprint: ${Utils.money(directSpend)} at ${topAgencyShort}, mostly.`;
       } else {
-        verdict = `${sellerLens} flows mostly through ${topPrimeName} here — ${Utils.money(directSpend)}.`;
+        verdict = `${sellerLens} flows mostly through ${topPrimeName} here, around ${Utils.money(directSpend)}.`;
       }
       action = exp90Val > 0
-        ? `Focus on the ${(m.expiring||[]).length} contracts expiring in the next 90 days — that's where your next move is.`
+        ? `Focus on the ${(m.expiring||[]).length} contracts expiring in the next 90 days, that's where your next move is.`
         : `Watch the recompete cycle on the top primes. That's where you'll win or lose this account.`;
     } else if (directSpend > 0 && sellerShare >= 10) {
       face = 'open';
-      verdict = `${sellerLens} is winning here — ${sellerShare}% of this slice.`;
+      verdict = `${sellerLens} is winning here, holding ${sellerShare}% of this slice.`;
       action = `Defend the expiring contracts. Look for adjacent agencies where ${sellerLens} isn't yet showing up.`;
     } else if (directSpend > 0) {
       face = 'watch';
@@ -2283,7 +2283,7 @@ function buildCardSpec(m, query, sellerLens, territory) {
       action = `Build on it and chase the indirect volume through resellers and integrators.`;
     } else if (indirectSpend > 0 && topIndirectIsReseller && topIndirectPrime) {
       // Reseller path: the seller's product is moving through a VAR.
-      // They're not "embedded" in anything — they're being purchased via
+      // They're not "embedded" in anything, they're being purchased via
       // a distribution partner. Advice: defend the reseller relationship,
       // expand to parallel resellers.
       const primeShort = tc(Utils.normalizeVendorName(topIndirectPrime));
@@ -2301,7 +2301,7 @@ function buildCardSpec(m, query, sellerLens, territory) {
     } else if (isConcentrated && exp90Val > 0) {
       face = 'watch';
       verdict = `${sellerLens} has no contracts here yet.`;
-      action = `Target ${Utils.money(exp90Val)} in expiring work — position as an alternative through a prime or vehicle.`;
+      action = `Target ${Utils.money(exp90Val)} in expiring work, positioning as an alternative through a prime or vehicle.`;
     } else if (isConcentrated) {
       face = 'locked';
       verdict = `${sellerLens} has no contracts here yet.`;
@@ -2313,10 +2313,10 @@ function buildCardSpec(m, query, sellerLens, territory) {
     }
   }
 
-  // ── Stats — three KPIs above the fold ─────────────────────
+  // ── Stats, three KPIs above the fold ─────────────────────
   // NOTE: 'total' is the sum of just the top-100 contracts shown, NOT the
   // true market total. For big markets like "HHS" ($96B+/yr), top 100 is
-  // a thin slice. Label says "Obligated" — tells the seller what they're
+  // a thin slice. Label says "Obligated", tells the seller what they're
   // looking at without over-claiming.
   const stats = [
     { label: 'Obligated', value: Utils.money(total) },
@@ -2324,11 +2324,11 @@ function buildCardSpec(m, query, sellerLens, territory) {
     { label: 'Top 3 share', value: top3Pct + '%' },
   ];
 
-  // ── Treemap — top 6 buckets + Other.
+  // ── Treemap, top 6 buckets + Other.
   //
   // Pick top-tier when multiple top-tiers are present (bare "cybersecurity"
   // spans DoD/DHS/HHS/VA). Otherwise pick subAgencies, which already has
-  // the fedhoo office-substitution applied at row level — so filtering
+  // the fedhoo office-substitution applied at row level, so filtering
   // to Navy gives NAVSEA/NAVAIR, filtering to Air Force gives
   // AFLCMC/AFRL, etc. Single block only if subAgencies also collapses
   // (happens for already-drilled-in queries like "AWS at AFLCMC" where
@@ -2357,19 +2357,19 @@ function buildCardSpec(m, query, sellerLens, territory) {
     });
   }
 
-  // ── Top primes — with biggest contract ID + USASpending link
+  // ── Top primes, with biggest contract ID + USASpending link
   const primes = vendorSorted.slice(0, 5).map(([name, v]) => {
     const biggest = (v.contracts || []).sort((a,b) => (parseFloat(b['Award Amount'])||0) - (parseFloat(a['Award Amount'])||0))[0];
     const vehicle = biggest ? Utils.detectVehicle(biggest) : null;
     // Agency context for the row's biggest contract. Sellers need this to
     // know which part of the federal government this vendor's dominant work
-    // is actually in — "Deloitte $249M" means different things at Army vs HHS.
+    // is actually in, "Deloitte $249M" means different things at Army vs HHS.
     const agencyShort = biggest ? Utils.cleanAgency(biggest['Awarding Agency'] || '') : '';
     const office = biggest && biggest['Awarding Sub Agency'] && biggest['Awarding Sub Agency'] !== biggest['Awarding Agency']
       ? biggest['Awarding Sub Agency'] : '';
     const agency = office ? `${agencyShort} · ${office}` : agencyShort;
     // First line of the description: tells the seller what kind of work this
-    // really is — "Splunk renewal" vs "Professional services" vs "R&D".
+    // really is, "Splunk renewal" vs "Professional services" vs "R&D".
     const description = biggest ? Utils.cleanDescription(biggest['Description'] || '') : '';
     return {
       name: tc(name),
@@ -2385,7 +2385,7 @@ function buildCardSpec(m, query, sellerLens, territory) {
     };
   });
 
-  // ── Expiring soon — up to 8, with the first 3 visible by default and the
+  // ── Expiring soon, up to 8, with the first 3 visible by default and the
   // rest hidden behind a "Show N more" toggle. Matches what Mo sees in her
   // payload so users can verify every contract Mo cites.
   const expiringAll = (m.expiring || []).slice(0, 8).map(c => {
@@ -2414,7 +2414,7 @@ function buildCardSpec(m, query, sellerLens, territory) {
   const expiring = expiringAll.slice(0, 3);
   const expiringMore = expiringAll.slice(3);
 
-  // ── Vehicle line — what GWAC/IDIQs are moving the money ───
+  // ── Vehicle line, what GWAC/IDIQs are moving the money ───
   // Promote to a proper section (not a footer footnote) so sellers can see
   // the contract path at a glance. A federal seller's whole capture motion
   // turns on whether they hold the right GWAC, so this is the single most
@@ -2432,7 +2432,7 @@ function buildCardSpec(m, query, sellerLens, territory) {
     ? vehicles.map(v => `${v.name} (${v.spend})`).join(', ')
     : null;
 
-  // ── Followups — what to ask Mo next ───────────────────────
+  // ── Followups, what to ask Mo next ───────────────────────
   const followups = [];
   if (sellerLens) {
     followups.push(`Who should I team with?`);
@@ -2475,7 +2475,7 @@ const Html = {
     // Escape HTML first
     text = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
-    // Bold and italic — support both asterisk and underscore syntaxes.
+    // Bold and italic, support both asterisk and underscore syntaxes.
     // Order matters: triple-character first, then double, then single.
     text = text
       .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
@@ -2483,7 +2483,7 @@ const Html = {
       .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
       .replace(/__(.+?)__/g, '<strong>$1</strong>')
       .replace(/\*(.+?)\*/g, '<em>$1</em>')
-      // Single underscore italic — more restrictive to avoid mangling
+      // Single underscore italic, more restrictive to avoid mangling
       // snake_case identifiers and vendor names with underscores. Require
       // letter boundaries on both ends.
       .replace(/(^|[\s(])_([^_\n]+?)_(?=[\s).,!?;:]|$)/g, '$1<em>$2</em>');
@@ -2549,7 +2549,7 @@ const Html = {
 };
 
 // ════════════════════════════════════════════════════════════
-// INTENT ROUTER — Gemini-powered, always-on
+// INTENT ROUTER. Gemini-powered, always-on
 // Every free-text input goes through Lambda → Gemini → JSON intent.
 // No regex routing. Gemini also normalizes USASpending queries
 // (legal entity names, canonical agency names, NAICS-vs-keyword)
@@ -2560,11 +2560,11 @@ const Html = {
 
 
 // ════════════════════════════════════════════════════════════
-// APP — UI controller
+// APP. UI controller
 // ════════════════════════════════════════════════════════════
 
 // ════════════════════════════════════════════════════════════
-// APP — UI controller (v2)
+// APP. UI controller (v2)
 // ════════════════════════════════════════════════════════════
 //
 // Radically simpler than v1. No intent routing, no run* dispatcher,
@@ -2582,7 +2582,7 @@ const Html = {
 const App = {
   state: {
     turns: 0,
-    // Most-recent successful card — used for "what's on screen" context
+    // Most-recent successful card, used for "what's on screen" context
     // the browser injects into the system prompt on each new turn.
     lastCardSpec: null,
     lastMarketMetrics: null,
@@ -2590,7 +2590,7 @@ const App = {
     // Last resolved input that produced the card. Used for subaward probes.
     lastResolverInput: null,
     // Debug panel visibility. Hidden by default for beta users (they don't
-    // need to see internal traces). Toggled by Ctrl+Shift+D — when a beta
+    // need to see internal traces). Toggled by Ctrl+Shift+D, when a beta
     // tester reports surprising behavior, they can press the shortcut and
     // paste the trace back to us for diagnosis. The trace is ALWAYS
     // collected by askMo regardless of this flag; this only controls
@@ -2599,7 +2599,7 @@ const App = {
   },
 
   // Conversation history for Mo. Each entry: { role: 'user'|'model', content: '...' }
-  // Trimmed to last ~12 turns. Mo's system prompt is NOT in here — the Lambda
+  // Trimmed to last ~12 turns. Mo's system prompt is NOT in here, the Lambda
   // prepends it at request time.
   _history: [],
 
@@ -2615,7 +2615,7 @@ const App = {
     // Hidden from beta users unless we tell them to press it. Uses the
     // 'D' keycode check rather than e.key to avoid keyboard layout
     // sensitivity. When toggled ON, retroactively renders debug for any
-    // turns that already ran — we stash debug data on each turn element
+    // turns that already ran, we stash debug data on each turn element
     // at ask-time for exactly this purpose. When toggled OFF, we clear
     // the existing slots.
     document.addEventListener('keydown', (e) => {
@@ -2654,7 +2654,7 @@ const App = {
         const q = followup.getAttribute('data-ask');
         if (q) {
           // Distinguish greeting-chip taps from inline-followup taps in
-          // analytics — useful for tracking which of the three starter
+          // analytics, useful for tracking which of the three starter
           // chips users click most and whether to rotate them.
           const source = followup.closest('#greetingChips') ? 'starter_chip' : 'followup';
           this._track('ask', { source, text: q.slice(0, 60) });
@@ -2701,7 +2701,7 @@ const App = {
   // ── Starter chips ───────────────────────────────────────────
   // Render the GREETING_CHIPS array into the #greetingChips container
   // on cold-start. Each chip's label doubles as the question sent to
-  // Mo when tapped — this is the same contract as inline followup
+  // Mo when tapped, this is the same contract as inline followup
   // chips, so the existing click delegation in init() handles taps.
   //
   // Called once from init(). No re-render on reset because resetThread
@@ -2726,7 +2726,7 @@ const App = {
     inp.blur();
   },
 
-  // ── ask — the one entry point ───────────────────────────────
+  // ── ask, the one entry point ───────────────────────────────
   //
   // Calls askMo() from the stream-client, passes render callbacks that draw
   // into a composite turn shell. Handles both coaching-only and data-backed
@@ -2746,14 +2746,14 @@ const App = {
       // refinement chain ("AWS at DoD" → "what about VA" → "who's subbing")
       // but short enough that old topics don't bleed into new ones when
       // the user pivots. Users complained about getting "trapped" in their
-      // last topic — this is the fix.
+      // last topic, this is the fix.
       this._history.push({ role: 'user', content: question });
       if (this._history.length > 4) this._history = this._history.slice(-4);
 
       // Create a composite turn shell. Has three slots:
-      //   preProse   — streams Mo's pre-tag text (or whole response if no tag)
-      //   cardSlot   — holds loading state → real data card
-      //   postProse  — streams Mo's grounded interpretation after card
+      //   preProse  , streams Mo's pre-tag text (or whole response if no tag)
+      //   cardSlot  , holds loading state → real data card
+      //   postProse , streams Mo's grounded interpretation after card
       const turnEls = this.appendCompositeTurn();
       loadingId = turnEls.turnId;
 
@@ -2778,7 +2778,7 @@ const App = {
       const pipelineIntent = detectPipelineListIntent(question);
       const haveActiveRows = Array.isArray(this.state.lastRows) && this.state.lastRows.length > 0;
       // Detect if the question mentions a scope (agency OR topic) that isn't
-      // in the active card. If so, we need a fresh pull — don't apply the
+      // in the active card. If so, we need a fresh pull, don't apply the
       // list request to the wrong rows. E.g. "5 cyber cms opps" after a
       // plain CMS card: agency matches, but topic "cyber" is new. Reusing
       // rows there would return Medicare admin contracts labeled as "cyber
@@ -2820,7 +2820,7 @@ const App = {
         // activeCardSummary is intentionally omitted. We used to inject a
         // summary of the current card into Mo's system prompt so she could
         // "refine" ("just Navy", "above $5M") relative to what's on screen.
-        // That turned out to trap users in their last topic — if someone
+        // That turned out to trap users in their last topic, if someone
         // asked about textiles after AWS, Mo kept bleeding AWS context
         // into the textile answer. Every question now stands on its own;
         // history alone is enough for genuine follow-ups where the user
@@ -2894,7 +2894,7 @@ const App = {
         // correction text so the user doesn't see the fake contracts.
         if (result.debug && result.debug.fabricationScrubbed && turnEls.preProseEl) {
           turnEls.preProseEl.innerHTML = `<div style="color: var(--text-muted); font-style: italic; line-height: 1.55;">${Html.escapeHtml(result.text)}</div>`;
-          // Clear the card slot too — sometimes the loading placeholder
+          // Clear the card slot too, sometimes the loading placeholder
           // is still there
           if (turnEls.cardSlotEl) turnEls.cardSlotEl.innerHTML = '';
         }
@@ -2915,10 +2915,10 @@ const App = {
       } else if ((result.mode === 'no_data' || result.mode === 'no_subaward_data') && result.resolverInput) {
         // Data pull succeeded but came back empty. Mo already rendered an
         // honest "no data" message via renderError. Now we paint escape-
-        // hatch chips so the user isn't stuck — they can tap to broaden,
+        // hatch chips so the user isn't stuck, they can tap to broaden,
         // pivot, or slice differently. Without these chips the turn is a
         // dead-end that forces the user to type their way out.
-        // fetchSmartPills with minimal context — no card, no prose — so
+        // fetchSmartPills with minimal context, no card, no prose, so
         // the LLM will suggest broader or alternative queries. If nothing
         // round-trips as valid, the chip row stays empty, which is fine:
         // the empty-state code shows an 'I couldn't find data' message
@@ -2932,7 +2932,7 @@ const App = {
         });
         this._track('turn_no_data', { mode: result.mode });
       }
-      // On error, we don't push to history — the user will retry
+      // On error, we don't push to history, the user will retry
 
       // Debug panel: render for EVERY turn mode (data, prose, qualifier,
       // no_data, error). This is the single source of ground truth for
@@ -2941,7 +2941,7 @@ const App = {
       // resolver input that fired against USASpending.
       //
       // In beta, hidden by default. Toggle with Ctrl+Shift+D when a
-      // tester reports something surprising — we can have them reproduce
+      // tester reports something surprising, we can have them reproduce
       // the turn, copy the debug trace, and paste it back for diagnosis.
       // We ALWAYS stash the debug data on the slot (for retro-render if
       // the user toggles debug on later), but only render it immediately
@@ -2973,13 +2973,13 @@ const App = {
 
   // When a data-backed turn completes successfully, stash the card state and
   // write a compact transcript entry to history. We don't push the raw payload
-  // into history — Gemini doesn't need it again, and it would bloat context.
+  // into history. Gemini doesn't need it again, and it would bloat context.
   // Detect whether the question names an agency that's DIFFERENT from
   // the one in the active card's resolver input. Used to decide
   // whether a pipeline-list request can be satisfied from active rows
   // or needs a fresh data pull first.
   //
-  // Conservative — only flags a mismatch when we see a recognizable
+  // Conservative, only flags a mismatch when we see a recognizable
   // agency alias in the question. If we're uncertain (e.g. ambiguous
   // terms), treat as same-scope and let the hot path run. The worst
   // case of a false negative is "list drawn from slightly-off data,"
@@ -2991,7 +2991,7 @@ const App = {
   //
   // Why both checks: "5 cyber cms opps" after a plain CMS card had the right
   // agency but a new topic. Reusing rows meant the pipeline list showed
-  // Medicare admin contracts labeled as "cyber opps" — wrong and dangerous.
+  // Medicare admin contracts labeled as "cyber opps", wrong and dangerous.
   //
   // Errs toward triggering a refresh (false positive) over reusing stale
   // rows (false negative). False positive = slightly slower turn. False
@@ -3024,7 +3024,7 @@ const App = {
     // ── Topic change ───────────────────────────────────────────
     // Topics the federal-sales user is likely to mean as a filter. If any
     // of these appears in the question and isn't present in the current
-    // resolver topic/keywords, we need a fresh pull. Kept tight — we don't
+    // resolver topic/keywords, we need a fresh pull. Kept tight, we don't
     // want every stray adjective triggering a refresh.
     const topicWords = [
       'cyber', 'cybersecurity', 'security', 'cloud', 'ai', 'ml', 'genai',
@@ -3076,7 +3076,7 @@ const App = {
     // We aggressively strip any <data> tags that might have leaked through —
     // Mo's own past tags, if visible in history, anchor Flash Lite to repeat
     // the same tag value on follow-up turns (the topic-bleed bug). Also
-    // drop the '[data card rendered]' structural marker — Mo doesn't need
+    // drop the '[data card rendered]' structural marker. Mo doesn't need
     // it to understand context, and it can reinforce 'I emit a tag every
     // turn' as a behavioral pattern.
     const cleanPre = stripDataTags(result.preTagText || '').cleaned;
@@ -3129,18 +3129,18 @@ const App = {
     return parts.join(' ') || 'this market';
   },
 
-  // ── Render callbacks — wire stream-client to the DOM ────────
-  // ── Smart Pills — LLM-driven "what to ask next" suggestions ─────────
+  // ── Render callbacks, wire stream-client to the DOM ────────
+  // ── Smart Pills. LLM-driven "what to ask next" suggestions ─────────
   //
   // Replaces the old deterministic generateFollowupChips + generateAlsoTryChips.
   // Instead of mechanical "top prime → drill into them" templates, we now ask
   // Gemini Flash Lite to pick 3-5 lateral moves specific to what the user
-  // just saw. The LLM returns a strict JSON schema — never free text — and
+  // just saw. The LLM returns a strict JSON schema, never free text, and
   // each suggestion is validated to round-trip through Mo's resolver before
   // rendering. If the LLM returns nothing valid, we render NO pills at all.
   // Silence > filler.
   //
-  // Pattern cribbed from govhoo's SearchPills.generate — typed schema,
+  // Pattern cribbed from govhoo's SearchPills.generate, typed schema,
   // background fetch, graceful empty state. See also the Lambda handler
   // handleMoPills in index.mjs.
 
@@ -3149,14 +3149,14 @@ const App = {
   generateFollowupChips() { return []; },
   generateAlsoTryChips() { return []; },
 
-  // Allowed suggestion types — must match Lambda MO_PILLS_PROMPT exactly.
+  // Allowed suggestion types, must match Lambda MO_PILLS_PROMPT exactly.
   _SMART_PILL_TYPES: new Set(['vendor', 'competitor', 'subagency', 'topic', 'drill']),
 
   // Validate a single suggestion. Returns true if it's safe to render,
   // false if it references an entity we can't resolve. Worst-case: a
   // valid-looking pill sends a query Mo can handle normally (vendor
   // lookup, topic lookup, agency filter). We reject pills with obvious
-  // hallucination patterns — empty text, too-long text, unknown types.
+  // hallucination patterns, empty text, too-long text, unknown types.
   _validateSmartPill(pill, contextPrimes) {
     if (!pill || typeof pill !== 'object') return false;
     if (!this._SMART_PILL_TYPES.has(pill.type)) return false;
@@ -3165,7 +3165,7 @@ const App = {
 
     // Drill-type pills must reference a vendor that appears in the card's
     // primes list. Without this check the LLM could suggest "Who subs for
-    // IronCloud Corp" — an invented vendor. Forcing the drill target to
+    // IronCloud Corp", an invented vendor. Forcing the drill target to
     // be a real prime in the current card eliminates that failure mode.
     if (pill.type === 'drill') {
       if (!Array.isArray(contextPrimes) || contextPrimes.length === 0) return false;
@@ -3182,7 +3182,7 @@ const App = {
   },
 
   // Fetch smart pills from Lambda. Fires after the second-pass prose
-  // completes — runs in background, renders when response arrives.
+  // completes, runs in background, renders when response arrives.
   // Never blocks the main response. Silent failure if Lambda returns
   // nothing valid. Stashes state in debug object for trace visibility.
   async fetchSmartPills({ chipsEl, question, cardSpec, prose, debug }) {
@@ -3194,7 +3194,7 @@ const App = {
     if (!chipsEl) { pillDebug.skippedReason = 'no chipsEl'; return; }
     if (!question) { pillDebug.skippedReason = 'no question'; return; }
 
-    // Build a tight card summary for the prompt. Keep it short — Gemini
+    // Build a tight card summary for the prompt. Keep it short. Gemini
     // Flash Lite does better with concise context than a full dump.
     let cardSummary = '';
     const contextPrimes = [];
@@ -3239,7 +3239,7 @@ const App = {
       pillDebug.rawCount = raw.length;
       pillDebug.raw = raw.slice(0, 10);
 
-      // Round-trip validation — drop anything that can't be safely rendered.
+      // Round-trip validation, drop anything that can't be safely rendered.
       const validated = raw.filter(s => this._validateSmartPill(s, contextPrimes));
       pillDebug.validCount = validated.length;
       pillDebug.pills = validated;
@@ -3271,13 +3271,13 @@ const App = {
           }
         }
       } catch (e) {
-        // Non-fatal — pills rendered, debug refresh is cosmetic
+        // Non-fatal, pills rendered, debug refresh is cosmetic
       }
     } catch (err) {
       pillDebug.skippedReason = `threw: ${err?.name || 'Error'}`;
       console.debug('[pills] fetch failed', err?.message || err);
 
-      // Same trace refresh on the failure path — so "skipped: HTTP 400"
+      // Same trace refresh on the failure path, so "skipped: HTTP 400"
       // or "skipped: threw" shows up in Copy trace.
       try {
         const chipsId = chipsEl?.id || '';
@@ -3342,7 +3342,7 @@ const App = {
   //
   // The primary purpose is diagnostics. When Mo emits a surprising tag
   // or the fallback picks an unexpected path, this panel is the one
-  // place with ground truth — no guessing about what happened under
+  // place with ground truth, no guessing about what happened under
   // the hood.
   //
   // The "Copy trace" button packages the whole record as plain text so
@@ -3351,7 +3351,7 @@ const App = {
 
   _renderDebugPanel(debugEl, debug) {
     if (!debugEl || !debug) return;
-    // Build the readable text trace — same format as the clipboard
+    // Build the readable text trace, same format as the clipboard
     // payload, but rendered inside a <pre> so indentation survives.
     const trace = this._buildDebugTextTrace(debug);
     // Stash the trace on the element as a data attr so the Copy button
@@ -3416,7 +3416,7 @@ const App = {
       }
       lines.push('');
     } else {
-      lines.push('(no <data> tag — coaching/prose response)');
+      lines.push('(no <data> tag. coaching/prose response)');
       lines.push('');
     }
 
@@ -3459,7 +3459,7 @@ const App = {
     }
 
     if (d.fabricatedIds && d.fabricatedIds.length > 0) {
-      lines.push('⚠ FABRICATION WARNING — Mo cited Award IDs not in the data:');
+      lines.push('⚠ FABRICATION WARNING. Mo cited Award IDs not in the data:');
       for (const id of d.fabricatedIds) {
         lines.push(`  ${id}`);
       }
@@ -3484,7 +3484,7 @@ const App = {
 
     // Smart-pill activity. Shown AFTER the rest because pills are the
     // last async thing to arrive on a turn. If no pills rendered, this
-    // section tells you why — HTTP 400 (Lambda not deployed), LLM
+    // section tells you why. HTTP 400 (Lambda not deployed), LLM
     // returned nothing, validation dropped everything, etc.
     if (d.pills) {
       const p = d.pills;
@@ -3544,7 +3544,7 @@ const App = {
   },
 
 
-  // Qualifier turn — render Mo asking what the product actually does when
+  // Qualifier turn, render Mo asking what the product actually does when
   // we can't confidently fall back. The direct pull was empty and the
   // vendor isn't in vendor_categories.json, so we don't know what
   // category keywords to search. Instead of guessing (which got us the
@@ -3559,7 +3559,7 @@ const App = {
     const vendor = originalSeller || 'that product';
     const agencyLabel = agency || 'this agency';
 
-    // Clear the loading placeholder — no card is coming
+    // Clear the loading placeholder, no card is coming
     if (cardSlotEl) cardSlotEl.innerHTML = '';
     // Keep Mo's pre-tag prose if she wrote any (she usually writes a
     // one-liner before the <data> tag); it's a natural lead-in to the
@@ -3569,14 +3569,14 @@ const App = {
       postProseEl.innerHTML = `
         <div class="mo-qualifier-msg">
           <p>I don't see direct contracts for <strong>${Html.escapeHtml(vendor)}</strong> at ${Html.escapeHtml(agencyLabel)}. That could mean the product flows through resellers, or that ${Html.escapeHtml(agencyLabel)} buys it under a category label I'm not matching.</p>
-          <p>Tell me a bit about what ${Html.escapeHtml(vendor)} does — or tap one of these to pivot:</p>
+          <p>Tell me a bit about what ${Html.escapeHtml(vendor)} does, or tap one of these to pivot:</p>
         </div>`;
     }
 
     // Two helpful escape hatches:
     //   1. Show the agency market anyway (seller wants a lay of the land)
     //   2. Let me describe it (user types a category or description)
-    // The "describe" chip is a conversational prompt — the user will
+    // The "describe" chip is a conversational prompt, the user will
     // type their answer into the composer, not hit a chip.
     const chips = [
       { label: `Just show me ${agencyLabel}`, question: `Show me the ${agencyLabel} market` },
@@ -3586,7 +3586,7 @@ const App = {
   },
 
 
-  // ── Render callbacks — wire stream-client to the DOM ────────
+  // ── Render callbacks, wire stream-client to the DOM ────────
   _buildRenderCallbacks(turnEls, turnQuestion) {
     const { preProseEl, cardSlotEl, postProseEl, chipsEl } = turnEls;
     // Stash the question on turnEls so any callback that fires later (after
@@ -3643,22 +3643,22 @@ const App = {
         const m = analyzeMarket(rows, label);
         // sellerLens resolution has three sources in priority order:
         //
-        //   1. resolverInput._sellerName — set ONLY in competitor mode.
+        //   1. resolverInput._sellerName, set ONLY in competitor mode.
         //      When Mo asked for competitors, stream-client expanded
         //      `vendor` to `vendors: [seller, ...competitors]` for the
         //      USASpending pull. But for verdict purposes we only want
-        //      the seller's name — not "AWS, AZURE, GCP, ORACLE..." as
+        //      the seller's name, not "AWS, AZURE, GCP, ORACLE..." as
         //      the verdict subject.
         //
-        //   2. resolverInput.vendor — single-vendor seller pitch. Direct.
+        //   2. resolverInput.vendor, single-vendor seller pitch. Direct.
         //
-        //   3. resolverInput.vendors — multi-vendor case (partner manager
+        //   3. resolverInput.vendors, multi-vendor case (partner manager
         //      covering multiple ISVs, e.g. "Ethos Systems, Govini").
         //      Join with "+" so the verdict can read "Ethos + Govini has
         //      a foothold here."
         let sellerLens = null;
         // Reframed mode: the vendor the user pitched isn't actually in
-        // the data — we fell back to the agency market view. Using the
+        // the data, we fell back to the agency market view. Using the
         // pitched vendor as sellerLens would produce verdict lines like
         // "AWS is winning here" for data that has no AWS in it. Wrong.
         // Leave sellerLens null so buildCardSpec produces a generic
@@ -3697,7 +3697,7 @@ const App = {
         // Render treemaps inside the new card
         initTreemaps(cardRef);
         // Stash chip context for the complete() callback. We don't render
-        // pills now — they render after Mo's post-tag prose finishes so
+        // pills now, they render after Mo's post-tag prose finishes so
         // they appear in their natural reading order (data → explanation
         // → next moves). This data is what fetchSmartPills needs: the
         // spec gives Lambda the card summary (stats, primes, treemap)
@@ -3753,7 +3753,7 @@ const App = {
         cardRef.innerHTML = '';
         if (cardBody) cardRef.appendChild(cardBody);
         else cardRef.appendChild(fullTurn);
-        // Subaward mode doesn't fire smart pills today — subaward specs
+        // Subaward mode doesn't fire smart pills today, subaward specs
         // have a different shape than card specs and would need their
         // own pill-generation path. Leaving chipData populated so if
         // pills get wired up later the context is there.
@@ -3775,7 +3775,7 @@ const App = {
           preProseEl.innerHTML = `<div class="mo-empty-msg" style="color: var(--text-muted);">${Html.escapeHtml(msg || 'Something went sideways.')}</div>`;
         }
         // Set chipData so complete() renders escape chips. Errors leave
-        // users stuck without this — they have to type a brand-new query
+        // users stuck without this, they have to type a brand-new query
         // to try anything else. Context-aware chips from the original
         // resolver input give them a way forward.
         turnEls.chipData = { mode: 'no_data', rows: [], resolverInput: turnEls.lastResolverInput || {} };
@@ -3839,7 +3839,7 @@ const App = {
         preProseEl.innerHTML = html;
       },
 
-      // Called after Mo's whole turn is done — pre-tag prose, data card,
+      // Called after Mo's whole turn is done, pre-tag prose, data card,
       // and post-tag prose have all rendered. This is where followup chips
       // get painted, so they appear as the natural last element of the
       // turn (data → explanation → next moves).
@@ -3860,7 +3860,7 @@ const App = {
             // is complete by the time complete() fires). This gives the
             // pill-generator the strategic context Mo just argued.
             const prose = (postProseEl?.textContent || '').slice(0, 500);
-            // Fire and forget — pills populate when Lambda responds.
+            // Fire and forget, pills populate when Lambda responds.
             // Silent failure if Lambda timeouts or returns nothing valid.
             // Pass debug so pill state is captured in the trace even if
             // the user turns on the debug panel later.
@@ -3917,7 +3917,7 @@ const App = {
     const thread = document.getElementById('thread');
     const wrap = document.createElement('div');
     wrap.className = 'turn-user';
-    // Class is .turn-user-bubble (not .user-bubble) — the existing v1 CSS
+    // Class is .turn-user-bubble (not .user-bubble), the existing v1 CSS
     // rule at the top of the file targets that specific name with the
     // purple background, white text, and asymmetric border radius.
     wrap.innerHTML = `<div class="turn-user-bubble">${Html.escapeHtml(text)}</div>`;
@@ -4015,11 +4015,11 @@ const App = {
   },
 
   // ────────────────────────────────────────────────────────────
-  // BUILDERS — DOM constructors for various turn types
+  // BUILDERS. DOM constructors for various turn types
   // These are the RENDERERS, kept from v1 largely unchanged.
   // ────────────────────────────────────────────────────────────
 
-  // ── buildSubawardTurn — ported verbatim from v1 ─────────────────────────
+  // ── buildSubawardTurn, ported verbatim from v1 ─────────────────────────
   buildSubawardTurn(spec) {
     const wrap = document.createElement('div');
     wrap.className = 'turn-mo';
@@ -4044,7 +4044,7 @@ const App = {
     });
     html += `</div>`;
 
-    // Teaming signals — the high-value observations
+    // Teaming signals, the high-value observations
     if (spec.signals && spec.signals.length > 0) {
       html += `<div class="mo-comp-head"><div class="mo-comp-title">Teaming signals</div></div>`;
       html += `<ul class="mo-signal-list">`;
@@ -4087,10 +4087,10 @@ const App = {
       html += `</div>`;
     }
 
-    // Reporting gap note — honest, short, earns trust
+    // Reporting gap note, honest, short, earns trust
     html += `<div class="mo-subaward-note">${Html.escapeHtml(spec.reportingNote)}</div>`;
 
-    // Static followups removed in Turn D — dynamic chips render below
+    // Static followups removed in Turn D, dynamic chips render below
     // the turn via generateFollowupChips + _renderChips.
 
     html += `<div class="mo-source">Top ${spec.totalSubs} subawards · last 12 months · USASpending.gov</div>`;
@@ -4100,7 +4100,7 @@ const App = {
     return wrap;
   },
 
-  // ── buildMoTurn — ported verbatim from v1 ─────────────────────────
+  // ── buildMoTurn, ported verbatim from v1 ─────────────────────────
   buildMoTurn(spec) {
     const wrap = document.createElement('div');
     wrap.className = 'turn-mo';
@@ -4233,7 +4233,7 @@ const App = {
     return wrap;
   },
 
-  // ── buildEmptyTurn — ported verbatim from v1 ─────────────────────────
+  // ── buildEmptyTurn, ported verbatim from v1 ─────────────────────────
   buildEmptyTurn(query) {
     const wrap = document.createElement('div');
     wrap.className = 'turn-mo';
@@ -4269,16 +4269,16 @@ const App = {
     return wrap;
   },
 
-  // ── buildErrorTurn — ported verbatim from v1 ─────────────────────────
+  // ── buildErrorTurn, ported verbatim from v1 ─────────────────────────
   buildErrorTurn(msg, opts = {}) {
     // Translate raw technical errors into Mo-voiced messages. Upstream
-    // services (USASpending, Gemini) occasionally hiccup — surface that
+    // services (USASpending, Gemini) occasionally hiccup, surface that
     // as something a seller can act on, not a status code.
     const raw = String(msg || '');
     let friendly;
     let retryable = opts.retryable === true;
     if (/^API\s*5\d{2}|Mo error 5|Router error 5|504|timed out/i.test(raw)) {
-      friendly = "USASpending took too long just now. That happens sometimes — try again and it usually goes through.";
+      friendly = "USASpending took too long just now. That happens sometimes, try again and it usually goes through.";
       retryable = true;
     } else if (/^API\s*429|rate limit/i.test(raw)) {
       friendly = "Hitting a rate limit. Give it a few seconds and try again.";
@@ -4287,11 +4287,11 @@ const App = {
       // USASpending rejected the filter shape. Usually means the router
       // built a search with a field combination USASpending doesn't honor.
       // A retry with the same wording will fail identically, so don't
-      // offer a retry button — instead suggest rephrasing.
-      friendly = "That one didn't translate cleanly to USASpending. Try rephrasing — a vendor name, an agency, or a NAICS code usually works.";
+      // offer a retry button, instead suggest rephrasing.
+      friendly = "That one didn't translate cleanly to USASpending. Try rephrasing, a vendor name, an agency, or a NAICS code usually works.";
       retryable = false;
     } else if (/^API\s*400/i.test(raw)) {
-      friendly = "Mo couldn't build a valid search from that. Try a simpler phrase — like a vendor, agency, or topic word.";
+      friendly = "Mo couldn't build a valid search from that. Try a simpler phrase, like a vendor, agency, or topic word.";
       retryable = false;
     } else if (/Failed to reach USASpending|Failed to fetch|NetworkError/i.test(raw)) {
       friendly = "Can't reach USASpending at the moment. Check your connection or try again in a minute.";
@@ -4330,7 +4330,7 @@ const App = {
     return wrap;
   },
 
-  // ── buildClarifyTurn — ported verbatim from v1 ─────────────────────────
+  // ── buildClarifyTurn, ported verbatim from v1 ─────────────────────────
   buildClarifyTurn(question) {
     const wrap = document.createElement('div');
     wrap.className = 'turn-mo';
@@ -4358,7 +4358,7 @@ const App = {
 //
 // Produces near-square rectangles sized by value. Unlike the old single-row
 // "bar chart in treemap clothing," this gives the user a real sense of market
-// concentration — one dominant agency shows up as a big square, fragmented
+// concentration, one dominant agency shows up as a big square, fragmented
 // markets show up as a tiled grid.
 //
 // Hand-rolled, no d3 dependency. ~90 lines including layout + render.
@@ -4433,7 +4433,7 @@ function renderTreemap(items) {
   // Returns a placeholder div that gets filled in by initTreemaps() after
   // insertion into the DOM. This lets us compute layout at the real container
   // width, so the treemap stretches edge-to-edge matching the card's text
-  // margins — no aspect-ratio fiddling, no preserveAspectRatio tradeoffs.
+  // margins, no aspect-ratio fiddling, no preserveAspectRatio tradeoffs.
   const payload = JSON.stringify(items).replace(/"/g, '&quot;');
   return `<div class="mo-treemap-host" data-treemap="${payload}"></div>`;
 }
@@ -4449,7 +4449,7 @@ function initTreemaps(root) {
     try { items = JSON.parse(itemsStr.replace(/&quot;/g, '"')); } catch (e) { return; }
     if (!items || items.length === 0) return;
 
-    // Measure the container — this is the REAL render width
+    // Measure the container, this is the REAL render width
     const W = host.clientWidth || 320;
     const H = 220;  // matches CSS .mo-treemap height
 

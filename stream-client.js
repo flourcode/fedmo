@@ -1,5 +1,5 @@
 // ============================================================================
-// mo-stream-client.v2.js — Browser-side streaming + <data> tag handling
+// mo-stream-client.v2.js. Browser-side streaming + <data> tag handling
 // ============================================================================
 //
 // This module implements the two-shot streaming pattern for Mo v2:
@@ -14,9 +14,9 @@
 //      is her interpretation, grounded in the real data.
 //
 // If Mo's first pass finishes without a <data> tag, this is a coaching
-// or conversational response — no second pass, no data card. Just prose.
+// or conversational response, no second pass, no data card. Just prose.
 //
-// Design: the module exposes ONE function — askMo() — that takes a user
+// Design: the module exposes ONE function, askMo(), that takes a user
 // question, a history array, and a set of DOM/render callbacks, and
 // orchestrates the whole turn. Integration into mo_mock is just: call
 // this function and wire the callbacks.
@@ -44,7 +44,7 @@
 import { resolve, applyPostFilters } from './resolver.js';
 
 // ─────────────────────────────────────────────────────────────────────
-// vendor_categories.json — category-aware fallback dictionary
+// vendor_categories.json, category-aware fallback dictionary
 // ─────────────────────────────────────────────────────────────────────
 //
 // When a user pitches a vendor at an agency and the direct pull comes
@@ -66,7 +66,7 @@ import { resolve, applyPostFilters } from './resolver.js';
 // downstream callers get a flat {categoryName, keywords, competitors}
 // shape regardless of how the file is structured.
 //
-// Best-effort load — if the file is missing or malformed, we skip the
+// Best-effort load, if the file is missing or malformed, we skip the
 // category branch entirely and fall through to the "needs qualifier"
 // path. That's a clean degradation: the tool asks more questions
 // instead of showing wrong data.
@@ -101,11 +101,11 @@ export const vendorCategoriesReady = (async () => {
 })();
 
 // ─────────────────────────────────────────────────────────────────────
-// offices.json — award-ID-prefix → office-name lookup
+// offices.json, award-ID-prefix → office-name lookup
 // ─────────────────────────────────────────────────────────────────────
 //
 // USASpending's spending_by_award endpoint does not reliably return the
-// Awarding Office field — for many large DoD contracts, that field is
+// Awarding Office field, for many large DoD contracts, that field is
 // null. But the Award ID itself encodes the office as a prefix (N00024,
 // N00019, W52P1J, etc.). This file maps those prefixes to human names
 // so we can enrich rows post-fetch and get a real command-level
@@ -142,7 +142,7 @@ export const officesReady = (async () => {
   }
 })();
 
-// Try progressive prefix matching — 6 chars first, then 5, then 4.
+// Try progressive prefix matching, 6 chars first, then 5, then 4.
 // Returns the decoded office name, or null if no match. Takes the
 // full Award ID string. Defensive on null/undefined.
 function officeFromAwardId(awardId) {
@@ -155,7 +155,7 @@ function officeFromAwardId(awardId) {
 }
 
 // Normalize a vendor name for category lookup. Same rules as the file
-// keys — lowercase, trimmed, punctuation stripped, legal suffixes removed.
+// keys, lowercase, trimmed, punctuation stripped, legal suffixes removed.
 // Not the same as the resolver's norm() because we want "AWS, Inc." and
 // "Amazon Web Services" to resolve to their category.
 function normalizeVendorForCategory(name) {
@@ -207,7 +207,7 @@ const ATTR_RE = /(\w+)\s*=\s*"([^"]*)"/g;
 export function findDataTag(text) {
   const m = DATA_TAG_RE.exec(text);
   if (!m) {
-    // Check for a partial tag — <data with no closer yet. If present,
+    // Check for a partial tag, <data with no closer yet. If present,
     // caller should pause rendering until more chunks arrive.
     const partialIdx = text.lastIndexOf('<data');
     if (partialIdx >= 0) {
@@ -236,27 +236,27 @@ export function findDataTag(text) {
 // tag in her grounded prose despite the prompt forbidding it. Without
 // this, the raw markup leaks into the rendered post-card prose and the
 // user literally sees "<data agency=..." in their card. Also handles
-// the partial-tag case mid-stream — if the chunk ends with "<da", we
+// the partial-tag case mid-stream, if the chunk ends with "<da", we
 // hold back the partial fragment until the next chunk completes it.
 //
-// Returns { cleaned, hasPartial } — caller should NOT render if
+// Returns { cleaned, hasPartial }, caller should NOT render if
 // hasPartial is true (wait for next chunk to disambiguate). On
 // completed chunks, fully-formed tags are removed and the surrounding
 // whitespace is collapsed so we don't leave double-newlines where a
 // tag was.
 export function stripDataTags(text) {
   if (!text) return { cleaned: '', hasPartial: false };
-  // Detect any partial trailing tag — if we see "<data" without a closer
+  // Detect any partial trailing tag, if we see "<data" without a closer
   // anywhere AFTER it, hold off rendering. Also catch shorter prefixes
   // like "<d", "<da", "<dat" that occur when a stream chunk lands
-  // mid-tag — we don't want to flash "Some prose <da" to the user.
+  // mid-tag, we don't want to flash "Some prose <da" to the user.
   const partialIdx = text.lastIndexOf('<data');
   let hasPartial = false;
   if (partialIdx >= 0) {
     const tail = text.slice(partialIdx);
     if (!/\/>/.test(tail) && !/<\/data>/i.test(tail)) {
       hasPartial = true;
-      // Don't render the partial — return only the safe prefix
+      // Don't render the partial, return only the safe prefix
       const safe = text.slice(0, partialIdx);
       return { cleaned: safe.replace(/<data\b[^>]*\/>/gi, '').replace(/\n{3,}/g, '\n\n').trim(), hasPartial };
     }
@@ -318,23 +318,23 @@ export function dataAttrsToResolverInput(attrs) {
 // endpoint. Returns { vendor, category, competitors: [...] } or throws.
 // Called by askMo() when a <data> tag has competitors="true".
 // ─────────────────────────────────────────────────────────────────────
-// fetchCompetitors — figure out who competes head-to-head with the seller
+// fetchCompetitors, figure out who competes head-to-head with the seller
 // ─────────────────────────────────────────────────────────────────────
 //
 // Two-tier lookup:
 //
 //  1. FILE FIRST. If the vendor is in vendor_categories.json, return the
 //     curated competitor list directly. No network call. No failure mode.
-//     Deterministic — same vendor always returns same list. This is how
+//     Deterministic, same vendor always returns same list. This is how
 //     we handle AWS, Microsoft, SentinelOne, Datadog, Akamai, Sonatype,
-//     etc. — all the vendors we've hand-curated for known federal
+//     etc., all the vendors we've hand-curated for known federal
 //     categories.
 //
 //  2. GEMINI FALLBACK. For unknown vendors (niche products, new entrants,
 //     anything not in the file), call the Lambda's mo_competitors
 //     endpoint, which asks Gemini for a competitor list. This path has
 //     failure modes (Gemini 500, malformed JSON, timeout) and the caller
-//     must handle them — see askMo()'s try/catch around fetchCompetitors.
+//     must handle them, see askMo()'s try/catch around fetchCompetitors.
 //
 // Why file-first matters: Gemini's competitor lookup can silently fail
 // (API error, timeout, malformed response), and when it does, Mo
@@ -385,7 +385,7 @@ const AWARD_FIELDS = [
   'Start Date', 'End Date', 'NAICS', 'PSC',
   'Contract Award Type', 'Type of Set Aside',
 ];
-// Subawards endpoint returns different fields — prime+sub relationships,
+// Subawards endpoint returns different fields, prime+sub relationships,
 // not prime contracts alone. Same URL, different shape.
 const SUBAWARD_FIELDS = [
   'Sub-Award ID', 'Sub-Awardee Name', 'Sub-Award Amount', 'Sub-Award Date',
@@ -407,7 +407,7 @@ function trailing12Mo() {
 // quirk that CISA, USCG, STRATCOM, Marines, Space Force, Secret Service,
 // JSOC, ATF, US Marshals, BOP, USPTO, and several combatant commands are
 // real to federal sellers but aren't actual awarding agencies at USASpending
-// — their contracts are awarded through the parent toptier (DHS HQ, DoD HQ,
+//, their contracts are awarded through the parent toptier (DHS HQ, DoD HQ,
 // DOJ Offices/Boards/Divisions) and only mention the "agency" in the
 // contract description. An agency-filter pull returns 0 rows. A keyword
 // pull against the parent toptier with [acronym, canonical name] returns
@@ -463,12 +463,12 @@ export async function fetchUsaspending(resolverInput, endpoint) {
 
   if (!res.ok) {
     // 4xx responses from USASpending usually mean the filter shape is
-    // invalid — e.g. a keyword that's too short, a mismatched agency
+    // invalid, e.g. a keyword that's too short, a mismatched agency
     // name, or a combination the API rejects. 5xx means USASpending
     // itself is having trouble. The error surface downstream renders
     // this message; keep it short and user-readable, not developer-y.
     if (res.status >= 400 && res.status < 500) {
-      throw new Error("The search terms didn't match USASpending's filter rules. Try rephrasing — be more specific about the vendor, agency, or product.");
+      throw new Error("The search terms didn't match USASpending's filter rules. Try rephrasing, be more specific about the vendor, agency, or product.");
     }
     throw new Error('USASpending is having trouble right now. Give it a minute and try again.');
   }
@@ -507,7 +507,7 @@ export async function fetchUsaspending(resolverInput, endpoint) {
         keywords: [...new Set(mergedKeywords)],
       };
       // Preserve non-agency filters the resolver produced (PSC, NAICS,
-      // recipient, date refinements, etc.) — only swap the agency filter.
+      // recipient, date refinements, etc.), only swap the agency filter.
       for (const key of Object.keys(resolvedFilters)) {
         if (key !== 'agencies' && key !== 'keywords' && !retryFilters[key]) {
           retryFilters[key] = resolvedFilters[key];
@@ -536,7 +536,7 @@ export async function fetchUsaspending(resolverInput, endpoint) {
           }
         }
       } catch (retryErr) {
-        // Swallow — the direct query already succeeded (with zero rows).
+        // Swallow, the direct query already succeeded (with zero rows).
         // Retry is best-effort. Log for debugging.
         console.warn('[fetchUsaspending] mission-fallback retry failed:', retryErr.message);
       }
@@ -561,7 +561,7 @@ export async function fetchUsaspending(resolverInput, endpoint) {
       r['Awarding Agency'] = r['Awarding Sub Agency'];
     }
     // USASpending often returns null Awarding Office even when the data
-    // exists — the office is encoded in the Award ID prefix. Decode it
+    // exists, the office is encoded in the Award ID prefix. Decode it
     // from offices.json so analyzeMarket's treemap bucketing gets real
     // command-level variation (NAVSEA vs NAVAIR vs NIWC) instead of
     // everything collapsing to "Department of the Navy".
@@ -589,17 +589,17 @@ export async function fetchUsaspending(resolverInput, endpoint) {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// fetchSubawards — pull prime→sub relationships from USASpending
+// fetchSubawards, pull prime→sub relationships from USASpending
 // ─────────────────────────────────────────────────────────────────────
 //
 // Same URL as fetchUsaspending (/search/spending_by_award/), but the payload
 // has `subawards: true` at the top level which flips USASpending into
-// subaward mode — it returns sub-tier records with Prime Recipient Name +
+// subaward mode, it returns sub-tier records with Prime Recipient Name +
 // Sub-Awardee Name instead of prime contracts.
 //
 // Returns an array of { prime, sub, amount, agency, desc, date, link } objects
 // ready for the subaward card renderer. No post-filtering is applied here
-// (subaward data is already narrow) — the filter just scopes the result set.
+// (subaward data is already narrow), the filter just scopes the result set.
 // ─────────────────────────────────────────────────────────────────────
 export async function fetchSubawards(resolverInput, endpoint) {
   const { filters: resolvedFilters } = resolve(resolverInput);
@@ -652,7 +652,7 @@ export async function fetchSubawards(resolverInput, endpoint) {
   // USASpending's subaward keyword-match scans BOTH the Prime Recipient
   // Name field AND the Sub-Awardee Name field. When a seller asks
   // "who's subbing to SAIC", they want rows where SAIC is the PRIME
-  // (so they can see SAIC's subs — the firms the seller could displace
+  // (so they can see SAIC's subs, the firms the seller could displace
   // or join). But the API returns both directions mixed, and for a big
   // firm like SAIC the "SAIC-as-sub" rows (TekSynap → SAIC, Corner
   // Alliance → SAIC) often dominate, because SAIC is big enough to show
@@ -660,7 +660,7 @@ export async function fetchSubawards(resolverInput, endpoint) {
   //
   // Fix: if the query had a vendor keyword, post-filter to rows where
   // the vendor matches Prime Recipient Name. This gives the seller what
-  // they actually wanted — the subs UNDER their target prime.
+  // they actually wanted, the subs UNDER their target prime.
   //
   // Zero-row fallback: if filtering by prime produces no rows, the
   // vendor genuinely shows up only as a sub in this slice. Return the
@@ -733,9 +733,9 @@ export function summarizeSubawardsForMo(subs, resolverInput) {
   // Direction framing: the post-filter in fetchSubawards stamps
   // _subawardDirection on the rows array when there's a vendor input.
   // 'as_prime' (default) means the vendor IS the prime and these are
-  // their subs — what the seller almost always wants. 'as_sub' means
+  // their subs, what the seller almost always wants. 'as_sub' means
   // the vendor-as-prime filter came back empty and we fell back to the
-  // unfiltered set — the vendor only appears here as a sub to other
+  // unfiltered set, the vendor only appears here as a sub to other
   // primes. Mo needs to know which slice this is so her coaching
   // targets the right audience.
   const direction = subs._subawardDirection;
@@ -748,7 +748,7 @@ export function summarizeSubawardsForMo(subs, resolverInput) {
 DIRECTION: ${vendorName} is the prime. These subawards show who ${vendorName} is awarding sub-work TO. The seller wants to know these subs so they can (a) displace a weak incumbent sub, or (b) partner with an established sub who's already in ${vendorName}'s delivery chain. Coach them accordingly.`;
   } else if (direction === 'as_sub' && vendorName) {
     directionBlock = `
-DIRECTION: ${vendorName} does NOT appear as a prime on any subawards in this slice. These rows show ${vendorName} appearing as a SUB to other primes. Tell the seller honestly that ${vendorName} isn't running sub teams in this agency — they're the hands on someone else's contract. The coaching shifts: if the seller wants to team with or displace ${vendorName}'s position, they need to target ${vendorName}'s prime customers (the top primes listed below) instead.`;
+DIRECTION: ${vendorName} does NOT appear as a prime on any subawards in this slice. These rows show ${vendorName} appearing as a SUB to other primes. Tell the seller honestly that ${vendorName} isn't running sub teams in this agency, they're the hands on someone else's contract. The coaching shifts: if the seller wants to team with or displace ${vendorName}'s position, they need to target ${vendorName}'s prime customers (the top primes listed below) instead.`;
   }
 
   return `Query: ${queryDesc || '(no filters)'} (SUBAWARD CUT)${directionBlock}
@@ -763,7 +763,7 @@ Top subs by work received:
 ${topSubs.map(s => '  - ' + s).join('\n')}
 
 Subs with leverage (working for multiple primes):
-${multiPrimeSubs.length > 0 ? multiPrimeSubs.map(s => '  - ' + s).join('\n') : '  (none — subs here are locked to single primes)'}
+${multiPrimeSubs.length > 0 ? multiPrimeSubs.map(s => '  - ' + s).join('\n') : '  (none, subs here are locked to single primes)'}
 
 Your job: tell the seller who's REALLY doing the work behind the primes. Call out leverage plays (subs working multiple primes are free agents worth pursuing). If a sub is taking a huge share, that's who actually delivers the capability. The prime is the contract vehicle; the sub is the hands.`;
 }
@@ -772,7 +772,7 @@ Your job: tell the seller who's REALLY doing the work behind the primes. Call ou
 // Build a payload summary for Mo's second (grounded) call
 // ─────────────────────────────────────────────────────────────────────
 //
-// We don't pass the raw 100 rows back to Gemini — that's too verbose and
+// We don't pass the raw 100 rows back to Gemini, that's too verbose and
 // wasteful. Instead, compact to the signals Mo needs for interpretation:
 // total dollars, top 5 primes, agency breakdown, expiring count.
 // ─────────────────────────────────────────────────────────────────────
@@ -807,17 +807,17 @@ export function summarizePayloadForMo(rows, resolverInput, opts = {}) {
   //
   // When a seller pitches (e.g., AWS at VA), the top primes in the
   // card include THREE kinds of vendors:
-  //   1. Direct    — the seller themselves (Amazon Web Services, Inc.)
-  //   2. Channel   — VARs reselling the seller (Four Points reselling
+  //   1. Direct   , the seller themselves (Amazon Web Services, Inc.)
+  //   2. Channel  , VARs reselling the seller (Four Points reselling
   //                  AWS, Thundercat reselling CrowdStrike Falcon).
   //                  Detectable: contract description names the seller's
   //                  product.
-  //   3. Competitor — a different vendor in the same category (Microsoft
+  //   3. Competitor, a different vendor in the same category (Microsoft
   //                  selling Azure in an AWS competitor pull).
   //
   // Mo's coaching is radically different across these three. Attacking
   // a channel partner who's reselling your product is shooting yourself
-  // in the foot — you want to DEFEND and STRENGTHEN that relationship.
+  // in the foot, you want to DEFEND and STRENGTHEN that relationship.
   // Competitors are the ones you attack. Without this distinction, Mo
   // lumps Four Points in with Microsoft and the seller walks away with
   // confused advice.
@@ -848,15 +848,15 @@ export function summarizePayloadForMo(rows, resolverInput, opts = {}) {
       if (canon.length >= 3) sellerForms.add(canon);
     }
     // If neither form produced a usable match key, skip classification
-    // entirely — better to leave primes untagged than to tag them wrong.
+    // entirely, better to leave primes untagged than to tag them wrong.
     if (sellerForms.size === 0) {
       // No classification possible. topPrimesAnnotated below will render
       // plain "Name ($M)" entries without relation tags.
     } else {
-      // Build per-prime description corpus — concatenate every description
+      // Build per-prime description corpus, concatenate every description
       // that prime shows up on. If ANY of their contracts name ANY form
       // of the seller, they're a channel partner. Empty description →
-      // assume competitor (safer default — better to attack a "competitor"
+      // assume competitor (safer default, better to attack a "competitor"
       // who is actually a partner than to defend a "partner" who is
       // actually a competitor, because the seller at least won't damage
       // their own distribution).
@@ -891,7 +891,7 @@ export function summarizePayloadForMo(rows, resolverInput, opts = {}) {
           vendorRelations.set(name, 'channel');
         } else {
           // Neither name nor description names the seller. This is a
-          // different vendor in the same cut — competitor in a
+          // different vendor in the same cut, competitor in a
           // competitor-mode pull, or an unrelated prime in an agency-
           // wide pull.
           vendorRelations.set(name, 'competitor');
@@ -927,7 +927,7 @@ export function summarizePayloadForMo(rows, resolverInput, opts = {}) {
     .slice(0, 3)
     .map(([n, a]) => `${n} ($${(a / 1_000_000).toFixed(1)}M)`);
 
-  // Expiring pipeline — 90 day and 12 month windows, with specific
+  // Expiring pipeline, 90 day and 12 month windows, with specific
   // contract records so Mo can produce govhoo-style recompete lists.
   //
   // Sellers asking "pipeline opps," "recompete targets," "what's expiring,"
@@ -951,7 +951,7 @@ export function summarizePayloadForMo(rows, resolverInput, opts = {}) {
     ? new Date(ts).toISOString().slice(0, 10)
     : 'unknown';
 
-  // 90-day near-term targets (immediate pipeline) — keep concise format
+  // 90-day near-term targets (immediate pipeline), keep concise format
   const topExpiringDetail = expiring.slice(0, 5).map(r => {
     const vendor = r['Recipient Name'] || 'Unknown';
     const amt = parseFloat(r['Award Amount']) || 0;
@@ -960,7 +960,7 @@ export function summarizePayloadForMo(rows, resolverInput, opts = {}) {
       || r['Awarding Agency']
       || '';
     const desc = (r['Description'] || '').slice(0, 80).replace(/\s+/g, ' ').trim();
-    return `${vendor} — $${(amt / 1_000_000).toFixed(1)}M at ${office}, ${daysOut(r._endTs)}d left${desc ? ' — ' + desc : ''}`;
+    return `${vendor}, $${(amt / 1_000_000).toFixed(1)}M at ${office}, ${daysOut(r._endTs)}d left${desc ? ', ' + desc : ''}`;
   });
 
   // 12-month recompete candidates (full records Mo can cite in bulleted
@@ -1020,20 +1020,20 @@ Your job: tell the seller who's winning and losing in THEIR category. Identify w
   } else if (resolverInput?._competitors && resolverInput?._competitorFetchFailed) {
     // Degraded path: the user asked for competitors, but the lookup
     // service errored out, so we're rendering the seller's own footprint
-    // instead of a real competitor view. Tell Mo the truth — don't let
+    // instead of a real competitor view. Tell Mo the truth, don't let
     // her hallucinate competitor names from training data when the data
     // in the card is just the seller's own contracts.
     const sellerLabel = resolverInput._sellerName || '';
     framing = `
 COMPETITOR LOOKUP FAILED.
 The user asked about ${sellerLabel}'s competitors, but the competitor expansion service returned an error. The rows below are ${sellerLabel}'s OWN footprint, not a real competitor view.
-Your job: tell the user honestly that you couldn't pull the competitive landscape this turn, show them ${sellerLabel}'s current position based on the rows below, and suggest they try again in a moment. DO NOT name specific competitors from memory — the data doesn't support those claims. It's fine to say "CrowdStrike and Microsoft Defender are typical competitors in this category" as general category knowledge, but do NOT claim anything about their specific federal footprint that isn't visible in the rows.`;
+Your job: tell the user honestly that you couldn't pull the competitive landscape this turn, show them ${sellerLabel}'s current position based on the rows below, and suggest they try again in a moment. DO NOT name specific competitors from memory, the data doesn't support those claims. It's fine to say "CrowdStrike and Microsoft Defender are typical competitors in this category" as general category knowledge, but do NOT claim anything about their specific federal footprint that isn't visible in the rows.`;
   }
 
   // Reframed-on-empty framing: the user pitched a vendor+agency combo, but
   // the direct pull came back empty, so the browser refired the query
   // without the vendor filter. The card now shows the agency-wide market,
-  // not the seller's literal footprint. Mo MUST explain this — leading
+  // not the seller's literal footprint. Mo MUST explain this, leading
   // with honesty ("your product isn't here directly") before walking the
   // market picture. Otherwise she'll read the card as proof of a presence
   // the seller doesn't actually have, which is a trust disaster.
@@ -1043,11 +1043,11 @@ Your job: tell the user honestly that you couldn't pull the competitive landscap
     const agencyName = resolverInput?.agency || 'this agency';
     if (category) {
       framing += `
-⚠️ CRITICAL FRAMING RULE — read before writing anything.
+⚠️ CRITICAL FRAMING RULE, read before writing anything.
 
 Your FIRST sentence must be, exactly in spirit: "${pitched} doesn't show up directly at ${agencyName}."
 
-WHY: the user pitched ${pitched} at ${agencyName}, but ${pitched} has no direct top-100 footprint there. The rows below are NOT ${pitched}'s contracts. They are the competitive ${category} market at ${agencyName} — pulled as a reframe so the seller can see where their product would fit.
+WHY: the user pitched ${pitched} at ${agencyName}, but ${pitched} has no direct top-100 footprint there. The rows below are NOT ${pitched}'s contracts. They are the competitive ${category} market at ${agencyName}, pulled as a reframe so the seller can see where their product would fit.
 
 Your response structure:
  1. FIRST SENTENCE: "${pitched} doesn't show up directly at ${agencyName}." No preamble. No softening.
@@ -1057,7 +1057,7 @@ Your response structure:
 Do NOT cite Award IDs, dollar amounts, or end dates as if they belong to ${pitched}. They belong to the competitors. Use them only to describe the competitive landscape ${pitched} would enter.`;
     } else {
       framing += `
-⚠️ CRITICAL FRAMING RULE — read before writing anything.
+⚠️ CRITICAL FRAMING RULE, read before writing anything.
 
 Your FIRST sentence must be, exactly in spirit: "${pitched} doesn't show up directly at ${agencyName}."
 
@@ -1066,14 +1066,14 @@ WHY: the user pitched ${pitched} at ${agencyName}, but ${pitched} has no direct 
 Your response structure:
  1. FIRST SENTENCE: "${pitched} doesn't show up directly at ${agencyName}." No preamble.
  2. SECOND SENTENCE: describe what the agency IS spending on, based on the top primes.
- 3. THIRD SENTENCE: a concrete next step — which sub-agency, which prime, which adjacency.
+ 3. THIRD SENTENCE: a concrete next step, which sub-agency, which prime, which adjacency.
 
 Do NOT pretend the rows represent ${pitched}'s presence. They don't.`;
     }
   }
 
   const missionFallbackNote = missionFallback
-    ? `\n\n⚠️ DATA NOTE: The user asked about "${missionFallback}," but USASpending doesn't file "${missionFallback}" as an awarding agency — contracts for this mission flow through the parent department. The rows below came from the parent toptier with "${missionFallback}" as a keyword filter, which surfaces the real market. In your prose, include ONE short acknowledgment like "USASpending files ${missionFallback} contracts under the parent department, so these are the real ones." Don't belabor it. Then continue with the normal analysis.`
+    ? `\n\n⚠️ DATA NOTE: The user asked about "${missionFallback}," but USASpending doesn't file "${missionFallback}" as an awarding agency, contracts for this mission flow through the parent department. The rows below came from the parent toptier with "${missionFallback}" as a keyword filter, which surfaces the real market. In your prose, include ONE short acknowledgment like "USASpending files ${missionFallback} contracts under the parent department, so these are the real ones." Don't belabor it. Then continue with the normal analysis.`
     : '';
 
   return `Query: ${queryDesc || '(no filters)'}${framing}${missionFallbackNote}
@@ -1084,14 +1084,14 @@ Top primes:
 ${topPrimesAnnotated.map(p => '  - ' + p).join('\n')}
 Top awarding agencies:
 ${topAgencies.map(a => '  - ' + a).join('\n')}
-Pipeline — expiring in next 90 days: ${expiring.length} contracts, $${(expiringVal / 1_000_000).toFixed(1)}M total
+Pipeline, expiring in next 90 days: ${expiring.length} contracts, $${(expiringVal / 1_000_000).toFixed(1)}M total
 ${topExpiringDetail.length > 0 ? 'Top near-term targets:\n' + topExpiringDetail.map(t => '  - ' + t).join('\n') : '  (nothing expiring soon)'}
-Pipeline — 12-month outlook: ${expiring12.length} contracts, $${(expiring12Val / 1_000_000).toFixed(1)}M total
+Pipeline, 12-month outlook: ${expiring12.length} contracts, $${(expiring12Val / 1_000_000).toFixed(1)}M total
 ${recompeteList.length > 0 ? 'Top recompete candidates (next 12 months, full records for citing in prose):\n' + recompeteList.join('\n\n') : ''}`;
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// streamOnce — one call to /mo_stream with abort support
+// streamOnce, one call to /mo_stream with abort support
 // ─────────────────────────────────────────────────────────────────────
 //
 // Returns the full accumulated text when the stream ends. Calls
@@ -1154,7 +1154,7 @@ export async function streamOnce({ endpoint, history, activeCardSummary, payload
 // ─────────────────────────────────────────────────────────────────────
 //
 // User asks "give me 5 salesforce-ready pipeline opps" or "top 10
-// recompetes at DHS" — this is a structured-list request where each
+// recompetes at DHS", this is a structured-list request where each
 // item is a real contract with specific fields (vendor, Award ID,
 // amount, end date, office). Without guardrails, Flash Lite fabricates
 // these fields. With this path, the fields come from real rows and the
@@ -1165,12 +1165,12 @@ export async function streamOnce({ endpoint, history, activeCardSummary, payload
 //   2. Select top N records from the rows deterministically (by
 //      expiring-soon priority + dollar value)
 //   3. Shape each record into the payload expected by the Lambda
-//   4. Call fedmo_pipeline_insights — returns insights keyed by awardId
+//   4. Call fedmo_pipeline_insights, returns insights keyed by awardId
 //   5. Combine real records + insights into the final output
 //   6. Client renders from real records; insights slot in per-card
 //
 // Fabrication is structurally impossible because the LLM never produces
-// record fields — only insight text keyed to awardIds the client
+// record fields, only insight text keyed to awardIds the client
 // controls.
 // ─────────────────────────────────────────────────────────────────────
 
@@ -1191,7 +1191,7 @@ export function detectPipelineListIntent(question) {
   if (!question || typeof question !== 'string') return null;
   const text = question.toLowerCase();
 
-  // Pipeline intent keywords — must appear somewhere in the message.
+  // Pipeline intent keywords, must appear somewhere in the message.
   // Includes common truncations sellers type in flow ("5 pipe", "3 recomps").
   // Requires \b word boundaries to avoid matching inside larger words
   // (e.g., "plays" matches but "display" does not; "pipe" matches but
@@ -1201,7 +1201,7 @@ export function detectPipelineListIntent(question) {
   if (!pipelineMatch) return null;
   const pipelineIdx = pipelineMatch.index;
 
-  // Count extraction — accept "5", "top 5", "give me 5", "5-10" → 5
+  // Count extraction, accept "5", "top 5", "give me 5", "5-10" → 5
   const countMatch = text.match(/\b(?:top\s+|give\s+me\s+|show\s+(?:me\s+)?|list\s+(?:me\s+)?)?(\d{1,2})\b/);
   if (!countMatch) return null;
   const count = parseInt(countMatch[1], 10);
@@ -1221,7 +1221,7 @@ export function detectPipelineListIntent(question) {
   const gap = Math.abs(pipelineIdx - countIdx);
   if (gap > 25) return null;
 
-  // Lens extraction — look for "[word]-ready", "[word]-fit", "[word]-friendly"
+  // Lens extraction, look for "[word]-ready", "[word]-fit", "[word]-friendly"
   // or "[word] opportunities" / "[word] opps" / "for [word]"
   let lens = null;
   const lensMatch1 = text.match(/\b([a-z][a-z0-9]+(?:\s[a-z][a-z0-9]+)?)-(?:ready|fit|friendly|focused)\b/);
@@ -1232,7 +1232,7 @@ export function detectPipelineListIntent(question) {
     const forMatch = text.match(/\bfor\s+([a-z][a-z0-9]+(?:\s+[a-z][a-z0-9]+)?)\s*(?:$|[?.!])/);
     if (forMatch) {
       const candidate = forMatch[1].trim();
-      // Don't treat agency names as lenses — "5 opps for DHS" is a
+      // Don't treat agency names as lenses, "5 opps for DHS" is a
       // scope, not a lens. The caller decides what to do with the
       // scope (pull fresh data).
       const commonAgencies = /^(dhs|dod|navy|army|air force|space force|hhs|va|treasury|doj|irs|nasa|usaf|dla|disa|dia|nsa|cia|state|doc|epa|fda|cms|nih|fbi|uscis|cbp|ice|tsa|uscg|occ)$/;
@@ -1356,7 +1356,7 @@ export async function buildPipelineList({ rows, count, lens, scope, endpoint }) 
   } catch (err) {
     console.warn('[pipeline] insight generation failed, using deterministic fallback:', err.message);
     insightsFailed = true;
-    // Graceful degradation — when the Lambda insight call fails, produce
+    // Graceful degradation, when the Lambda insight call fails, produce
     // deterministic intro + outro text from the real records so the
     // seller still gets some framing instead of a raw list. Per-record
     // insights stay empty; the intro carries the load.
@@ -1366,15 +1366,15 @@ export async function buildPipelineList({ rows, count, lens, scope, endpoint }) 
     const expiringSoon = records.filter(r => r.daysLeft !== null && r.daysLeft <= 90).length;
 
     if (hasLens) {
-      intro = `Alright, here's ${records.length} from ${scopeLabel}, screened for ${lens}. Expiring contracts first, then the heavy-dollar ones — that's where your time pays off.`;
+      intro = `Alright, here's ${records.length} from ${scopeLabel}, screened for ${lens}. Expiring contracts first, then the heavy-dollar ones, that's where your time pays off.`;
     } else {
       intro = `Alright, here's ${records.length} from ${scopeLabel}. Expiring first, then biggest dollars. Work from the top.`;
     }
 
     if (top && expiringSoon > 0) {
-      outro = `Start with #1 — closest to recompete and the biggest move you can actually influence this quarter. Go.`;
+      outro = `Start with #1, closest to recompete and the biggest move you can actually influence this quarter. Go.`;
     } else if (top) {
-      outro = `Start with #1 — biggest dollars on the page. Get in front of the PM before the recompete window opens.`;
+      outro = `Start with #1, biggest dollars on the page. Get in front of the PM before the recompete window opens.`;
     }
   }
 
@@ -1387,7 +1387,7 @@ export async function buildPipelineList({ rows, count, lens, scope, endpoint }) 
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// askMo — top-level orchestrator for one user turn
+// askMo, top-level orchestrator for one user turn
 // ─────────────────────────────────────────────────────────────────────
 //
 // Handles both paths:
@@ -1396,18 +1396,18 @@ export async function buildPipelineList({ rows, count, lens, scope, endpoint }) 
 //     fires second grounded stream
 //
 // render callbacks:
-//   streamPreTagProse(text)  — called with progressively-accumulating text
+//   streamPreTagProse(text) , called with progressively-accumulating text
 //                              BEFORE a <data> tag is detected. Caller
 //                              renders markdown inline.
-//   onDataTag(resolverInput) — called when a <data> tag is detected but
+//   onDataTag(resolverInput), called when a <data> tag is detected but
 //                              before the fetch fires. Caller should show
 //                              a loading card. Return a reference that
 //                              renderDataCard() will use.
-//   renderDataCard(cardRef, rows, input)  — called with the fetched rows.
+//   renderDataCard(cardRef, rows, input) , called with the fetched rows.
 //                                            Caller renders the actual card.
-//   streamPostTagProse(text) — called with Mo's grounded second pass prose.
-//   renderError(msg)         — called on any failure.
-//   complete()               — called when the whole turn is done.
+//   streamPostTagProse(text), called with Mo's grounded second pass prose.
+//   renderError(msg)        , called on any failure.
+//   complete()              , called when the whole turn is done.
 // ─────────────────────────────────────────────────────────────────────
 
 // Detect whether a user's current message is a TRUE refer-back to a
@@ -1426,7 +1426,7 @@ export async function buildPipelineList({ rows, count, lens, scope, endpoint }) 
 // refer-backs ("what about VA", "just Navy"), we still send history
 // because the message would be unintelligible without it.
 //
-// Heuristic — returns true if the message looks like a refer-back:
+// Heuristic, returns true if the message looks like a refer-back:
 //   - Short opener words: "what about", "how about", "and ", "just "
 //   - Pronouns referring to prior context: "that", "those", "this", "them"
 //   - Bare narrowing: just an agency/topic word, or starts with a comma/and
@@ -1434,7 +1434,7 @@ export async function buildPipelineList({ rows, count, lens, scope, endpoint }) 
 //
 // Conservative on the false-positive side: when in doubt, treat as
 // fresh. False negatives (treating a real follow-up as fresh) just mean
-// Mo gets less context — she may ask for clarification. False positives
+// Mo gets less context, she may ask for clarification. False positives
 // (treating a fresh query as a follow-up) cause the bug we're fixing —
 // Flash Lite anchors on stale context.
 export function looksLikeFollowUp(question) {
@@ -1442,18 +1442,32 @@ export function looksLikeFollowUp(question) {
   const q = question.trim().toLowerCase();
   if (q.length === 0) return false;
 
-  // Very short messages (< 4 words) without a verb are usually refer-backs:
+  // Pronoun reference patterns — strong refer-back signal at any length.
+  // Check FIRST so short refer-backs like "show me their subs" are caught
+  // before the verb-exemption branch returns false.
+  if (/\b(their|those|that one|that prime|that vendor|that company|the same)\b/i.test(q)) {
+    return true;
+  }
+
+  // Very short messages (< 5 words) without a verb are usually refer-backs:
   // "Navy", "VA", "expiring", "above $5M", "small business set-asides"
   const wordCount = q.split(/\s+/).length;
-  if (wordCount <= 3) {
-    // But "show me X" is a 3-word fresh query — exempt clear command verbs
-    if (/^(show|find|get|pull|tell|give|list|who's|whats|what's|i sell|i cover|i rep)/i.test(q)) {
+  if (wordCount <= 4) {
+    // Exempt clear command verbs and identity/meta questions. "show me X",
+    // "who subs for X", "who are you", "where are you", "help", "hi",
+    // "thanks" are NOT refer-backs to prior data, they're fresh queries
+    // (or conversational openers) that should not pull in stale context.
+    if (/^(show|find|get|pull|tell|give|list|who's|whats|what's|i sell|i cover|i rep|i work|who subs|who covers|who works|who competes)/i.test(q)) {
+      return false;
+    }
+    // Identity / meta / conversational greetings, all fresh
+    if (/^(who are you|who made you|what are you|what can you do|where are you|how do you work|why|hi$|hello|hey$|thanks|thank you|help$|help me$|test|debug)/i.test(q)) {
       return false;
     }
     return true;
   }
 
-  // Refer-back openers — first 1-3 words are the tell
+  // Refer-back openers, first 1-3 words are the tell
   const referOpeners = [
     'what about', 'how about', 'and what', 'and how', 'and also',
     'same but', 'same with', 'same for', 'same thing',
@@ -1470,13 +1484,7 @@ export function looksLikeFollowUp(question) {
     if (q.startsWith(opener)) return true;
   }
 
-  // Pronoun reference patterns mid-message
-  // "show me their subs", "who competes with that one", etc.
-  if (/\b(their|those|that one|that prime|that vendor|that company|the same)\b/i.test(q)) {
-    return true;
-  }
-
-  // Otherwise — looks like a fresh, self-contained query
+  // Otherwise, looks like a fresh, self-contained query
   return false;
 }
 
@@ -1487,7 +1495,7 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
   let dataTagSeen = false;
   let preTagText = ''; // text before the <data> tag (final, clean)
 
-  // Debug trace — captured progressively through the turn so callers can
+  // Debug trace, captured progressively through the turn so callers can
   // inspect exactly what Mo emitted, what attrs came out, what resolver
   // input was built, what USASpending returned, and which fallbacks fired.
   // Attached to every return shape. Turns no-op in production UI but the
@@ -1510,8 +1518,8 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
 
   // History decision: send conversation context ONLY when the user's
   // current message reads like a refer-back ("just Navy", "what about
-  // VA", "those primes"). For fresh queries — full vendor+agency
-  // statements, smart-pill clicks, new topics — send NO history. This
+  // VA", "those primes"). For fresh queries, full vendor+agency
+  // statements, smart-pill clicks, new topics, send NO history. This
   // eliminates Flash Lite anchoring on prior tag patterns and dragging
   // forward stale vendor / topic / attribute values.
   //
@@ -1542,7 +1550,7 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
         const tagInfo = findDataTag(accumulated);
 
         if (tagInfo && !tagInfo.pending) {
-          // Full <data> tag detected — pause, pull data, fire second call
+          // Full <data> tag detected, pause, pull data, fire second call
           dataTagSeen = true;
           preTagText = accumulated.slice(0, tagInfo.index).trim();
 
@@ -1563,18 +1571,18 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
           debug.resolverInput = { ...resolverInput };
           cardRef = render.onDataTag(resolverInput);
 
-          // Abort the first stream — we don't want Mo's speculative
+          // Abort the first stream, we don't want Mo's speculative
           // post-tag prose. We'll get grounded prose from the second call.
           abort.abort();
 
           // Stash resolverInput on cardRef for the later fetch
           if (cardRef) cardRef._resolverInput = resolverInput;
         } else if (tagInfo && tagInfo.pending) {
-          // Partial tag — render only text before the partial start.
+          // Partial tag, render only text before the partial start.
           // Avoids flashing "<data" to the user mid-stream.
           render.streamPreTagProse(accumulated.slice(0, tagInfo.partialIndex).trim());
         } else {
-          // No tag yet — render everything we have
+          // No tag yet, render everything we have
           render.streamPreTagProse(accumulated);
         }
       },
@@ -1585,7 +1593,7 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
     });
 
     if (!dataTagSeen) {
-      // Coaching / conversational path — first pass WAS the whole answer
+      // Coaching / conversational path, first pass WAS the whole answer
       // firstPassFull is the final text; render.streamPreTagProse already
       // got the cumulative version as it arrived
       render.complete(debug);
@@ -1617,7 +1625,7 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
         console.warn('[askMo] Mo cited Award IDs in prose-only turn (no data pulled):', suspiciousIds);
         debug.fabricatedIds = suspiciousIds;
         debug.fabricatedProseOriginal = proseText;
-        const correction = `To give you real contracts with real IDs and values, I need to pull the data. Tell me the scope — agency, vendor, topic — and I'll run it fresh. For instance: "5 DISA opps" becomes a scoped pull the moment you name the agency.`;
+        const correction = `To give you real contracts with real IDs and values, I need to pull the data. Tell me the scope, agency, vendor, topic, and I'll run it fresh. For instance: "5 DISA opps" becomes a scoped pull the moment you name the agency.`;
         debug.fabricationScrubbed = true;
         return { mode: 'prose', text: correction, debug };
       }
@@ -1631,12 +1639,12 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
     // Competitor mode: before fetching USASpending, call mo_competitors to
     // get the head-to-head competitors of the original vendor, then expand
     // resolverInput.vendors to [originalVendor, ...competitors]. The card
-    // renders the combined footprint — seller + competitors in one view —
+    // renders the combined footprint, seller + competitors in one view —
     // which is what the seller actually wants to see for "who are my
     // competitors" questions.
     let competitorInfo = null;
     if (resolverInput?._competitors && resolverInput?.vendor) {
-      // Stash _sellerName up-front — we need it regardless of whether
+      // Stash _sellerName up-front, we need it regardless of whether
       // the competitor lookup succeeds. Without this, a failed lookup
       // leaves downstream code with no seller reference, which breaks
       // the channel-partner classifier and the card's sellerLens label.
@@ -1669,7 +1677,7 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
         console.warn('[askMo] competitor lookup failed, falling back to single-vendor card:', compErr.message);
         // Fall through with the original single-vendor input + _sellerName
         // already set above. Flag the failure so the payload summary can
-        // tell Mo "this is a degraded competitor view — don't invent
+        // tell Mo "this is a degraded competitor view, don't invent
         // competitor names the data doesn't show."
         resolverInput._competitorFetchFailed = true;
       }
@@ -1686,7 +1694,7 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
     // If Mo emitted subawards="true", we short-circuit the normal prime
     // fetch and instead hit USASpending's subaward mode. Different card,
     // different payload summary, different render path. Returns early
-    // with its own second stream — none of the prime-path logic below
+    // with its own second stream, none of the prime-path logic below
     // runs for subaward turns.
     if (resolverInput?._subawards) {
       let subs;
@@ -1705,7 +1713,7 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
         // Subaward data is legitimately sparse in federal. Not every
         // contract has visible sub-tier reporting. Tell the user honestly
         // instead of rendering an empty card.
-        render.renderError(`I don't see subaward data for that slice. Federal subaward reporting is patchy — smaller task orders and some vehicles don't require it. Try a different agency or a broader vendor filter.`);
+        render.renderError(`I don't see subaward data for that slice. Federal subaward reporting is patchy, smaller task orders and some vehicles don't require it. Try a different agency or a broader vendor filter.`);
         debug.mode = 'no_subaward_data';
         debug.fallbackType = 'no_data';
         debug.rowCountFinal = 0;
@@ -1809,7 +1817,7 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
     // Real example: SentinelOne's competitor expansion includes
     // CrowdStrike, whose product is called "Falcon". USASpending then
     // surfaces $1.2B in Bahrain F-16 "Hamad's Falcons" production
-    // contracts — clearly not endpoint security work. A seller reading
+    // contracts, clearly not endpoint security work. A seller reading
     // that card would walk away thinking CrowdStrike has a billion-
     // dollar Air Force contract to displace. That's false and
     // trust-damaging.
@@ -1823,7 +1831,7 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
     // rows like "CrowdStrike Falcon license".
     //
     // Only fires for competitor mode. Direct single-vendor pulls don't
-    // need this — a user asking about "SentinelOne at DHS" expects the
+    // need this, a user asking about "SentinelOne at DHS" expects the
     // 2-row Thundercat cut, not a category-filtered view of all
     // endpoint work.
     const isCompetitorMode = !!(resolverInput?._competitors || resolverInput?._sellerName);
@@ -1838,7 +1846,7 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
         // EDR) PLUS the canonical names of the seller and every known
         // competitor in the same category. We need the vendor-name leg
         // because descriptions often name the product without the
-        // category word — "CROWDSTRIKE FALCON LICENSES" is clearly
+        // category word, "CROWDSTRIKE FALCON LICENSES" is clearly
         // endpoint work even though the word ENDPOINT doesn't appear.
         // Adding the competitor list is what keeps those rows alive
         // while still dropping Bahrain F-16 contracts.
@@ -1887,7 +1895,7 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
     //
     //   (b) Unknown vendor (niche product, commodity, zinger like "MyPillow
     //       to DoD" or "mules to Army") → we CAN'T guess the category. The
-    //       right move is not a blind agency-wide fallback — that got us
+    //       right move is not a blind agency-wide fallback, that got us
     //       the SentinelOne/border-wall embarrassment. Instead, bail out
     //       with mode='needs_qualifier' so Mo can ask the user what their
     //       product actually does. Better a useful question than wrong data.
@@ -1896,7 +1904,7 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
     //       current "truly empty" path. Nothing to fall back to.
     //
     // One retry max. If the category refire also returns empty, we fall
-    // through to the qualifier path — can't recover further.
+    // through to the qualifier path, can't recover further.
     let reframed = false;
     let categoryInfo = null;
     const originalSeller = resolverInput._sellerName
@@ -1983,7 +1991,7 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
 
     // Build a payload summary for Mo's grounded interpretation. The
     // `reframed` flag tells Mo that the pull she's about to interpret
-    // isn't the literal vendor pull the user asked for — it's the
+    // isn't the literal vendor pull the user asked for, it's the
     // agency-wide fallback. She reads _reframedFromVendor to know what
     // the user originally pitched.
     const summary = summarizePayloadForMo(rows, resolverInput, { reframed });
@@ -1996,7 +2004,7 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
       { role: 'model', content: preTagText + '\n\n[data pulled; see card]' },
     ];
 
-    // Fire second stream — grounded interpretation
+    // Fire second stream, grounded interpretation
     const secondAbort = new AbortController();
     const secondPassFull = await streamOnce({
       endpoint,
@@ -2021,7 +2029,7 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
     // drift or hallucination patterns.
     debug.secondPassRaw = secondPassFull || '';
 
-    // ── Fabrication detection — multi-layered safety net ─────
+    // ── Fabrication detection, multi-layered safety net ─────
     //
     // This is the last guard before Mo's prose reaches a beta partner.
     // It checks three failure modes:
@@ -2030,7 +2038,7 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
     //   (b) Dollar amounts cited that don't match any real row within 10%
     //       (also accepts the grand total and the top-3 aggregation)
     //   (c) Vendor-at-agency pairs cited that don't exist in the rows
-    //       (skipped for now — too many false positives; revisit if beta
+    //       (skipped for now, too many false positives; revisit if beta
     //       users report it)
     //
     // Design principle: when a fabrication is caught, NEVER show a
@@ -2083,7 +2091,7 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
       if (unit === 'billion' || unit === 'b') value = num * 1e9;
       else if (unit === 'million' || unit === 'm') value = num * 1e6;
       else if (unit === 'thousand' || unit === 'k') value = num * 1e3;
-      else if (num >= 1e6) value = num; // raw number — treat as dollars
+      else if (num >= 1e6) value = num; // raw number, treat as dollars
       else continue; // too ambiguous (bare $5 could be anything); skip
 
       // Only flag amounts $100K and up. Anything smaller is either
@@ -2130,9 +2138,9 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
 
       let scrubbed;
       if (topName && topShare >= 25) {
-        scrubbed = `Look at the card — ${topName} is holding most of this. Your shortest path in is usually through them or the agency team they already work with. Going around an entrenched incumbent at this concentration gets expensive fast.`;
+        scrubbed = `Look at the card, ${topName} is holding most of this. Your shortest path in is usually through them or the agency team they already work with. Going around an entrenched incumbent at this concentration gets expensive fast.`;
       } else if (topName) {
-        scrubbed = `Good news on the card — no single dominant incumbent here, and that's rarer than you'd think. Means the door's actually open. Compete on capability rather than trying to displace a relationship.`;
+        scrubbed = `Good news on the card, no single dominant incumbent here, and that's rarer than you'd think. Means the door's actually open. Compete on capability rather than trying to displace a relationship.`;
       } else {
         scrubbed = `Card's in front of you. Pick the contract or office that matches what you sell and we'll go deeper on that one.`;
       }
