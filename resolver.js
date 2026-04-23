@@ -618,49 +618,69 @@ export function resolve(input) {
 
   if (vendorInputs.length > 0) {
     const legalNames = vendorInputs.map(lookupVendor);
-    // Send BOTH forms as keywords to USASpending: the legal name AND the
-    // raw input (e.g., ['GENERAL DYNAMICS INFORMATION TECHNOLOGY', 'GDIT']).
-    // USASpending's keyword filter appears to do token-contains across
-    // prime + sub fields and descriptions; the legal form and the short
-    // form often hit different records. This matters most in subaward
-    // mode — searching just 'GENERAL DYNAMICS INFORMATION TECHNOLOGY'
-    // returns GDIT-as-sub rows, while adding 'GDIT' unlocks the
-    // GDIT-as-prime rows because those use the short form in the Prime
-    // Recipient Name field. Verified via USASpending probe, April 2026.
+    // Build two sets: (1) keywordSet sent to USASpending's keyword filter,
+    // and (2) vendorScopeSet for the browser-side post-filter that does
+    // literal .includes() match against recipient name + description.
     //
-    // Beyond the explicit short form from raw input, we also DERIVE a
-    // short form from every legal name (DELOITTE CONSULTING → DELOITTE,
-    // CARAHSOFT TECHNOLOGY → CARAHSOFT, AMAZON WEB SERVICES → AMAZON WEB).
-    // This unlocks as-prime data for vendors whose alias entries are
-    // incomplete, AND for vendors not in the alias table at all. The
-    // probe showed Deloitte going from 2 → 10 prime rows and SAIC from
-    // 1 → 24 prime rows with this change, which are huge improvements
-    // for BDR use cases.
+    // Why split: USASpending's `keywords` filter is NOT a literal substring
+    // match. Probe data from April 2026 showed keywords=['AWS'] returning
+    // F-35 and nuclear-lab contracts whose descriptions contain NO literal
+    // 'aws' substring. USASpending appears to token-stem or fuzzy-match,
+    // which makes 3-char vendor acronyms (AWS, CGI, SAP, IBM) collide with
+    // common contract-description words like 'award' and 'awarded'. The
+    // collision dragged in ~84 junk rows that dominated the top-100 by
+    // award amount, leaving the post-filter with 1 real match.
     //
-    // Every keyword MUST be ≥3 characters or USASpending rejects the
-    // whole request with a 422: {"detail":"Field 'filters|keywords'
-    // value 'F5' is below min '3' items"}. Competitor lists may contain
-    // short names like 'F5' or 'C3' — those get dropped at the keyword
-    // stage but stay in postFilters.vendor_scope for client-side match.
-    const keywordSet = new Set();
+    // Fix: when a resolved legal name exists AND the raw short form is
+    // ≤3 chars, drop the short form from the USASpending keyword set.
+    // Longer forms (legal + derived) still get sent, so GDIT (4-char raw
+    // that doesn't collide) still gets both keywords. The post-filter
+    // still carries the 3-char form so a literal 'AWS CLOUD' in a
+    // description does still match client-side.
+    //
+    // Every keyword MUST be ≥3 characters or USASpending rejects with 422.
+    // F5, C3, and other short competitor names drop out naturally.
+    const keywordSet = new Set();   // sent to USASpending
+    const vendorScopeSet = new Set(); // used by client-side post-filter
+
+    // Legal names: always add to both (they're long enough to be unambiguous)
     for (const n of legalNames) {
-      if (String(n || '').trim().length >= 3) keywordSet.add(n);
+      if (String(n || '').trim().length >= 3) {
+        keywordSet.add(n);
+        vendorScopeSet.add(n);
+      }
     }
-    for (const raw of vendorInputs) {
-      const short = String(raw || '').trim();
-      if (short.length >= 3) keywordSet.add(short.toUpperCase());
+
+    // Raw inputs: always add to post-filter (literal match). Add to
+    // USASpending keywords ONLY if longer than 3 chars OR if no legal
+    // form was resolved (no alias found). The 3-char guard is what
+    // prevents 'AWS' from dragging in award/awarded fuzzy matches.
+    for (let i = 0; i < vendorInputs.length; i++) {
+      const raw = String(vendorInputs[i] || '').trim();
+      if (raw.length < 3) continue;
+      const upper = raw.toUpperCase();
+      vendorScopeSet.add(upper);
+      const legal = legalNames[i];
+      const hasLongerLegal = legal && String(legal).length > raw.length;
+      if (raw.length > 3 || !hasLongerLegal) {
+        keywordSet.add(upper);
+      }
     }
-    // Derived short forms from each legal name
+
+    // Derived short forms: always add to post-filter. Add to USASpending
+    // keywords only if >3 chars — same collision guard as for raw input.
+    // deriveShortForm('CGI FEDERAL') returns 'CGI' which would collide
+    // with contract-description fuzzy match just like 'AWS' does.
     for (const legal of legalNames) {
       const derived = deriveShortForm(legal);
-      if (derived) keywordSet.add(derived);
+      if (derived) {
+        vendorScopeSet.add(derived);
+        if (derived.length > 3) keywordSet.add(derived);
+      }
     }
-    topics.push(...keywordSet);
 
-    // Post-filter needles mirror the keyword set. Recipient fields on
-    // USASpending use the legal name; descriptions use short forms.
-    // Carry both so applyPostFilters can match either.
-    postFilters.vendor_scope = [...keywordSet];
+    topics.push(...keywordSet);
+    postFilters.vendor_scope = [...vendorScopeSet];
 
     // Also stash the legal names separately so the subaward direction
     // filter in stream-client can match against them without re-running
