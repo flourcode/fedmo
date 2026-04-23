@@ -538,37 +538,43 @@ export function resolve(input) {
 
   if (vendorInputs.length > 0) {
     const legalNames = vendorInputs.map(lookupVendor);
-    // Send vendor names as keywords to USASpending. Every keyword MUST be
-    // ≥3 characters or USASpending rejects the whole request with a 422:
-    //   {"detail":"Field 'filters|keywords' value 'F5' is below min '3'
-    //    items"}
-    // This matters for competitor lists where Mo passes in names like
-    // "F5" or "C3" — short by design. Drop any keyword under 3 chars;
-    // they'd fail validation anyway. For the truly edge case where
-    // every keyword for a vendor is too short (shouldn't happen with
-    // our legal-name table but defensive), fall back to the raw input
-    // padded if needed... actually no, just skip — a missing vendor
-    // match is better than a failed request.
-    const safeKeywords = legalNames.filter(n => String(n || '').trim().length >= 3);
-    topics.push(...safeKeywords);
-
-    // Post-filter needles: include BOTH the legal name ("AMAZON WEB SERVICES")
-    // AND the user's raw input ("aws"). Recipient fields on USASpending use
-    // the full legal name, so the legal name is the right match there. But
-    // contract descriptions often abbreviate ("AWS cloud services", "Splunk
-    // Enterprise", "Palantir Gotham"). Carrying both forms means we catch
-    // the reseller/integrator contracts that only mention the product by
-    // its short form in the description.
+    // Send BOTH forms as keywords to USASpending: the legal name AND the
+    // raw input (e.g., ['GENERAL DYNAMICS INFORMATION TECHNOLOGY', 'GDIT']).
+    // USASpending's keyword filter appears to do token-contains across
+    // prime + sub fields and descriptions; the legal form and the short
+    // form often hit different records. This matters most in subaward
+    // mode — searching just 'GENERAL DYNAMICS INFORMATION TECHNOLOGY'
+    // returns GDIT-as-sub rows, while adding 'GDIT' unlocks the
+    // GDIT-as-prime rows because those use the short form in the Prime
+    // Recipient Name field. Verified via USASpending probe, April 2026.
     //
-    // Short forms below 3 characters are skipped — "ai" or "hr" would match
-    // everything. The ones that matter ("AWS", "GCP", "IBM") are all ≥3.
-    const needles = new Set();
-    for (const n of legalNames) needles.add(n);
-    for (const raw of vendorInputs) {
-      const short = String(raw).trim();
-      if (short.length >= 3) needles.add(short.toUpperCase());
+    // Every keyword MUST be ≥3 characters or USASpending rejects the
+    // whole request with a 422: {"detail":"Field 'filters|keywords'
+    // value 'F5' is below min '3' items"}. Competitor lists may contain
+    // short names like 'F5' or 'C3' — those get dropped at the keyword
+    // stage but stay in postFilters.vendor_scope for client-side match.
+    const keywordSet = new Set();
+    for (const n of legalNames) {
+      if (String(n || '').trim().length >= 3) keywordSet.add(n);
     }
-    postFilters.vendor_scope = [...needles];
+    for (const raw of vendorInputs) {
+      const short = String(raw || '').trim();
+      if (short.length >= 3) keywordSet.add(short.toUpperCase());
+    }
+    topics.push(...keywordSet);
+
+    // Post-filter needles mirror the keyword set. Recipient fields on
+    // USASpending use the legal name; descriptions use short forms.
+    // Carry both so applyPostFilters can match either.
+    postFilters.vendor_scope = [...keywordSet];
+
+    // Also stash the legal names separately so the subaward direction
+    // filter in stream-client can match against them without re-running
+    // the lookup. vendor_scope contains BOTH raw and legal forms mixed;
+    // this field is just the legal-form subset.
+    postFilters.vendor_legal_names = legalNames
+      .filter(n => String(n || '').trim().length >= 3)
+      .map(n => String(n).toUpperCase());
   }
 
   // ── Agency resolution ──────────────────────────────────────────

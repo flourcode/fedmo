@@ -602,7 +602,7 @@ export async function fetchUsaspending(resolverInput, endpoint) {
 // (subaward data is already narrow), the filter just scopes the result set.
 // ─────────────────────────────────────────────────────────────────────
 export async function fetchSubawards(resolverInput, endpoint) {
-  const { filters: resolvedFilters } = resolve(resolverInput);
+  const { filters: resolvedFilters, postFilters: resolvedPostFilters } = resolve(resolverInput);
   const filters = {
     time_period: trailing12Mo(),
     award_type_codes: CONTRACT_TYPES,
@@ -669,11 +669,39 @@ export async function fetchSubawards(resolverInput, endpoint) {
   // falling back to Direction A. USASpending subaward reporting is
   // sparse by design (mandatory only above $30K, lags by months),
   // and silence is better than a misleading card.
+  // Direction filter: keep only rows where the queried vendor is the PRIME.
+  // Critical: we must match against BOTH the short form (what the user
+  // typed, e.g. "GDIT") AND the legal form (what USASpending stores in
+  // the Prime Recipient Name field, e.g. "GENERAL DYNAMICS INFORMATION
+  // TECHNOLOGY, INC."). If we only test one, we miss real prime-level
+  // rows. Verified via USASpending probe, April 2026: with needle="GDIT"
+  // and Prime="GENERAL DYNAMICS INFORMATION TECHNOLOGY, INC.", the
+  // substring test fails and all rows get dropped.
   const vendorInput = resolverInput?.vendor
     || (Array.isArray(resolverInput?.vendors) ? resolverInput.vendors[0] : null);
   if (vendorInput && rows.length > 0) {
-    const needle = String(vendorInput).toUpperCase();
-    rows = rows.filter(r => (r.prime || '').toUpperCase().includes(needle));
+    // Build the same needle set the resolver uses for keywords: raw
+    // input + legal name, each upper-cased. Any match against Prime
+    // Recipient Name keeps the row.
+    const needles = new Set();
+    const short = String(vendorInput || '').trim().toUpperCase();
+    if (short.length >= 3) needles.add(short);
+    // Pull the legal name(s) from the resolver's postFilters — this is
+    // the authoritative resolution (handles vendor-alias variants,
+    // normalizes case, etc.). The resolver stamped these during the
+    // resolve() call at the top of this function.
+    if (Array.isArray(resolvedPostFilters?.vendor_legal_names)) {
+      for (const legal of resolvedPostFilters.vendor_legal_names) {
+        needles.add(String(legal).toUpperCase());
+      }
+    }
+    rows = rows.filter(r => {
+      const prime = (r.prime || '').toUpperCase();
+      for (const needle of needles) {
+        if (prime.includes(needle)) return true;
+      }
+      return false;
+    });
     rows._subawardDirection = 'as_prime';
   }
 
