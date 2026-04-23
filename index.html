@@ -235,12 +235,12 @@ button { cursor: pointer; }
   max-width: 720px;
   margin: 0 auto;
   /* Bottom padding gives appendUserTurn's scroll enough room to pin the
-     user bubble just under the header. On a ~850px phone, a user bubble
-     plus a minimal Mo-turn skeleton needs ~400px of content below it to
-     push the bubble to the top. 35vh threads the needle — enough to
-     scroll cleanly when a turn first mounts, not so much that the page
-     feels like it floats into empty space after the card renders. */
-  padding: 16px 12px 35vh;
+     user bubble just under the header once the Mo turn has grown (prose
+     streaming / card rendered). At 10vh the scroll may briefly undershoot
+     during the ~few-hundred-ms window when the Mo turn is still a tiny
+     skeleton, but the eye is on the streaming prose at that moment and
+     the user bubble settles into place as layout grows. */
+  padding: 16px 12px 10vh;
 }
 
 .greeting { padding: 32px 4px 16px; }
