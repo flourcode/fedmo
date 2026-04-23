@@ -3763,49 +3763,6 @@ const App = {
 
       // Show an error state inside the turn. Keeps any successfully-rendered
       // pre-tag prose and card above, only the bottom shows the error.
-      // Render a sparse "channel-only" explanation panel when the
-      // fetch returned a collision pattern (thin rows + no vendor in
-      // Recipient Name). Replaces the data card entirely — the
-      // misleading $ stats and collision-row prime list would do more
-      // harm than good. Mo's second-pass prose still runs after this
-      // to fill in strategic context from her general knowledge.
-      renderLowConfidenceCard: (cardRef, flag, resolverInput) => {
-        if (!cardRef) return;
-        const vendorLabel = Html.escapeHtml(flag.vendor);
-        cardRef.innerHTML = `
-          <div class="turn-mo-card" style="border-radius: 16px; padding: 22px 24px;">
-            <div class="mo-framing" style="background: var(--surface-subtle, #fff7e8); border-left: 3px solid var(--accent, #c97c1b); padding: 14px 16px; margin-bottom: 14px; font-size: 14px; line-height: 1.5;">
-              <strong>${vendorLabel}</strong> doesn't show up as a direct prime in USASpending in a way worth charting. That's normal for platform vendors — most of their federal volume flows through resellers (Carahsoft, Four Points, DLT, Thundercat) and gets bundled by integrators (GDIT, Leidos, Accenture) into larger programs. A direct vendor search won't surface any of that.
-            </div>
-            <div style="font-size: 14px; color: var(--text-body); line-height: 1.55;">
-              <strong>Better next moves to actually see ${vendorLabel}'s federal footprint:</strong>
-              <ul style="margin: 10px 0 0 0; padding-left: 22px; line-height: 1.7;">
-                <li>Ask <em>"who subawards to ${vendorLabel}"</em> — shows the primes hiring ${vendorLabel} as a sub</li>
-                <li>Ask <em>"show me Carahsoft's ${vendorLabel} contracts"</em> — the reseller channel view</li>
-                <li>Ask <em>"who's using ${vendorLabel} at [agency]"</em> — agency-scoped search that catches bundled work</li>
-              </ul>
-            </div>
-          </div>
-        `;
-        // Still set chipData so smart pills fire. No cardSpec here
-        // because there's no real market data to derive pills from —
-        // pills will come from the user's question + Mo's prose.
-        turnEls.chipData = {
-          mode: 'low_confidence',
-          rows: [],
-          resolverInput,
-          cardSpec: {
-            stats: [],
-            primes: [],
-            treemap: [],
-            headline: `${flag.vendor} — no direct prime footprint; sold through channel`,
-            _isLowConfidence: true,
-            _vendor: flag.vendor,
-          },
-        };
-        this._track('low_confidence_card_render', { vendor: flag.vendor, rowCount: flag.rowCount });
-      },
-
       renderError: (msg) => {
         // Clear the "Pulling data..." loading placeholder from the card
         // slot so it doesn't hang visible alongside the error message.
