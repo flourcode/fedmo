@@ -111,42 +111,67 @@ export const vendorCategoriesReady = (async () => {
 // so we can enrich rows post-fetch and get a real command-level
 // breakdown (NAVSEA / NAVAIR / NIWC / etc.) in the card treemap.
 //
-// Best-effort load. If offices.json is missing or malformed, we skip
-// the enrichment and the treemap falls back to subtier-level data
-// (one block for Navy, which is visually underwhelming but correct).
+// LAZY LOAD (Apr 2026): ~106KB raw / ~33KB gzipped, used only for DoD
+// treemap enrichment. Non-DoD queries never touch it. Even on DoD
+// queries, the card renders correctly without it — we just fall back
+// to subtier-level names (one "NAVY" block) instead of command-level.
+// We now defer until either:
+//   (a) a caller warms it via warmOffices() — oldmo.html kicks this
+//       off on idle and on any chip tap, so by the time USASpending
+//       returns rows (typically 1-3s), the file is loaded
+//   (b) the first officeFromAwardId() call during card render — in
+//       the unlikely case that rows come back before the warm fires,
+//       we skip enrichment for that card and it self-heals on the next
 // ─────────────────────────────────────────────────────────────────────
 
 let _offices = {};            // prefix → "OFFICE NAME"
 let _officesLoaded = false;
+let _officesLoading = null;   // promise guard
 
-export const officesReady = (async () => {
-  try {
-    const url = new URL('./offices.json', import.meta.url);
-    const res = await fetch(url);
-    if (!res.ok) {
-      console.warn(`[stream-client] offices.json fetch failed: HTTP ${res.status}. Office enrichment disabled.`);
+export function warmOffices() {
+  if (_officesLoaded) return Promise.resolve();
+  if (_officesLoading) return _officesLoading;
+  _officesLoading = (async () => {
+    try {
+      const url = new URL('./offices.json', import.meta.url);
+      const res = await fetch(url);
+      if (!res.ok) {
+        console.warn(`[stream-client] offices.json fetch failed: HTTP ${res.status}. Office enrichment disabled.`);
+        _officesLoaded = true;
+        return;
+      }
+      const data = await res.json();
+      if (data && typeof data === 'object') {
+        _offices = data;
+        _officesLoaded = true;
+      } else {
+        console.warn('[stream-client] offices.json has unexpected shape. Office enrichment disabled.');
+        _officesLoaded = true;
+      }
+    } catch (err) {
+      console.warn('[stream-client] offices.json load error:', err.message);
       _officesLoaded = true;
-      return;
     }
-    const data = await res.json();
-    if (data && typeof data === 'object') {
-      _offices = data;
-      _officesLoaded = true;
-    } else {
-      console.warn('[stream-client] offices.json has unexpected shape. Office enrichment disabled.');
-      _officesLoaded = true;
-    }
-  } catch (err) {
-    console.warn('[stream-client] offices.json load error:', err.message);
-    _officesLoaded = true;
-  }
-})();
+  })();
+  return _officesLoading;
+}
+
+// Backwards-compat shim for any code still awaiting officesReady.
+export const officesReady = Promise.resolve();
 
 // Try progressive prefix matching, 6 chars first, then 5, then 4.
 // Returns the decoded office name, or null if no match. Takes the
 // full Award ID string. Defensive on null/undefined.
 function officeFromAwardId(awardId) {
   if (!awardId || typeof awardId !== 'string') return null;
+  // If the lazy load hasn't happened yet (rare — idle + chip-tap warmups
+  // should have fired), kick one off in the background so the NEXT card
+  // gets enrichment. This card will render without office decoding,
+  // identical to the no-offices-file fallback.
+  if (!_officesLoaded) {
+    warmOffices();
+    return null;
+  }
   const id = awardId.toUpperCase();
   return _offices[id.substring(0, 6)]
     || _offices[id.substring(0, 5)]
