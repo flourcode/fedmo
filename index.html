@@ -3963,6 +3963,23 @@ const App = {
     thread.appendChild(wrap);
     this._updateEmptyState();
     this._updateJumpVisibility();
+    // Pop the new Mo turn to the top of the viewport (just under the
+    // fixed header). Previously we scrolled the user bubble here; that
+    // left Mo's turn to mount wherever the layout happened to place
+    // it — typically near the bottom of the screen on mobile after a
+    // couple of turns. Scrolling the Mo turn up gives the prose + card
+    // the full viewport to render into, which is what the user came
+    // to see.
+    //
+    // requestAnimationFrame (not setTimeout) ensures the browser has
+    // laid out the new element before we measure its position. Smooth
+    // behavior so the motion feels intentional rather than jumpy.
+    requestAnimationFrame(() => {
+      const header = document.getElementById('moHeader');
+      const headerH = header ? header.getBoundingClientRect().height : 60;
+      const target = wrap.getBoundingClientRect().top + window.pageYOffset - headerH - 12;
+      window.scrollTo({ top: target, behavior: 'smooth' });
+    });
     return {
       turnId,
       wrap,
@@ -3984,13 +4001,12 @@ const App = {
     wrap.innerHTML = `<div class="turn-user-bubble">${Html.escapeHtml(text)}</div>`;
     thread.appendChild(wrap);
     this._updateEmptyState();
-    // Auto-scroll the user turn into view
-    setTimeout(() => {
-      const header = document.getElementById('moHeader');
-      const headerH = header ? header.getBoundingClientRect().height : 60;
-      const target = wrap.getBoundingClientRect().top + window.pageYOffset - headerH - 12;
-      window.scrollTo({ top: target, behavior: 'smooth' });
-    }, 50);
+    // Note: user bubble used to auto-scroll into view here. We removed it
+    // because appendCompositeTurn (which fires ~immediately after this)
+    // now owns the scroll position — it pins the Mo turn just under the
+    // header so Mo's prose + card get the full viewport. User bubble
+    // sits just above the fold; users can scroll up to re-read if they
+    // want, but nothing worth seeing is there during an active turn.
   },
 
   // Build the "currently on screen" card summary that gets injected into
