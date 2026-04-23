@@ -647,38 +647,34 @@ export async function fetchSubawards(resolverInput, endpoint) {
     _raw: s,
   }));
 
-  // ── Subaward direction post-filter ───────────────────────────────
+  // ── Subaward direction filter ───────────────────────────────────
   //
-  // USASpending's subaward keyword-match scans BOTH the Prime Recipient
-  // Name field AND the Sub-Awardee Name field. When a seller asks
-  // "who's subbing to SAIC", they want rows where SAIC is the PRIME
-  // (so they can see SAIC's subs, the firms the seller could displace
-  // or join). But the API returns both directions mixed, and for a big
-  // firm like SAIC the "SAIC-as-sub" rows (TekSynap → SAIC, Corner
-  // Alliance → SAIC) often dominate, because SAIC is big enough to show
-  // up as a sub to many other primes.
+  // USASpending's subaward keyword-match scans BOTH Prime Recipient
+  // Name AND Sub-Awardee Name. When a seller asks "who subs for
+  // Accenture", they want Direction B: Accenture IS the prime, these
+  // are the subs Accenture hired (AWS, CrowdStrike, Carahsoft, etc.).
+  // That's the teaming intelligence, what work is Accenture farming
+  // out that the seller could win, displace, or wrap with adjacent
+  // value.
   //
-  // Fix: if the query had a vendor keyword, post-filter to rows where
-  // the vendor matches Prime Recipient Name. This gives the seller what
-  // they actually wanted, the subs UNDER their target prime.
+  // The API also returns Direction A rows (where the vendor appears
+  // as a SUB to some other prime: GDIT → Accenture, SAIC → Accenture).
+  // This is the OPPOSITE of what the user asked for. Showing these
+  // rows would mislead SaaS/SMB sellers who want to find Accenture's
+  // downstream vendors, not its upstream customers.
   //
-  // Zero-row fallback: if filtering by prime produces no rows, the
-  // vendor genuinely shows up only as a sub in this slice. Return the
-  // unfiltered rows so the user sees SOMETHING real rather than an
-  // empty card. Log the direction so Mo's payload summary can frame
-  // the data honestly ("here's where SAIC shows up as a sub").
+  // So we filter strictly to as-prime rows. If that produces zero
+  // rows, the vendor genuinely has no reportable subaward activity
+  // in this slice. Show an honest "no data" message instead of
+  // falling back to Direction A. USASpending subaward reporting is
+  // sparse by design (mandatory only above $30K, lags by months),
+  // and silence is better than a misleading card.
   const vendorInput = resolverInput?.vendor
     || (Array.isArray(resolverInput?.vendors) ? resolverInput.vendors[0] : null);
   if (vendorInput && rows.length > 0) {
     const needle = String(vendorInput).toUpperCase();
-    const asPrimeRows = rows.filter(r => (r.prime || '').toUpperCase().includes(needle));
-    if (asPrimeRows.length > 0) {
-      rows = asPrimeRows;
-      rows._subawardDirection = 'as_prime';
-    } else {
-      // Fallback: vendor only shows up as a sub in this dataset
-      rows._subawardDirection = 'as_sub';
-    }
+    rows = rows.filter(r => (r.prime || '').toUpperCase().includes(needle));
+    rows._subawardDirection = 'as_prime';
   }
 
   return rows;
@@ -689,7 +685,7 @@ export async function fetchSubawards(resolverInput, endpoint) {
 // sub spend, top subs by take.
 export function summarizeSubawardsForMo(subs, resolverInput) {
   if (!subs || subs.length === 0) {
-    return `No subaward records returned. Tell the user subaward data is sparse for this slice and suggest they look at the prime-level recompete signals instead.`;
+    return `No subaward records where this vendor is the prime. Either they're delivering the work organically, or their sub-reporting hasn't posted yet (USASpending subaward reporting is sparse, mandatory only above $30K and lags by months). Tell the seller this plainly. Suggest they look at the vendor's prime-level recompete signals, or broaden the time window.`;
   }
   const total = subs.reduce((s, r) => s + (r.amount || 0), 0);
 
@@ -730,26 +726,17 @@ export function summarizeSubawardsForMo(subs, resolverInput) {
     .map(([k, v]) => `${k}=${Array.isArray(v) ? v.join('|') : v}`)
     .join(', ');
 
-  // Direction framing: the post-filter in fetchSubawards stamps
-  // _subawardDirection on the rows array when there's a vendor input.
-  // 'as_prime' (default) means the vendor IS the prime and these are
-  // their subs, what the seller almost always wants. 'as_sub' means
-  // the vendor-as-prime filter came back empty and we fell back to the
-  // unfiltered set, the vendor only appears here as a sub to other
-  // primes. Mo needs to know which slice this is so her coaching
-  // targets the right audience.
-  const direction = subs._subawardDirection;
+  // Direction framing: fetchSubawards filters strictly to Direction B
+  // (the queried vendor IS the prime, these are the subs under that
+  // prime). That's what the seller wants: who is Accenture farming
+  // work out to, where's the teaming opportunity. If the vendor had
+  // no as-prime rows, the function returned empty and we never get
+  // here. So we can always frame the data as "vendor is the prime."
   const vendorName = resolverInput?.vendor
     || (Array.isArray(resolverInput?.vendors) ? resolverInput.vendors[0] : null);
 
-  let directionBlock = '';
-  if (direction === 'as_prime' && vendorName) {
-    directionBlock = `
-DIRECTION: ${vendorName} is the prime. These subawards show who ${vendorName} is awarding sub-work TO. The seller wants to know these subs so they can (a) displace a weak incumbent sub, or (b) partner with an established sub who's already in ${vendorName}'s delivery chain. Coach them accordingly.`;
-  } else if (direction === 'as_sub' && vendorName) {
-    directionBlock = `
-DIRECTION: ${vendorName} does NOT appear as a prime on any subawards in this slice. These rows show ${vendorName} appearing as a SUB to other primes. Tell the seller honestly that ${vendorName} isn't running sub teams in this agency, they're the hands on someone else's contract. The coaching shifts: if the seller wants to team with or displace ${vendorName}'s position, they need to target ${vendorName}'s prime customers (the top primes listed below) instead.`;
-  }
+  const directionBlock = vendorName ? `
+DIRECTION: ${vendorName} is the prime. These subawards show who ${vendorName} is awarding sub-work TO. The seller wants to know these subs so they can (a) displace a weak incumbent sub with a better capability, (b) partner with an established sub who's already in ${vendorName}'s delivery chain, or (c) offer ${vendorName} an adjacent value-added service the current subs don't provide. Coach them accordingly.` : '';
 
   return `Query: ${queryDesc || '(no filters)'} (SUBAWARD CUT)${directionBlock}
 Total sub work (top ${subs.length} subs, last 12mo): $${(total / 1_000_000).toFixed(1)}M
@@ -1749,7 +1736,7 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
         // Subaward data is legitimately sparse in federal. Not every
         // contract has visible sub-tier reporting. Tell the user honestly
         // instead of rendering an empty card.
-        render.renderError(`I don't see subaward data for that slice. Federal subaward reporting is patchy, smaller task orders and some vehicles don't require it. Try a different agency or a broader vendor filter.`);
+        render.renderError(`No subaward activity found where this vendor is the prime. Either they're delivering the work organically, or their sub-reporting hasn't posted yet (USASpending requires reporting only above $30K and often lags the prime award by months). Try a broader time window, drop the agency filter, or look at their prime-level contracts instead.`);
         debug.mode = 'no_subaward_data';
         debug.fallbackType = 'no_data';
         debug.rowCountFinal = 0;
