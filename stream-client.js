@@ -1507,7 +1507,7 @@ export function looksLikeFollowUp(question) {
     // which causes Mo to pull forward the previous turn's vendor and
     // emit a <data> tag for the wrong company entirely. Verified April
     // 2026 with the Northrop test case.
-    if (/^(show|find|get|pull|tell|give|list|who's|whats|what's|i sell|i cover|i rep|i work|who subs|who subawards|who covers|who works|who competes|who hires|who does)/i.test(q)) {
+    if (/^(show|find|get|pull|tell|give|list|who's|whats|what's|i sell|i cover|i rep|i work|who subs|who subawards|who covers|who works|who competes|who hires|who does|who resells|who sells|who ships)/i.test(q)) {
       return false;
     }
     // Identity / meta / conversational greetings, all fresh
