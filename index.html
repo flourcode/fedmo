@@ -2067,11 +2067,17 @@ function analyzeSubawards(subs, marketLabel, opts = {}) {
   return {
     label: marketLabel,
     verdict: { face, text: verdict, action },
-    stats: [
-      { value: Utils.money(totalSubVal), label: 'Sub spend' },
-      { value: String(primeCount), label: 'Primes' },
-      { value: String(subCount), label: 'Subs' },
-    ],
+    stats: direction === 'from'
+      ? [
+          { value: Utils.money(totalSubVal), label: 'Sub spend' },
+          { value: String(primeCount), label: 'Primes buying' },
+          { value: String(subs.length), label: 'Awards' },
+        ]
+      : [
+          { value: Utils.money(totalSubVal), label: 'Sub spend' },
+          { value: String(subCount), label: 'Subs hired' },
+          { value: String(subs.length), label: 'Awards' },
+        ],
     signals,
     relationships,
     totalSubs: subs.length,
