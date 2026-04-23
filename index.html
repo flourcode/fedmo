@@ -3657,11 +3657,35 @@ const App = {
         cardRef.innerHTML = '';
         if (cardBody) cardRef.appendChild(cardBody);
         else cardRef.appendChild(fullTurn);
-        // Subaward mode doesn't fire smart pills today, subaward specs
-        // have a different shape than card specs and would need their
-        // own pill-generation path. Leaving chipData populated so if
-        // pills get wired up later the context is there.
-        turnEls.chipData = { mode: 'subaward', rows, resolverInput };
+        // Build a cardSpec-shaped object so smart pills can fire for
+        // subaward turns too. The fields map the subaward spec into the
+        // shape fetchSmartPills expects:
+        //   - stats: direct pass-through, labeled differently but same shape
+        //   - primes: the prime is the queried vendor; use the unique subs
+        //     from relationships as "context primes" so drill-type pills
+        //     can reference a real sub (e.g. "Show me Oracle at federal"
+        //     after seeing SAIC → Oracle $11M)
+        //   - headline: one-liner description of what this card shows
+        //   - treemap: top agencies by sub spend
+        const uniqueSubs = [...new Set((spec.relationships || []).map(r => r.sub))].filter(Boolean);
+        const agencyMap = new Map();
+        for (const r of (spec.relationships || [])) {
+          // relationships have .agency as a string already titled
+          if (!r.agency) continue;
+          agencyMap.set(r.agency, (agencyMap.get(r.agency) || 0) + 1);
+        }
+        const treemapFromSubs = [...agencyMap.entries()]
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 5)
+          .map(([name]) => ({ name }));
+        const subawardCardSpec = {
+          stats: spec.stats,
+          primes: uniqueSubs.slice(0, 10).map(name => ({ name })),
+          treemap: treemapFromSubs,
+          headline: `Subs ${spec.label} is hiring: ${uniqueSubs.slice(0, 3).join(', ')}${uniqueSubs.length > 3 ? ` and ${uniqueSubs.length - 3} more` : ''}`,
+          _isSubaward: true,
+        };
+        turnEls.chipData = { mode: 'subaward', rows, resolverInput, cardSpec: subawardCardSpec };
         this._track('subaward_card_render', { rows: subs.length });
       },
 
@@ -3755,11 +3779,12 @@ const App = {
       complete: (debug) => {
         if (chipsEl && turnEls.chipData) {
           const { mode, cardSpec } = turnEls.chipData;
-          // Only fire smart pills for actual data modes. Coaching replies,
-          // clarifying questions, and errors intentionally skip pills —
-          // the seller's next question is already in their head and pill
-          // suggestions would be noise.
-          if (mode === 'data' && cardSpec) {
+          // Fire smart pills for any turn that surfaced a data card
+          // (either a prime-level data card or a subaward card). Both
+          // card types have cardSpec populated by now. Coaching replies,
+          // clarifying questions, and errors intentionally skip pills
+          // since the seller's next question is already in their head.
+          if ((mode === 'data' || mode === 'subaward') && cardSpec) {
             // Grab Mo's post-card prose as it stands right now (streaming
             // is complete by the time complete() fires). This gives the
             // pill-generator the strategic context Mo just argued.
