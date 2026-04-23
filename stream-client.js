@@ -1508,10 +1508,17 @@ export function looksLikeFollowUp(question) {
   const wordCount = q.split(/\s+/).length;
   if (wordCount <= 4) {
     // Exempt clear command verbs and identity/meta questions. "show me X",
-    // "who subs for X", "who are you", "where are you", "help", "hi",
+    // "who subs for X", "who subawards to X", "who does X subaward to",
+    // "who hires X", "who are you", "where are you", "help", "hi",
     // "thanks" are NOT refer-backs to prior data, they're fresh queries
     // (or conversational openers) that should not pull in stale context.
-    if (/^(show|find|get|pull|tell|give|list|who's|whats|what's|i sell|i cover|i rep|i work|who subs|who covers|who works|who competes)/i.test(q)) {
+    // The subaward drill verbs ("who subawards", "who hires", "who does")
+    // are specifically important: without them, 4-word subaward queries
+    // like "who subawards to northrop" get misclassified as refer-backs,
+    // which causes Mo to pull forward the previous turn's vendor and
+    // emit a <data> tag for the wrong company entirely. Verified April
+    // 2026 with the Northrop test case.
+    if (/^(show|find|get|pull|tell|give|list|who's|whats|what's|i sell|i cover|i rep|i work|who subs|who subawards|who covers|who works|who competes|who hires|who does)/i.test(q)) {
       return false;
     }
     // Identity / meta / conversational greetings, all fresh
