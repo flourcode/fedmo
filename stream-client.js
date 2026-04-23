@@ -1808,20 +1808,35 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
         const dirLabel = dir === 'to'
           ? `as a prime hiring subs`
           : `as a sub hired by primes`;
-        const oppositeQuery = dir === 'to'
-          ? `"who subawards to ${vName}"`
-          : `"who does ${vName} subaward to"`;
         // Render a simple "no data" panel in the card slot. Not an error,
         // not a scary banner — just honest framing plus a concrete next
-        // move for the user.
+        // move for the user. The flip-direction button uses the same
+        // .mo-followup + data-ask pattern as inline followups so the
+        // delegated click handler in oldmo.html picks it up for free.
         if (cardRef) {
+          // Local HTML-escape helper. Stream-client rarely renders HTML
+          // directly (oldmo.html owns that layer), so instead of adding
+          // an import we keep this minimal escape inline.
+          const esc = (s) => String(s ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+          const flipAsk = dir === 'to'
+            ? `Who subawards to ${vName}`
+            : `Who does ${vName} subaward to`;
+          const flipPrompt = dir === 'to'
+            ? `primes hiring <strong>${esc(vName)}</strong> as a sub`
+            : `the subs <strong>${esc(vName)}</strong> is hiring`;
           cardRef.innerHTML = `
             <div class="turn-mo-card" style="padding: 20px 22px;">
               <div class="mo-framing">
-                No subaward records found for <strong>${vName}</strong> ${dirLabel} in the last 12 months. USASpending subaward reporting is sparse — mandatory only above $30K and lags the prime award by months, and classified contracts often don't report at all.
+                No subaward records found for <strong>${esc(vName)}</strong> ${dirLabel} in the last 12 months. USASpending subaward reporting is sparse — mandatory only above $30K and lags the prime award by months, and classified contracts often don't report at all.
               </div>
-              <div style="margin-top: 12px; font-size: 14px; color: var(--text-body); line-height: 1.55;">
-                Try asking ${oppositeQuery} to see the opposite direction, or look at <strong>${vName}</strong>'s prime-level contracts.
+              <div class="mo-direction-flip" style="margin-top:14px; padding:10px 12px; background:var(--surface-subtle, #f6f7f9); border-radius:8px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+                <span style="font-size:13px; color:var(--text-body); line-height:1.4;">Want the other direction — ${flipPrompt}?</span>
+                <button class="mo-followup" data-ask="${esc(flipAsk)}" style="font-size:13px; padding:6px 12px; flex-shrink:0;">Flip direction</button>
               </div>
             </div>
           `;

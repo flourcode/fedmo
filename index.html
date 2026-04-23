@@ -4088,6 +4088,29 @@ const App = {
     // Reporting gap note, honest, short, earns trust
     html += `<div class="mo-subaward-note">${Html.escapeHtml(spec.reportingNote)}</div>`;
 
+    // Direction-flip pill. "Who subs to X" is ambiguous in federal-speak:
+    // some sellers mean "who acts as a sub TO X" (X is prime, direction
+    // "to"), others mean "who subawards work TO X" (X is sub, direction
+    // "from"). We picked one default for Mo's interpretation, but we
+    // always offer the opposite direction in the card itself so a one-
+    // click flip covers the ambiguity. Uses the same .mo-followup +
+    // data-ask pattern as inline followups — the delegated click handler
+    // in init() submits the data-ask value as a new user turn.
+    {
+      const vendorLabel = spec.label || 'this vendor';
+      const isCurrentTo = spec.direction !== 'from';
+      const flipAsk = isCurrentTo
+        ? `Who subawards to ${vendorLabel}`
+        : `Who does ${vendorLabel} subaward to`;
+      const flipExplainer = isCurrentTo
+        ? `Want the other direction — primes hiring <strong>${Html.escapeHtml(vendorLabel)}</strong> as a sub?`
+        : `Want the other direction — the subs <strong>${Html.escapeHtml(vendorLabel)}</strong> is hiring?`;
+      html += `<div class="mo-direction-flip" style="margin-top:14px; padding:10px 12px; background:var(--surface-subtle, #f6f7f9); border-radius:8px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+        <span style="font-size:13px; color:var(--text-body); line-height:1.4;">${flipExplainer}</span>
+        <button class="mo-followup" data-ask="${Html.escapeHtml(flipAsk)}" style="font-size:13px; padding:6px 12px; flex-shrink:0;">Flip direction</button>
+      </div>`;
+    }
+
     // Dynamic chips render below the turn via fetchSmartPills.
 
     html += `<div class="mo-source">Top ${spec.totalSubs} subawards · last 12 months · USASpending.gov</div>`;
