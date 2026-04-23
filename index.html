@@ -234,14 +234,13 @@ button { cursor: pointer; }
 .thread {
   max-width: 720px;
   margin: 0 auto;
-  /* Bottom padding is intentionally ~viewport-height so that when a new
-     Mo turn is inserted, we can always scroll its top to just under the
-     header — even if the turn is still a skeleton ("Mo's thinking…")
-     with no card rendered yet. Without this, scrollTo targets a position
-     past the end of the document, the browser clamps, and the turn ends
-     up somewhere in the middle of the viewport instead of the top.
-     Standard chat-app pattern. */
-  padding: 16px 12px 90vh;
+  /* Bottom padding gives appendUserTurn's scroll enough room to pin the
+     user bubble just under the header. On a ~850px phone, a user bubble
+     plus a minimal Mo-turn skeleton needs ~400px of content below it to
+     push the bubble to the top. 35vh threads the needle — enough to
+     scroll cleanly when a turn first mounts, not so much that the page
+     feels like it floats into empty space after the card renders. */
+  padding: 16px 12px 35vh;
 }
 
 .greeting { padding: 32px 4px 16px; }
@@ -3970,23 +3969,6 @@ const App = {
     thread.appendChild(wrap);
     this._updateEmptyState();
     this._updateJumpVisibility();
-    // Pop the new Mo turn to the top of the viewport (just under the
-    // fixed header). Previously we scrolled the user bubble here; that
-    // left Mo's turn to mount wherever the layout happened to place
-    // it — typically near the bottom of the screen on mobile after a
-    // couple of turns. Scrolling the Mo turn up gives the prose + card
-    // the full viewport to render into, which is what the user came
-    // to see.
-    //
-    // requestAnimationFrame (not setTimeout) ensures the browser has
-    // laid out the new element before we measure its position. Smooth
-    // behavior so the motion feels intentional rather than jumpy.
-    requestAnimationFrame(() => {
-      const header = document.querySelector('.mo-header');
-      const headerH = header ? header.getBoundingClientRect().height : 60;
-      const target = wrap.getBoundingClientRect().top + window.pageYOffset - headerH - 12;
-      window.scrollTo({ top: target, behavior: 'smooth' });
-    });
     return {
       turnId,
       wrap,
@@ -4008,12 +3990,18 @@ const App = {
     wrap.innerHTML = `<div class="turn-user-bubble">${Html.escapeHtml(text)}</div>`;
     thread.appendChild(wrap);
     this._updateEmptyState();
-    // Note: user bubble used to auto-scroll into view here. We removed it
-    // because appendCompositeTurn (which fires ~immediately after this)
-    // now owns the scroll position — it pins the Mo turn just under the
-    // header so Mo's prose + card get the full viewport. User bubble
-    // sits just above the fold; users can scroll up to re-read if they
-    // want, but nothing worth seeing is there during an active turn.
+    // Scroll the user bubble to just under the header. The Mo turn will
+    // mount ~immediately after this, just below the bubble, and the user
+    // sees a clean "my question at top → Mo's avatar → prose streaming"
+    // layout. requestAnimationFrame ensures layout has settled before we
+    // measure position (replaces old 50ms setTimeout, which raced on
+    // slower devices).
+    requestAnimationFrame(() => {
+      const header = document.querySelector('.mo-header');
+      const headerH = header ? header.getBoundingClientRect().height : 60;
+      const target = wrap.getBoundingClientRect().top + window.pageYOffset - headerH - 12;
+      window.scrollTo({ top: target, behavior: 'smooth' });
+    });
   },
 
   // Build the "currently on screen" card summary that gets injected into
