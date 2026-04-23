@@ -1933,9 +1933,11 @@ function analyzeMarket(data, currentQuery) {
 // which subs have leverage (work with multiple primes), which primes
 // build teams (work with many subs)?
 // Ported from govhoo's _renderSubawardSignals, adapted for the card pipeline.
-function analyzeSubawards(subs, marketLabel) {
+function analyzeSubawards(subs, marketLabel, opts = {}) {
   if (!subs || !subs.length) return null;
   const tc = s => Utils.titleCase(s);
+  const direction = opts.direction === 'from' ? 'from' : 'to';
+  const autoFlipped = opts.autoFlipped === true;
 
   const primes = {}, subvendors = {}, agencies = {};
   let totalSubVal = 0;
@@ -1963,41 +1965,87 @@ function analyzeSubawards(subs, marketLabel) {
   const subCount = subSorted.length;
   const avgSubSize = subs.length > 0 ? totalSubVal / subs.length : 0;
 
-  // Verdict, matches govhoo's logic but in Mo's voice
+  // ── Verdict + action, branched on direction ──────────────────────
+  //
+  // Direction B (to): queried vendor IS the prime, so primeCount is
+  //   always 1. The interesting signal is sub-roster concentration.
+  // Direction A (from): queried vendor IS the sub, so subCount is
+  //   always 1. The interesting signal is prime-customer concentration.
+  //
+  // Old logic treated primeCount + subCount as independent axes. After
+  // the Direction B filter that's meaningless; one of them is always 1.
+  const topSubSpend = subSorted[0]?.[1].spend || 0;
+  const topSubPct = totalSubVal > 0 ? Math.round(topSubSpend / totalSubVal * 100) : 0;
+  const secondSubName = tc(subSorted[1]?.[0] || '');
+
+  const topPrimeSpend = primeSorted[0]?.[1].spend || 0;
+  const secondPrimeName = tc(primeSorted[1]?.[0] || '');
+
   let face, verdict, action;
-  const isConcentrated = topPrimePct >= 50;
-  const hasManyPrimes = primeCount >= 3;
-  const hasManySubs = subCount >= 5;
 
-  if (hasManyPrimes && hasManySubs && !isConcentrated) {
-    face = 'open';
-    verdict = `Active sub market. ${primeCount} primes are spreading work across ${subCount} subs.`;
-    action = `Multiple primes are actively building teams here. Good place to pitch your capabilities.`;
-  } else if (isConcentrated && hasManyPrimes) {
-    face = 'watch';
-    verdict = `${topPrime} controls ${topPrimePct}% of the sub work here. Others are in the mix but smaller.`;
-    action = `Start with ${topPrime}'s capture team. They're moving the most work.`;
-  } else if (isConcentrated) {
-    face = 'locked';
-    verdict = `Most sub work flows through ${topPrime}.`;
-    action = `${topPrime} is your path in. Talk to their team.`;
+  if (direction === 'to') {
+    // Rows show queried vendor → their subs. Verdict = sub concentration.
+    const topSubIsConcentrated = topSubPct >= 40;
+    const subRosterIsBroad = subCount >= 8;
+
+    if (subs.length < 5) {
+      face = 'watch';
+      verdict = `${topPrime} has light reported sub activity — ${subs.length} sub${subs.length === 1 ? '' : 's'}, ${Utils.money(totalSubVal)} total. This is a lower-bound view.`;
+      action = `Treat as partial signal. The named subs are real, but expect more delivery relationships that aren't reported.`;
+    } else if (topSubIsConcentrated) {
+      face = 'locked';
+      verdict = `${topSub} is taking ${topSubPct}% of ${topPrime}'s reported sub work (${Utils.money(topSubSpend)}).`;
+      action = `${topSub}'s capture team is the fastest path into ${topPrime}'s delivery chain. Pitch them on the capability gaps in their current scope.`;
+    } else if (subRosterIsBroad) {
+      face = 'open';
+      verdict = `${topPrime} is actively building teams — ${subCount} different subs, led by ${topSub} (${Utils.money(topSubSpend)})${secondSubName ? ` and ${secondSubName}` : ''}.`;
+      action = `Broad sub roster means they're open to new delivery partners. Approach ${topSub} first, then ${secondSubName}. Niche capabilities land on these teams.`;
+    } else {
+      face = 'watch';
+      verdict = `${topPrime} runs a focused sub roster — ${subCount} subs, ${Utils.money(totalSubVal)} total, led by ${topSub}.`;
+      action = `${topSub} is the primary delivery partner. That's your first conversation.`;
+    }
   } else {
-    face = 'watch';
-    verdict = `Light sub activity, with ${subs.length} reported subawards across ${primeCount} primes.`;
-    action = `Thin data here. Worth a call to any of the primes to understand their teaming.`;
+    // Direction from: queried vendor is the sub. Verdict = which primes
+    // are hiring the vendor, how concentrated the prime relationships are.
+    const topPrimeIsConcentrated = topPrimePct >= 40;
+    const primeBaseIsBroad = primeCount >= 5;
+
+    if (subs.length < 5) {
+      face = 'watch';
+      verdict = `${topSub} appears as a sub on ${subs.length} reported subaward${subs.length === 1 ? '' : 's'}, ${Utils.money(totalSubVal)} total. Thin picture.`;
+      action = `Partial data. Worth confirming directly with ${topSub}'s partner team before building a play around this.`;
+    } else if (topPrimeIsConcentrated) {
+      face = 'locked';
+      verdict = `${topPrime} hires ${topSub} for ${topPrimePct}% of this sub-work (${Utils.money(topPrimeSpend)}). Heavy concentration on a single prime customer.`;
+      action = `${topPrime}'s capture team is the fastest entry — they're already buying this category from ${topSub}, so they buy in the category generally.`;
+    } else if (primeBaseIsBroad) {
+      face = 'open';
+      verdict = `${topSub} is subbed on ${primeCount} different primes, led by ${topPrime}${secondPrimeName ? ` and ${secondPrimeName}` : ''}.`;
+      action = `Broad prime base means ${topSub} is a well-known delivery partner in this space. Any of these primes is a reasonable entry point — ${topPrime} and ${secondPrimeName} first.`;
+    } else {
+      face = 'watch';
+      verdict = `${topSub} subs to a tight set of primes — ${primeCount}, led by ${topPrime} (${Utils.money(topPrimeSpend)}).`;
+      action = `Small prime base. Start with ${topPrime}, the biggest buyer of ${topSub}'s sub capacity in this slice.`;
+    }
   }
 
-  // Teaming signals, the useful stuff beyond the verdict
+  // Teaming signals, direction-aware
   const signals = [];
-  if (topPrimeData.subs.size >= 3) {
-    signals.push(`${topPrime} works with ${topPrimeData.subs.size} different subs, they actively build teams. If you have a niche capability, approach their capture team directly.`);
-  }
-  if (topSubData.primes.size >= 2) {
-    signals.push(`${topSub} subs to ${topSubData.primes.size} different primes, the most connected sub in this market. Study what they do or partner with them.`);
-  }
-  const multiPrimeSubs = subSorted.filter(([, d]) => d.primes.size >= 2);
-  if (multiPrimeSubs.length >= 2) {
-    signals.push(`${multiPrimeSubs.length} subs work with multiple primes. That means the primes are competing for the same talent, which gives subs leverage in teaming negotiations.`);
+  if (direction === 'to') {
+    if (subCount >= 5) {
+      signals.push(`${topPrime} hires ${subCount} different subs across ${primeSorted[0][1].count} reported awards. They actively build teams.`);
+    }
+    if (topSubPct >= 25 && subCount >= 3) {
+      signals.push(`${topSub} is carrying ${topSubPct}% of the sub work — the standout delivery partner for this prime.`);
+    }
+  } else {
+    if (primeCount >= 3) {
+      signals.push(`${topSub} subs to ${primeCount} different primes. They're a known delivery partner, not a one-client shop.`);
+    }
+    if (topPrimePct >= 40) {
+      signals.push(`${topPrime} is ${topSub}'s biggest prime customer (${topPrimePct}%). That's the relationship to understand before approaching.`);
+    }
   }
 
   // Top prime→sub relationships for the list view
@@ -2029,6 +2077,8 @@ function analyzeSubawards(subs, marketLabel) {
     totalSubs: subs.length,
     avgSubSize: Utils.money(avgSubSize),
     topPrime, topPrimePct,
+    direction,       // 'to' (vendor is prime) | 'from' (vendor is sub)
+    autoFlipped,     // true when asked for 'to' but got 'from' fallback
     reportingNote: 'Subaward reporting is mandatory only above $30K and often lags the prime award by months. This is a lower-bound picture, not complete.',
   };
 }
@@ -3646,7 +3696,13 @@ const App = {
           'prime_award_generated_internal_id': s.primeAwardId,
         }));
         const label = this._labelForResolverInput(resolverInput);
-        const spec = analyzeSubawards(rows, label);
+        // Pull direction + autoFlipped from the row array (stamped by
+        // fetchSubawards). These drive the card framing — "subs X hires"
+        // vs "primes hiring X" — and the auto-flip banner when Direction
+        // B was empty and we silently fell back to Direction A.
+        const direction = subs._subawardDirection === 'from' ? 'from' : 'to';
+        const autoFlipped = subs._autoFlipped === true;
+        const spec = analyzeSubawards(rows, label, { direction, autoFlipped });
         if (!spec) {
           cardRef.innerHTML = '<div class="mo-empty-msg">Subaward data came back but I couldn\'t shape it.</div>';
           return;
@@ -3661,16 +3717,17 @@ const App = {
         // subaward turns too. The fields map the subaward spec into the
         // shape fetchSmartPills expects:
         //   - stats: direct pass-through, labeled differently but same shape
-        //   - primes: the prime is the queried vendor; use the unique subs
-        //     from relationships as "context primes" so drill-type pills
-        //     can reference a real sub (e.g. "Show me Oracle at federal"
-        //     after seeing SAIC → Oracle $11M)
-        //   - headline: one-liner description of what this card shows
+        //   - primes: direction-aware context for drill pill validation.
+        //     For TO cards, these are the subs the prime is hiring (so a
+        //     drill-TO pill like "Who Oracle subawards to" is valid).
+        //     For FROM cards, these are the primes hiring the vendor (so
+        //     a drill pill like "Who Lockheed subawards TO" is valid).
+        //   - headline: direction-aware sentence
         //   - treemap: top agencies by sub spend
         const uniqueSubs = [...new Set((spec.relationships || []).map(r => r.sub))].filter(Boolean);
+        const uniquePrimes = [...new Set((spec.relationships || []).map(r => r.prime))].filter(Boolean);
         const agencyMap = new Map();
         for (const r of (spec.relationships || [])) {
-          // relationships have .agency as a string already titled
           if (!r.agency) continue;
           agencyMap.set(r.agency, (agencyMap.get(r.agency) || 0) + 1);
         }
@@ -3678,15 +3735,24 @@ const App = {
           .sort((a, b) => b[1] - a[1])
           .slice(0, 5)
           .map(([name]) => ({ name }));
+
+        // For TO: drill context is the subs. For FROM: drill context is the primes.
+        const contextList = direction === 'from' ? uniquePrimes : uniqueSubs;
+        const headlineLead = direction === 'from'
+          ? `Primes hiring ${spec.label} as a sub: ${contextList.slice(0, 3).join(', ')}`
+          : `Subs ${spec.label} is hiring: ${contextList.slice(0, 3).join(', ')}`;
+        const headline = `${headlineLead}${contextList.length > 3 ? ` and ${contextList.length - 3} more` : ''}`;
+
         const subawardCardSpec = {
           stats: spec.stats,
-          primes: uniqueSubs.slice(0, 10).map(name => ({ name })),
+          primes: contextList.slice(0, 10).map(name => ({ name })),
           treemap: treemapFromSubs,
-          headline: `Subs ${spec.label} is hiring: ${uniqueSubs.slice(0, 3).join(', ')}${uniqueSubs.length > 3 ? ` and ${uniqueSubs.length - 3} more` : ''}`,
+          headline,
           _isSubaward: true,
+          _direction: direction,
         };
         turnEls.chipData = { mode: 'subaward', rows, resolverInput, cardSpec: subawardCardSpec };
-        this._track('subaward_card_render', { rows: subs.length });
+        this._track('subaward_card_render', { rows: subs.length, direction });
       },
 
       // Show an error state inside the turn. Keeps any successfully-rendered
@@ -3964,7 +4030,10 @@ const App = {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>
-        <div class="mo-framing">Subaward view: the subs <strong>${Html.escapeHtml(spec.label)}</strong> is hiring to help deliver their prime contracts.</div>
+        ${spec.autoFlipped ? `<div class="mo-framing" style="background: var(--surface-subtle, #fff7e8); border-left: 3px solid var(--accent, #c97c1b); padding: 10px 12px; margin-bottom: 10px; font-size: 13px;"><strong>${Html.escapeHtml(spec.label)}</strong> has no reportable as-prime subawards in USASpending. Common for defense primes (Northrop, Lockheed) and for vendors who deliver most work organically. Showing <strong>${Html.escapeHtml(spec.label)}</strong>-as-a-sub instead, so you can see which primes are already hiring them.</div>` : ''}
+        <div class="mo-framing">${spec.direction === 'from'
+          ? `Subaward view: the primes hiring <strong>${Html.escapeHtml(spec.label)}</strong> as a sub to help deliver their own contracts.`
+          : `Subaward view: the subs <strong>${Html.escapeHtml(spec.label)}</strong> is hiring to help deliver their prime contracts.`}</div>
         <div class="mo-verdict">${Html.escapeHtml(spec.verdict.text)}</div>
         <div class="mo-action">${Html.escapeHtml(spec.verdict.action)}</div>
         <div class="mo-stat-row">`;
