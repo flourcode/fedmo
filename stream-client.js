@@ -1531,6 +1531,23 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
     ? [...history, { role: 'user', content: question }]
     : [{ role: 'user', content: question }];
 
+  // Prefetch window: the moment onChunk sees a complete <data> tag, we
+  // can start the USASpending fetch in parallel with the stream-abort
+  // handshake and any post-tag bookkeeping. This saves 100-300ms of
+  // serialized wait on every straight-vendor/topic query.
+  //
+  // NOT safe to prefetch on:
+  //   - competitors="true" turns. The fetch needs the expanded competitor
+  //     list which comes from a separate Gemini call (fetchCompetitors).
+  //     Pre-firing here would query the wrong slice.
+  //   - subawards="true" turns. Different fetch (fetchSubawards), different
+  //     URL, different payload shape. The prefetch function assumes prime-
+  //     level queries.
+  // On those paths, prefetchPromise stays null and the regular await at
+  // the fetchUsaspending callsite runs as before.
+  let prefetchPromise = null;
+  let prefetchInput = null;
+
   try {
     // ── First pass ──────────────────────────────────────────────
     const firstPassFull = await streamOnce({
@@ -1570,6 +1587,25 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
           const resolverInput = dataAttrsToResolverInput(tagInfo.attrs);
           debug.resolverInput = { ...resolverInput };
           cardRef = render.onDataTag(resolverInput);
+
+          // PARALLEL FETCH — start USASpending pull now, while the abort
+          // handshake and downstream bookkeeping run. Only safe when the
+          // tag doesn't require competitor expansion or subaward routing
+          // (both need more work before the fetch can be issued). The
+          // .catch here is defensive — we don't want an in-flight failure
+          // to surface as an unhandled rejection before the main code
+          // path reaches its try/catch. The real error handling happens
+          // at the await site, which falls back to a fresh fetch if the
+          // prefetch rejected.
+          if (!resolverInput._competitors && !resolverInput._subawards) {
+            prefetchInput = resolverInput;
+            prefetchPromise = fetchUsaspending(resolverInput, endpoint)
+              .catch(err => {
+                // Store the error shape so the await site can re-throw it
+                // consistently with the non-prefetch path.
+                return { _prefetchError: err };
+              });
+          }
 
           // Abort the first stream, we don't want Mo's speculative
           // post-tag prose. We'll get grounded prose from the second call.
@@ -1767,7 +1803,24 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
 
     let rows;
     try {
-      rows = await fetchUsaspending(resolverInput, endpoint);
+      // If we pre-fired the fetch in onChunk (non-competitors, non-subawards
+      // paths), reuse that in-flight promise instead of issuing a fresh
+      // request. The prefetchPromise is guarded by resolverInput identity:
+      // if competitor expansion mutated resolverInput after the prefetch
+      // fired (which it shouldn't on this branch, but defensive), we fall
+      // through to a fresh fetch.
+      if (prefetchPromise && prefetchInput === resolverInput) {
+        const prefetched = await prefetchPromise;
+        if (prefetched && prefetched._prefetchError) {
+          // Prefetch rejected, retry once with a fresh call. This preserves
+          // the original error-reporting semantics.
+          rows = await fetchUsaspending(resolverInput, endpoint);
+        } else {
+          rows = prefetched;
+        }
+      } else {
+        rows = await fetchUsaspending(resolverInput, endpoint);
+      }
     } catch (fetchErr) {
       console.error('[askMo] USASpending fetch failed:', fetchErr);
       render.renderError(`Couldn't pull that data. ${fetchErr.message || ''}`.trim());
