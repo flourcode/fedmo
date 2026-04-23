@@ -925,6 +925,43 @@ export function applyPostFilters(rows, postFilters) {
   if (!Array.isArray(rows)) return [];
   let out = rows;
 
+  // ── Word-boundary needle match helper ────────────────────────────
+  //
+  // Used by vendor_scope and topic_scope filters. The old implementation
+  // did a plain substring .includes() check, which produced nasty false
+  // positives when a short needle happened to be a substring of unrelated
+  // words. Real example captured April 2026: competitor list for Sonatype
+  // included 'Mend' (a real SCA vendor). Post-filter matched MENDONCA
+  // (ship name), MENDOCINO (Lake Mendocino at Army), MENDELSOHN,
+  // MENDOZA — pulling $135M of maritime dredging contracts into a
+  // DevSecOps query.
+  //
+  // Word-boundary match (\b on both sides) fixes it cleanly:
+  //   - MEND matches 'MEND INC', 'MEND LLC', 'SUBSCRIPTION TO MEND' ✓
+  //   - MEND does NOT match 'MENDONCA', 'MENDOCINO', 'AMENDMENT' ✓
+  //
+  // Multi-word needles still work: 'AMAZON WEB SERVICES' has \b at
+  // start (boundary with space before AMAZON) and end (boundary after
+  // final S), and the spaces between words are themselves boundaries.
+  //
+  // Needles are regex-escaped to handle punctuation safely (commas,
+  // ampersands, periods in 'CACI, INC.' etc.). Compiled once per
+  // needle and cached on a map so re-running against many rows isn't
+  // 1000 regex compilations.
+  const _needleCache = new Map();
+  function needleMatches(text, needle) {
+    if (!text || !needle) return false;
+    let re = _needleCache.get(needle);
+    if (!re) {
+      // Escape regex metachars. \b is a word boundary — position between
+      // \w (word char: alphanumeric + underscore) and a non-word char.
+      const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      re = new RegExp('\\b' + escaped + '\\b', 'i');
+      _needleCache.set(needle, re);
+    }
+    return re.test(text);
+  }
+
   if (postFilters.agency_scope) {
     const wanted = postFilters.agency_scope;
     const wantedName = (wanted.name || '').toLowerCase();
@@ -973,14 +1010,19 @@ export function applyPostFilters(rows, postFilters) {
     // "Palantir Gotham professional services"). Matching description lets
     // us keep those rows and show the real footprint.
     //
+    // Uses word-boundary matching (see needleMatches) so short needles
+    // like 'MEND' or 'OKTA' don't false-positive on MENDONCA, OKTAUGHT,
+    // etc. Substring match caused $135M of maritime contracts to surface
+    // on a Sonatype+competitors query because one competitor name was 'Mend'.
+    //
     // The keyword already sent to USASpending ensures the API returns only
-    // rows that mention the vendor somewhere (description OR recipient), so
-    // this filter is the browser's final "is this actually about X" check.
-    const needles = postFilters.vendor_scope.map(v => v.toLowerCase());
+    // rows that mention the vendor somewhere; this filter is the browser's
+    // final "is this actually about X" check.
+    const needles = postFilters.vendor_scope;
     out = out.filter(r => {
-      const recipient = (r['Recipient Name'] || '').toLowerCase();
-      const description = (r['Description'] || '').toLowerCase();
-      return needles.some(n => recipient.includes(n) || description.includes(n));
+      const recipient = r['Recipient Name'] || '';
+      const description = r['Description'] || '';
+      return needles.some(n => needleMatches(recipient, n) || needleMatches(description, n));
     });
   }
 
@@ -993,12 +1035,15 @@ export function applyPostFilters(rows, postFilters) {
   // contracts whose text doesn't literally contain the topic words — the
   // CSP case where Army industrial ops ($14B KBR) surfaced on a CSP query
   // because "engineering" and "services" fuzzy-matched.
+  //
+  // Same word-boundary matcher as vendor_scope: avoids false positives
+  // from short topic words embedded in unrelated contract text.
   if (!postFilters.vendor_scope && postFilters.topic_scope && postFilters.topic_scope.length > 0) {
-    const topicNeedles = postFilters.topic_scope.map(n => n.toLowerCase());
+    const topicNeedles = postFilters.topic_scope;
     out = out.filter(r => {
-      const recipient = (r['Recipient Name'] || '').toLowerCase();
-      const description = (r['Description'] || '').toLowerCase();
-      return topicNeedles.some(n => recipient.includes(n) || description.includes(n));
+      const recipient = r['Recipient Name'] || '';
+      const description = r['Description'] || '';
+      return topicNeedles.some(n => needleMatches(recipient, n) || needleMatches(description, n));
     });
   }
 
