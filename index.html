@@ -389,100 +389,6 @@ button { cursor: pointer; }
 .mo-treemap rect:active { opacity: 0.85; }
 .mo-treemap text { pointer-events: none; font-family: var(--font); }
 
-/* ── Competitor stack-rank bar ─────────────────────────────
-   Horizontal single-row stacked bar showing market share among
-   the top 4 primes + "Others". Each segment is tappable and sends
-   a follow-up via the existing .mo-followup data-ask pattern.
-   Palette is the primary purple ramp — darkest at left (leader),
-   lightest at right (others tail). Matches the treemap's visual
-   weight without competing for attention. */
-.mo-compbar-host {
-  display: block;
-  margin: 8px 0 4px;
-}
-.mo-compbar {
-  display: flex;
-  width: 100%;
-  height: 28px;
-  border-radius: 8px;
-  overflow: hidden;
-  background: var(--primary-20);
-}
-.mo-compbar-seg {
-  /* Button reset so segments blend into the bar */
-  border: 0;
-  padding: 0;
-  margin: 0;
-  font: inherit;
-  color: inherit;
-  cursor: pointer;
-  /* Layout inside the segment */
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 0;
-  height: 100%;
-  /* A subtle right-edge divider instead of a gap — keeps the bar
-     reading as one visual unit while separating segments. */
-  box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.45);
-  transition: filter 120ms;
-  position: relative;
-}
-.mo-compbar-seg:last-child { box-shadow: none; }
-.mo-compbar-seg:active { filter: brightness(0.92); }
-.mo-compbar-seg-label {
-  font-size: 11px;
-  font-weight: 600;
-  color: #FFFFFF;
-  letter-spacing: 0.02em;
-  font-variant-numeric: tabular-nums;
-  padding: 0 4px;
-  overflow: hidden;
-  white-space: nowrap;
-}
-/* Color ramp: darkest leader → lightest tail. Four vendors + others. */
-.mo-compbar-seg[data-rank="1"] { background: var(--primary-100); }
-.mo-compbar-seg[data-rank="2"] { background: var(--primary-80); }
-.mo-compbar-seg[data-rank="3"] { background: var(--primary-60); }
-.mo-compbar-seg[data-rank="4"] { background: var(--primary-40); }
-.mo-compbar-seg[data-rank="others"] {
-  background: var(--primary-20);
-}
-/* The "Others" segment gets darker text since the lavender bg is light */
-.mo-compbar-seg[data-rank="others"] .mo-compbar-seg-label {
-  color: var(--primary-100);
-}
-/* Legend below the bar: inline list of name + % pairs, for segments
-   too narrow to carry their label inside. Also serves as the a11y
-   fallback when labels are hidden. */
-.mo-compbar-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 12px;
-  margin-top: 10px;
-  font-size: 12px;
-  color: var(--text-muted);
-  line-height: 1.3;
-}
-.mo-compbar-legend-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-.mo-compbar-legend-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 2px;
-  flex-shrink: 0;
-}
-.mo-compbar-legend-dot[data-rank="1"] { background: var(--primary-100); }
-.mo-compbar-legend-dot[data-rank="2"] { background: var(--primary-80); }
-.mo-compbar-legend-dot[data-rank="3"] { background: var(--primary-60); }
-.mo-compbar-legend-dot[data-rank="4"] { background: var(--primary-40); }
-.mo-compbar-legend-dot[data-rank="others"] { background: var(--primary-20); }
-.mo-compbar-legend-name { color: var(--text-body); font-weight: 500; }
-.mo-compbar-legend-pct  { color: var(--text-faint); font-variant-numeric: tabular-nums; }
-
 .mo-list { display: flex; flex-direction: column; }
 .mo-row {
   display: flex;
@@ -1077,6 +983,31 @@ body.thread-empty .mo-ask-bar {
   border-bottom: 1px solid var(--border-soft);
 }
 .mo-row-2line:last-child { border-bottom: none; }
+
+/* Rank-weighted rows. Add .mo-row-ranked with data-rank="1..5" to a
+   .mo-row-2line and the leader gets the deepest purple stripe down
+   the left edge, fading to light lavender for #5. At-a-glance
+   hierarchy without duplicating the amount or position text. Stripe
+   sits inside a 10px left padding so text breathing room is preserved. */
+.mo-row-ranked {
+  position: relative;
+  padding-left: 10px;
+}
+.mo-row-ranked::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 14px;
+  bottom: 14px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--primary-60); /* fallback */
+}
+.mo-row-ranked[data-rank="1"]::before { background: var(--primary-100); }
+.mo-row-ranked[data-rank="2"]::before { background: var(--primary-80); }
+.mo-row-ranked[data-rank="3"]::before { background: var(--primary-60); }
+.mo-row-ranked[data-rank="4"]::before { background: var(--primary-40); }
+.mo-row-ranked[data-rank="5"]::before { background: var(--primary-20); }
 .mo-row-2line-top {
   display: flex;
   align-items: center;
@@ -2472,7 +2403,7 @@ function buildCardSpec(m, query, sellerLens, territory) {
   }
 
   // ── Top primes, with biggest contract ID + USASpending link
-  const primes = vendorSorted.slice(0, 5).map(([name, v]) => {
+  const primes = vendorSorted.slice(0, 5).map(([name, v], idx) => {
     const biggest = (v.contracts || []).sort((a,b) => (parseFloat(b['Award Amount'])||0) - (parseFloat(a['Award Amount'])||0))[0];
     const vehicle = biggest ? Utils.detectVehicle(biggest) : null;
     // Agency context for the row's biggest contract. Sellers need this to
@@ -2489,6 +2420,10 @@ function buildCardSpec(m, query, sellerLens, territory) {
       name: tc(name),
       spend: Utils.money(v.spend),
       pct: Math.round(v.spend / top1Spend * 100),
+      // Rank 1-5. Drives the left-border color stripe on the row so a
+      // reader can tell at a glance who leads the market. Pairs with
+      // the --primary-100 → --primary-20 ramp in CSS.
+      rank: idx + 1,
       contractId: biggest ? (biggest['Award ID'] || '') : '',
       vehicle: vehicle,
       agency: agency,
@@ -2498,79 +2433,6 @@ function buildCardSpec(m, query, sellerLens, territory) {
         : null,
     };
   });
-
-  // ── Competitor stack-rank bar ─────────────────────────────────────
-  // A single horizontal stacked bar showing market share among the top
-  // 4 primes + an "Others" tail. Paired with the Top primes list below
-  // it: the bar gives instant competitive shape, the list gives detail.
-  //
-  // Two thresholds keep the bar meaningful:
-  //   1. Need at least 3 primes (else a single bar looks like a verdict,
-  //      not a stack rank).
-  //   2. Top prime must hold ≥15% of total (else the market is too
-  //      fragmented for a stacked view to read — everything becomes
-  //      near-equal slivers).
-  //
-  // Percentages here are true market share (spend / total), unlike the
-  // `pct` on each prime row which is pct-of-leader (for row widths in
-  // the list). Total comes from m.total, the full market size in scope.
-  let competitorBar = null;
-  if (vendorSorted.length >= 3 && total > 0) {
-    const leaderShare = (vendorSorted[0]?.[1].spend || 0) / total;
-    if (leaderShare >= 0.15) {
-      const topN = vendorSorted.slice(0, 4);
-      const topNSpend = topN.reduce((s, [, v]) => s + v.spend, 0);
-      const othersSpend = Math.max(0, total - topNSpend);
-
-      // Build raw segments at full precision, then reconcile percentages
-      // to ensure they sum to exactly 100 after rounding (otherwise the
-      // bar has a 1-2px gap or overflow).
-      const rawSegs = topN.map(([name, v], i) => ({
-        rank: String(i + 1),
-        name: tc(name),
-        spend: v.spend,
-        amount: Utils.money(v.spend),
-        rawPct: (v.spend / total) * 100,
-      }));
-      if (othersSpend > 0) {
-        rawSegs.push({
-          rank: 'others',
-          name: 'Others',
-          spend: othersSpend,
-          amount: Utils.money(othersSpend),
-          rawPct: (othersSpend / total) * 100,
-        });
-      }
-      // Round pct while preserving sum=100: largest-remainder method.
-      const floors = rawSegs.map(s => ({ ...s, pct: Math.floor(s.rawPct) }));
-      let remainder = 100 - floors.reduce((s, f) => s + f.pct, 0);
-      floors
-        .map((f, i) => ({ i, frac: f.rawPct - f.pct }))
-        .sort((a, b) => b.frac - a.frac)
-        .slice(0, remainder)
-        .forEach(({ i }) => { floors[i].pct += 1; });
-
-      // Drop any segment that rounded to 0% — they'd be invisible anyway
-      // and add accessibility noise (screen readers announce every button).
-      const segments = floors
-        .filter(f => f.pct > 0)
-        .map(f => ({
-          rank: f.rank,
-          name: f.name,
-          pct: f.pct,
-          amount: f.amount,
-          // Follow-up text Mo receives. The Others segment asks a different
-          // question because "tell me more about Others" is meaningless.
-          askText: f.rank === 'others'
-            ? `Who else is in this market beyond the top ${topN.length}?`
-            : `Tell me more about ${f.name}`,
-        }));
-
-      if (segments.length >= 3) {
-        competitorBar = { segments };
-      }
-    }
-  }
 
   // ── Expiring soon, up to 8, with the first 3 visible by default and the
   // rest hidden behind a "Show N more" toggle. Matches what Mo sees in her
@@ -2609,7 +2471,6 @@ function buildCardSpec(m, query, sellerLens, territory) {
     stats,
     treemap,
     primes,
-    competitorBar,
     expiring,
     expiringMore,
     sourceCount: contractCount,
@@ -4338,22 +4199,16 @@ const App = {
       html += `<div class="mo-comp-head"><div class="mo-comp-title">Where the money is</div><div class="mo-comp-meta">last 12 months</div></div>${renderTreemap(spec.treemap)}`;
     }
 
-    // Competitor stack-rank bar. A single horizontal stacked bar showing
-    // market share among the top primes + Others. Tapping a segment sends
-    // a follow-up via the existing .mo-followup data-ask plumbing. Only
-    // renders when the spec.competitorBar object was computed (see the
-    // gating rules in deriveMarketSpec — ≥3 primes, leader ≥15%).
-    if (spec.competitorBar && spec.competitorBar.segments && spec.competitorBar.segments.length >= 3) {
-      html += renderCompetitorBar(spec.competitorBar);
-    }
-
     if (spec.primes && spec.primes.length > 0) {
       html += `<div class="mo-comp-head"><div class="mo-comp-title">Top primes</div><div class="mo-comp-meta">${spec.primes.length} shown</div></div><div class="mo-list">`;
       spec.primes.forEach(p => {
         const idShort = p.contractId ? p.contractId.slice(0, 24) + (p.contractId.length > 24 ? '…' : '') : '';
         const meta = [idShort, p.vehicle].filter(Boolean).join(' · ');
         const liUrl = `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(Utils.linkedinSearchTerm(p.name))}&origin=GLOBAL_SEARCH_HEADER`;
-        html += `<div class="mo-row-2line">
+        // data-rank drives the left-border stripe color (CSS .mo-row-ranked[data-rank="N"])
+        // Defensive default to 5 (lightest) if rank happens to be missing.
+        const rank = p.rank || 5;
+        html += `<div class="mo-row-2line mo-row-ranked" data-rank="${rank}">
           <div class="mo-row-2line-top">
             <span class="mo-row-name">${Html.escapeHtml(p.name)}</span>
             <span class="mo-row-amount">${Html.escapeHtml(p.spend)}</span>
@@ -4642,49 +4497,6 @@ function worst(row, sideLength) {
       sumSq / (sideSq * it.area)
     ))
   );
-}
-
-// Renders a horizontal stacked bar showing market share. Segments are
-// buttons with the existing .mo-followup[data-ask] contract, so taps
-// flow through the app's delegated click handler — no new wiring.
-// Labels render inline only when the segment is wide enough to hold
-// them cleanly; narrow segments rely on the legend below. The legend
-// always renders as a readable detail + a11y fallback.
-function renderCompetitorBar(bar) {
-  if (!bar || !bar.segments || bar.segments.length < 3) return '';
-  // Inline-label threshold: ~12% of a 393px card = ~47px, enough for
-  // "34%" at 11px font plus padding. Below that, label is hidden and
-  // the legend carries the number.
-  const INLINE_LABEL_THRESHOLD = 12;
-  const segHtml = bar.segments.map(s => {
-    const showInline = s.pct >= INLINE_LABEL_THRESHOLD;
-    const ariaLabel = `${s.name}: ${s.pct}% (${s.amount}). Tap to ask Mo about ${s.name}.`;
-    return `<button class="mo-compbar-seg mo-followup"
-      data-ask="${Html.escapeHtml(s.askText)}"
-      data-rank="${s.rank}"
-      style="width: ${s.pct}%"
-      aria-label="${Html.escapeHtml(ariaLabel)}">
-      ${showInline ? `<span class="mo-compbar-seg-label">${s.pct}%</span>` : ''}
-    </button>`;
-  }).join('');
-
-  const legendHtml = bar.segments.map(s =>
-    `<span class="mo-compbar-legend-item">
-      <span class="mo-compbar-legend-dot" data-rank="${s.rank}"></span>
-      <span class="mo-compbar-legend-name">${Html.escapeHtml(s.name)}</span>
-      <span class="mo-compbar-legend-pct">${s.pct}%</span>
-    </span>`
-  ).join('');
-
-  const topCount = bar.segments.filter(s => s.rank !== 'others').length;
-  const hasOthers = bar.segments.some(s => s.rank === 'others');
-  const metaText = hasOthers ? `top ${topCount} + others` : `top ${topCount}`;
-
-  return `<div class="mo-compbar-host">
-    <div class="mo-comp-head"><div class="mo-comp-title">Market share</div><div class="mo-comp-meta">${metaText}</div></div>
-    <div class="mo-compbar" role="img" aria-label="Market share stacked bar">${segHtml}</div>
-    <div class="mo-compbar-legend">${legendHtml}</div>
-  </div>`;
 }
 
 function renderTreemap(items) {
