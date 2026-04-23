@@ -234,7 +234,14 @@ button { cursor: pointer; }
 .thread {
   max-width: 720px;
   margin: 0 auto;
-  padding: 16px 12px 24px;
+  /* Bottom padding is intentionally ~viewport-height so that when a new
+     Mo turn is inserted, we can always scroll its top to just under the
+     header — even if the turn is still a skeleton ("Mo's thinking…")
+     with no card rendered yet. Without this, scrollTo targets a position
+     past the end of the document, the browser clamps, and the turn ends
+     up somewhere in the middle of the viewport instead of the top.
+     Standard chat-app pattern. */
+  padding: 16px 12px 90vh;
 }
 
 .greeting { padding: 32px 4px 16px; }
@@ -3975,7 +3982,7 @@ const App = {
     // laid out the new element before we measure its position. Smooth
     // behavior so the motion feels intentional rather than jumpy.
     requestAnimationFrame(() => {
-      const header = document.getElementById('moHeader');
+      const header = document.querySelector('.mo-header');
       const headerH = header ? header.getBoundingClientRect().height : 60;
       const target = wrap.getBoundingClientRect().top + window.pageYOffset - headerH - 12;
       window.scrollTo({ top: target, behavior: 'smooth' });
@@ -4051,7 +4058,7 @@ const App = {
   jumpToLatest() {
     const lastTurn = document.querySelector('.turn-user:last-of-type, .turn-mo:last-of-type');
     if (!lastTurn) return;
-    const header = document.getElementById('moHeader');
+    const header = document.querySelector('.mo-header');
     const headerH = header ? header.getBoundingClientRect().height : 60;
     const target = lastTurn.getBoundingClientRect().top + window.pageYOffset - headerH - 12;
     window.scrollTo({ top: target, behavior: 'smooth' });
