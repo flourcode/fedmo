@@ -248,9 +248,17 @@ const VENDOR_LEGAL_NAMES = {
   'palantir':              'PALANTIR',
 
   'ibm':                   'INTERNATIONAL BUSINESS MACHINES',
+  'hp':                    'HEWLETT PACKARD',
   'hpe':                   'HEWLETT PACKARD ENTERPRISE',
+  'hpi':                   'HP INC',
   'dell':                  'DELL',
   'cisco':                 'CISCO',
+  'sap':                   'SAP',
+  'dxc':                   'DXC TECHNOLOGY',
+  '3m':                    '3M COMPANY',
+  'ge':                    'GENERAL ELECTRIC',
+  'att':                   'AT&T',
+  'att corp':              'AT&T',
 
   'splunk':                'SPLUNK',
   'elastic':               'ELASTICSEARCH',
@@ -679,11 +687,24 @@ export function resolve(input) {
     // USASpending keywords ONLY if longer than 3 chars OR if no legal
     // form was resolved (no alias found). The 3-char guard is what
     // prevents 'AWS' from dragging in award/awarded fuzzy matches.
+    //
+    // Short raw inputs (1-2 chars like "HP", "GE", "3M") still go into
+    // vendor_scope because client-side post-filter is a literal match
+    // that's safe at any length — just not to USASpending's fuzzy
+    // keyword filter. Without this, a bare "HP" with no alias leaves
+    // vendor_scope empty, which lets the entire $1.3T federal contract
+    // universe sail past the post-filter.
     for (let i = 0; i < vendorInputs.length; i++) {
       const raw = String(vendorInputs[i] || '').trim();
-      if (raw.length < 3) continue;
+      if (!raw) continue;
       const upper = raw.toUpperCase();
+      // Always carry in vendor_scope for literal client-side match
       vendorScopeSet.add(upper);
+      // Only send to USASpending keywords if ≥3 chars (API requirement)
+      // AND either longer than 3 chars or no longer legal form exists
+      // (collision guard: 3-char acronyms fuzzy-match common contract
+      // words like 'award', so if we have a safer long-form, use it).
+      if (raw.length < 3) continue;
       const legal = legalNames[i];
       const hasLongerLegal = legal && String(legal).length > raw.length;
       if (raw.length > 3 || !hasLongerLegal) {
