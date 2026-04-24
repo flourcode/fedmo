@@ -1005,6 +1005,42 @@ body.thread-empty .mo-ask-bar {
 .mo-row-ranked[data-rank="1"]::before { background: var(--primary-100); }
 .mo-row-ranked[data-rank="2"]::before { background: var(--primary-60); }
 .mo-row-ranked[data-rank="3"]::before { background: var(--primary-40); }
+
+/* First-card teaching moment: appended to Mo's post-prose the first
+   time the user gets a data card in a session. Reads as Mo's own
+   voice — same font, slightly muted color, a touch of top margin
+   to separate it from the grounded prose that precedes it. */
+.mo-first-card-teach {
+  margin-top: 10px;
+  color: var(--text-muted);
+  font-size: 14px;
+  font-style: italic;
+}
+
+/* Toast for share-link-copied confirmation. Anchored to the bottom
+   center of the viewport, above the ask bar. Fades in, sits for ~2s,
+   fades out. Pure CSS transition — no animation libraries. */
+.mo-toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(96px + env(safe-area-inset-bottom));
+  transform: translate(-50%, 8px);
+  background: var(--primary-100);
+  color: #FFFFFF;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 10px 18px;
+  border-radius: var(--radius-pill);
+  box-shadow: 0 4px 16px rgba(44, 41, 51, 0.18);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 200;
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+.mo-toast-show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
 .mo-row-2line-top {
   display: flex;
   align-items: center;
@@ -1316,8 +1352,8 @@ body.thread-empty .mo-ask-bar {
     <div class="greeting-intro">
       <svg class="greeting-face" viewBox="0 0 40 40"><use href="#icon-face-open"/></svg>
       <div class="greeting-intro-text">
-        <div class="greeting-hi">Hi, I'm Mo.</div>
-        <div class="greeting-sub">Your federal sales buddy. Plugged into USASpending.</div>
+        <div class="greeting-hi" id="greetingHi">Hi, I'm Mo.</div>
+        <div class="greeting-sub" id="greetingSub">Ask me anything about federal contracts. I pull live data from USASpending and show you the money in seconds.</div>
       </div>
     </div>
     <div class="greeting-examples" id="greetingChips"></div>
@@ -2616,6 +2652,11 @@ const App = {
     debugVisible: false,
   },
 
+  // Session-scoped flag for the first-card teaching moment. Appended to
+  // Mo's post-prose on the first successful card render, then suppressed
+  // for subsequent cards. Reset to false by resetThread.
+  _firstCardShown: false,
+
   // Conversation history for Mo. Each entry: { role: 'user'|'model', content: '...' }
   // Trimmed to last ~12 turns. Mo's system prompt is NOT in here, the Lambda
   // prepends it at request time.
@@ -2687,11 +2728,69 @@ const App = {
       const peopleLink = e.target.closest('.mo-people-link');
       if (peopleLink) this._track('view_linkedin', { vendor: peopleLink.getAttribute('data-vendor') || '' });
 
+      // Share button inside any card — copies a replayable permalink to
+      // the clipboard. The query comes from data-q on the .turn-mo wrap,
+      // which gets set when the turn was created. Same-tab share is a
+      // permalink to fedmo.com/?q=<encoded>; recipient taps and Mo runs
+      // that query against live data.
+      const shareBtn = e.target.closest('.mo-card-share');
+      if (shareBtn) {
+        const turnEl = shareBtn.closest('.turn-mo');
+        const q = turnEl?.getAttribute('data-q') || '';
+        if (q) {
+          const url = `${window.location.origin}/?q=${encodeURIComponent(q)}`;
+          this._copyShareUrl(url, shareBtn);
+          this._track('share_card', { query: q.slice(0, 60) });
+        }
+      }
+
       const jumpBtn = e.target.closest('#jumpLatest');
       if (jumpBtn) this._track('jump_latest');
     });
 
     this._updateEmptyState();
+
+    // ── Welcome-back copy swap ──────────────────────────────────
+    // On first-ever user turn we set fedmo_returning=1 in localStorage.
+    // Subsequent page loads detect the flag and swap the greeting
+    // headline to a softer "welcome back" — but ONLY when no ?q=
+    // param is replaying (if replaying, we're jumping straight into
+    // a query and the greeting won't be visible anyway).
+    // Wrapped defensively: Safari private mode can throw on localStorage
+    // access and we never want that to break the app.
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const replayQuery = (params.get('q') || '').trim();
+      if (!replayQuery) {
+        const returning = localStorage.getItem('fedmo_returning') === '1';
+        if (returning) {
+          const hi = document.getElementById('greetingHi');
+          if (hi) hi.textContent = 'Welcome back.';
+          const sub = document.getElementById('greetingSub');
+          if (sub) sub.textContent = "What are we digging into?";
+        }
+      }
+    } catch (e) { /* localStorage blocked, fall through to default greeting */ }
+
+    // ── Shareable URL replay ──────────────────────────────────
+    // If the page loaded with ?q=<encoded question>, auto-fire that
+    // query as if the user typed it. This is what makes "share link"
+    // work — recipient taps the link, Mo answers their question
+    // immediately against live data.
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const replayQuery = (params.get('q') || '').trim();
+      if (replayQuery) {
+        this._track('load_from_share', { query: replayQuery.slice(0, 60) });
+        // Defer to next frame so the greeting has rendered and is ready
+        // to be hidden; also lets warmLazyTables kick off in parallel.
+        requestAnimationFrame(() => {
+          warmLazyTables();
+          this.ask(replayQuery);
+        });
+      }
+    } catch (e) { /* never break init on URL parse failure */ }
+
     this._track('app_init');
   },
 
@@ -2702,6 +2801,50 @@ const App = {
     try {
       if (typeof gtag === 'function') gtag('event', event, props);
     } catch (e) { /* never break the app on analytics */ }
+  },
+
+  // Copy a share URL to the clipboard and show a brief toast confirmation
+  // near the button that was tapped. Uses the async clipboard API with a
+  // legacy textarea + execCommand fallback for older Safari and for pages
+  // served over non-HTTPS (though fedmo.com is always HTTPS, the fallback
+  // is cheap insurance).
+  _copyShareUrl(url, sourceBtn) {
+    const showToast = (msg) => {
+      // Remove any existing toast first — if the user taps share twice
+      // quickly we don't want stacked toasts.
+      document.querySelectorAll('.mo-toast').forEach(t => t.remove());
+      const toast = document.createElement('div');
+      toast.className = 'mo-toast';
+      toast.textContent = msg;
+      document.body.appendChild(toast);
+      // Animate in via class, auto-remove after 2 seconds.
+      requestAnimationFrame(() => toast.classList.add('mo-toast-show'));
+      setTimeout(() => {
+        toast.classList.remove('mo-toast-show');
+        setTimeout(() => toast.remove(), 220);
+      }, 2000);
+    };
+    const onSuccess = () => showToast('Link copied');
+    const onFailure = () => showToast('Copy failed — select the URL');
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(url).then(onSuccess, onFailure);
+      return;
+    }
+    // Legacy fallback
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = url;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'absolute';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      ok ? onSuccess() : onFailure();
+    } catch (e) {
+      onFailure();
+    }
   },
 
   // Subaward card's "Show N more" button handler. v1 pattern: the extra
@@ -3604,6 +3747,13 @@ const App = {
     // this, the complete() callback has no way to know what the user
     // actually asked this turn.
     turnEls.turnQuestion = String(turnQuestion || '').slice(0, 200);
+    // Also set data-q on the turn wrap so the delegated share-button
+    // handler (in init's click listener) can read the original query
+    // off the closest .turn-mo without threading turnEls references
+    // through every card renderer.
+    if (turnEls.wrap && turnEls.turnQuestion) {
+      turnEls.wrap.setAttribute('data-q', turnEls.turnQuestion);
+    }
 
     return {
       // Stream Mo's pre-tag prose (or whole response if no <data> tag).
@@ -3896,6 +4046,25 @@ const App = {
       // because the seller's next question is already in their head —
       // suggestions would just get in the way.
       complete: (debug) => {
+        // First data card of the session: append a warm teaching-moment
+        // line to Mo's post-prose so new users understand that what they
+        // just saw is live contract data, not a static dashboard. Fires
+        // exactly once per session — session-scoped flag on App, reset by
+        // resetThread. Skipped for coaching/clarifying/error turns since
+        // those don't render a card to teach from.
+        const hasCard = turnEls.chipData && (turnEls.chipData.mode === 'data' || turnEls.chipData.mode === 'subaward');
+        if (hasCard && !this._firstCardShown && postProseEl) {
+          // Append (don't replace) so Mo's grounded interpretation stays
+          // visible and the teaching line reads like her own voice.
+          // Small visual breathing room via a line break.
+          const teachingLine = document.createElement('div');
+          teachingLine.className = 'mo-first-card-teach';
+          teachingLine.textContent = "Hey that's live data, nice!";
+          postProseEl.appendChild(teachingLine);
+          this._firstCardShown = true;
+          this._track('first_card_teach_shown');
+        }
+
         if (chipsEl && turnEls.chipData) {
           const { mode, cardSpec } = turnEls.chipData;
           // Fire smart pills for any turn that surfaced a data card
@@ -3971,6 +4140,17 @@ const App = {
     wrap.innerHTML = `<div class="turn-user-bubble">${Html.escapeHtml(text)}</div>`;
     thread.appendChild(wrap);
     this._updateEmptyState();
+
+    // First turn of this session: mark the user as returning (so the
+    // next page load gets "Welcome back") and swap the input placeholder
+    // from the cold-start prompt to a follow-up-friendly one.
+    // Guarded by lookup so this only runs on the first turn, not every turn.
+    const askInp = document.getElementById('askInput');
+    if (askInp && askInp.placeholder && askInp.placeholder.startsWith('What do you sell')) {
+      askInp.placeholder = 'Ask a follow-up, or pivot…';
+    }
+    try { localStorage.setItem('fedmo_returning', '1'); } catch (e) { /* private mode */ }
+
     // Auto-scroll the user turn into view
     setTimeout(() => {
       const header = document.getElementById('moHeader');
@@ -4040,6 +4220,15 @@ const App = {
     this.state.lastQuery = null;
     this.state.lastResolverInput = null;
     this._history = [];
+    // Revert the ask-input placeholder back to the cold-start prompt.
+    // Without this, a user who hits "New conversation" sees "Ask a
+    // follow-up…" over an empty thread, which makes no sense.
+    const askInp = document.getElementById('askInput');
+    if (askInp) askInp.placeholder = 'What do you sell or cover?';
+    // Reset the "first card in this session" flag so the teaching
+    // moment line fires again for the new conversation. Scoped to
+    // session (not persistent) — intentional. Makes reset feel clean.
+    this._firstCardShown = false;
     document.getElementById('jumpLatest')?.classList.remove('visible');
     window.scrollTo({ top: 0, behavior: 'smooth' });
     this._updateEmptyState();
@@ -4079,8 +4268,8 @@ const App = {
       </div>
       <div class="turn-mo-card">
         <div class="mo-card-actions">
-          <button class="mo-card-action" title="Dismiss" onclick="this.closest('.turn-mo').remove()" aria-label="Dismiss">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          <button class="mo-card-action mo-card-share" title="Share" aria-label="Share this card">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
           </button>
         </div>
         <div class="mo-framing">${spec.direction === 'from'
@@ -4189,8 +4378,8 @@ const App = {
       </div>
       <div class="turn-mo-card">
         <div class="mo-card-actions">
-          <button class="mo-card-action" title="Dismiss" onclick="this.closest('.turn-mo').remove()" aria-label="Dismiss">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          <button class="mo-card-action mo-card-share" title="Share" aria-label="Share this card">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
           </button>
         </div>
         ${spec.framing ? `<div class="mo-framing">${Html.escapeHtml(spec.framing)}</div>` : ''}
@@ -4336,8 +4525,8 @@ const App = {
       </div>
       <div class="turn-mo-card">
         <div class="mo-card-actions">
-          <button class="mo-card-action" title="Dismiss" onclick="this.closest('.turn-mo').remove()" aria-label="Dismiss">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          <button class="mo-card-action mo-card-share" title="Share" aria-label="Share this card">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
           </button>
         </div>
         <div class="mo-empty">
@@ -4397,8 +4586,8 @@ const App = {
       </div>
       <div class="turn-mo-card">
         <div class="mo-card-actions">
-          <button class="mo-card-action" title="Dismiss" onclick="this.closest('.turn-mo').remove()" aria-label="Dismiss">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          <button class="mo-card-action mo-card-share" title="Share" aria-label="Share this card">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
           </button>
         </div>
         <div class="mo-empty">
@@ -4421,8 +4610,8 @@ const App = {
       </div>
       <div class="turn-mo-card">
         <div class="mo-card-actions">
-          <button class="mo-card-action" title="Dismiss" onclick="this.closest('.turn-mo').remove()" aria-label="Dismiss">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          <button class="mo-card-action mo-card-share" title="Share" aria-label="Share this card">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
           </button>
         </div>
         <div class="mo-verdict">${Html.escapeHtml(question)}</div>
