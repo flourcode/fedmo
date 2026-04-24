@@ -2824,7 +2824,22 @@ const App = {
         setTimeout(() => toast.remove(), 220);
       }, 2000);
     };
-    const onSuccess = () => showToast('Link copied');
+    // Briefly swap the button's text to "Copied!" for inline feedback,
+    // then restore. Pairs with the toast — tapping the button gives
+    // the user confirmation in the place they were looking, not just
+    // at the bottom of the screen. Guarded so we don't mangle the
+    // button if the user taps repeatedly during the swap window.
+    const flashButton = () => {
+      if (!sourceBtn || sourceBtn.dataset.copyFlashing === '1') return;
+      const originalText = sourceBtn.textContent;
+      sourceBtn.dataset.copyFlashing = '1';
+      sourceBtn.textContent = 'Copied!';
+      setTimeout(() => {
+        sourceBtn.textContent = originalText;
+        delete sourceBtn.dataset.copyFlashing;
+      }, 1600);
+    };
+    const onSuccess = () => { flashButton(); showToast('Link copied'); };
     const onFailure = () => showToast('Copy failed — select the URL');
     if (navigator.clipboard && window.isSecureContext) {
       navigator.clipboard.writeText(url).then(onSuccess, onFailure);
@@ -4268,9 +4283,7 @@ const App = {
       </div>
       <div class="turn-mo-card">
         <div class="mo-card-actions">
-          <button class="mo-card-action mo-card-share" title="Share" aria-label="Share this card">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
-          </button>
+          <button class="mo-action-link mo-card-share" title="Copy a link to this card" aria-label="Copy link to this card">Copy</button>
         </div>
         <div class="mo-framing">${spec.direction === 'from'
           ? `Subaward view: the primes hiring <strong>${Html.escapeHtml(spec.label)}</strong> as a sub to help deliver their own contracts.`
@@ -4378,9 +4391,7 @@ const App = {
       </div>
       <div class="turn-mo-card">
         <div class="mo-card-actions">
-          <button class="mo-card-action mo-card-share" title="Share" aria-label="Share this card">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
-          </button>
+          <button class="mo-action-link mo-card-share" title="Copy a link to this card" aria-label="Copy link to this card">Copy</button>
         </div>
         ${spec.framing ? `<div class="mo-framing">${Html.escapeHtml(spec.framing)}</div>` : ''}
         <div class="mo-verdict">${Html.escapeHtml(spec.verdict.text)}</div>
@@ -4525,9 +4536,7 @@ const App = {
       </div>
       <div class="turn-mo-card">
         <div class="mo-card-actions">
-          <button class="mo-card-action mo-card-share" title="Share" aria-label="Share this card">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
-          </button>
+          <button class="mo-action-link mo-card-share" title="Copy a link to this card" aria-label="Copy link to this card">Copy</button>
         </div>
         <div class="mo-empty">
           <div class="mo-empty-msg">${msg}</div>
@@ -4586,9 +4595,7 @@ const App = {
       </div>
       <div class="turn-mo-card">
         <div class="mo-card-actions">
-          <button class="mo-card-action mo-card-share" title="Share" aria-label="Share this card">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
-          </button>
+          <button class="mo-action-link mo-card-share" title="Copy a link to this card" aria-label="Copy link to this card">Copy</button>
         </div>
         <div class="mo-empty">
           <div class="mo-empty-msg">${Html.escapeHtml(friendly)}</div>
@@ -4610,9 +4617,7 @@ const App = {
       </div>
       <div class="turn-mo-card">
         <div class="mo-card-actions">
-          <button class="mo-card-action mo-card-share" title="Share" aria-label="Share this card">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
-          </button>
+          <button class="mo-action-link mo-card-share" title="Copy a link to this card" aria-label="Copy link to this card">Copy</button>
         </div>
         <div class="mo-verdict">${Html.escapeHtml(question)}</div>
       </div>
