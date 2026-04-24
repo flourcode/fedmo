@@ -1353,7 +1353,7 @@ body.thread-empty .mo-ask-bar {
       <svg class="greeting-face" viewBox="0 0 40 40"><use href="#icon-face-open"/></svg>
       <div class="greeting-intro-text">
         <div class="greeting-hi" id="greetingHi">Hi, I'm Mo.</div>
-        <div class="greeting-sub" id="greetingSub">Ask me anything about federal contracts. I pull live data from USASpending and show you the money in seconds.</div>
+        <div class="greeting-sub" id="greetingSub">Ask me anything about federal contracts. I'll pull live data from USASpending so you can follow the money.</div>
       </div>
     </div>
     <div class="greeting-examples" id="greetingChips"></div>
@@ -4283,7 +4283,7 @@ const App = {
       </div>
       <div class="turn-mo-card">
         <div class="mo-card-actions">
-          <button class="mo-action-link mo-card-share" title="Copy a link to this card" aria-label="Copy link to this card">Copy</button>
+          <button class="mo-action-link mo-card-share" title="Copy a link to this card" aria-label="Copy link to this card">Copy link</button>
         </div>
         <div class="mo-framing">${spec.direction === 'from'
           ? `Subaward view: the primes hiring <strong>${Html.escapeHtml(spec.label)}</strong> as a sub to help deliver their own contracts.`
@@ -4391,7 +4391,7 @@ const App = {
       </div>
       <div class="turn-mo-card">
         <div class="mo-card-actions">
-          <button class="mo-action-link mo-card-share" title="Copy a link to this card" aria-label="Copy link to this card">Copy</button>
+          <button class="mo-action-link mo-card-share" title="Copy a link to this card" aria-label="Copy link to this card">Copy link</button>
         </div>
         ${spec.framing ? `<div class="mo-framing">${Html.escapeHtml(spec.framing)}</div>` : ''}
         <div class="mo-verdict">${Html.escapeHtml(spec.verdict.text)}</div>
@@ -4536,7 +4536,7 @@ const App = {
       </div>
       <div class="turn-mo-card">
         <div class="mo-card-actions">
-          <button class="mo-action-link mo-card-share" title="Copy a link to this card" aria-label="Copy link to this card">Copy</button>
+          <button class="mo-action-link mo-card-share" title="Copy a link to this card" aria-label="Copy link to this card">Copy link</button>
         </div>
         <div class="mo-empty">
           <div class="mo-empty-msg">${msg}</div>
@@ -4595,7 +4595,7 @@ const App = {
       </div>
       <div class="turn-mo-card">
         <div class="mo-card-actions">
-          <button class="mo-action-link mo-card-share" title="Copy a link to this card" aria-label="Copy link to this card">Copy</button>
+          <button class="mo-action-link mo-card-share" title="Copy a link to this card" aria-label="Copy link to this card">Copy link</button>
         </div>
         <div class="mo-empty">
           <div class="mo-empty-msg">${Html.escapeHtml(friendly)}</div>
@@ -4617,7 +4617,7 @@ const App = {
       </div>
       <div class="turn-mo-card">
         <div class="mo-card-actions">
-          <button class="mo-action-link mo-card-share" title="Copy a link to this card" aria-label="Copy link to this card">Copy</button>
+          <button class="mo-action-link mo-card-share" title="Copy a link to this card" aria-label="Copy link to this card">Copy link</button>
         </div>
         <div class="mo-verdict">${Html.escapeHtml(question)}</div>
       </div>
