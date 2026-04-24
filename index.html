@@ -1016,31 +1016,6 @@ body.thread-empty .mo-ask-bar {
   font-size: 14px;
   font-style: italic;
 }
-
-/* Toast for share-link-copied confirmation. Anchored to the bottom
-   center of the viewport, above the ask bar. Fades in, sits for ~2s,
-   fades out. Pure CSS transition — no animation libraries. */
-.mo-toast {
-  position: fixed;
-  left: 50%;
-  bottom: calc(96px + env(safe-area-inset-bottom));
-  transform: translate(-50%, 8px);
-  background: var(--primary-100);
-  color: #FFFFFF;
-  font-size: 14px;
-  font-weight: 500;
-  padding: 10px 18px;
-  border-radius: var(--radius-pill);
-  box-shadow: 0 4px 16px rgba(44, 41, 51, 0.18);
-  opacity: 0;
-  pointer-events: none;
-  z-index: 200;
-  transition: opacity 180ms ease, transform 180ms ease;
-}
-.mo-toast-show {
-  opacity: 1;
-  transform: translate(-50%, 0);
-}
 .mo-row-2line-top {
   display: flex;
   align-items: center;
@@ -2803,44 +2778,29 @@ const App = {
     } catch (e) { /* never break the app on analytics */ }
   },
 
-  // Copy a share URL to the clipboard and show a brief toast confirmation
-  // near the button that was tapped. Uses the async clipboard API with a
-  // legacy textarea + execCommand fallback for older Safari and for pages
-  // served over non-HTTPS (though fedmo.com is always HTTPS, the fallback
-  // is cheap insurance).
+  // Copy a share URL to the clipboard and flash the button briefly as
+  // confirmation. Uses the async clipboard API with a legacy textarea +
+  // execCommand fallback for older Safari and for pages served over
+  // non-HTTPS (though fedmo.com is always HTTPS, the fallback is cheap
+  // insurance).
   _copyShareUrl(url, sourceBtn) {
-    const showToast = (msg) => {
-      // Remove any existing toast first — if the user taps share twice
-      // quickly we don't want stacked toasts.
-      document.querySelectorAll('.mo-toast').forEach(t => t.remove());
-      const toast = document.createElement('div');
-      toast.className = 'mo-toast';
-      toast.textContent = msg;
-      document.body.appendChild(toast);
-      // Animate in via class, auto-remove after 2 seconds.
-      requestAnimationFrame(() => toast.classList.add('mo-toast-show'));
-      setTimeout(() => {
-        toast.classList.remove('mo-toast-show');
-        setTimeout(() => toast.remove(), 220);
-      }, 2000);
-    };
     // Briefly swap the button's text to "Copied!" for inline feedback,
-    // then restore. Pairs with the toast — tapping the button gives
-    // the user confirmation in the place they were looking, not just
-    // at the bottom of the screen. Guarded so we don't mangle the
-    // button if the user taps repeatedly during the swap window.
-    const flashButton = () => {
+    // then restore. The button is where the user tapped, so it's where
+    // they're looking — confirmation in place is cleaner than a separate
+    // floating element. Guarded so we don't mangle the button if the
+    // user taps repeatedly during the swap window.
+    const flashButton = (msg) => {
       if (!sourceBtn || sourceBtn.dataset.copyFlashing === '1') return;
       const originalText = sourceBtn.textContent;
       sourceBtn.dataset.copyFlashing = '1';
-      sourceBtn.textContent = 'Copied!';
+      sourceBtn.textContent = msg;
       setTimeout(() => {
         sourceBtn.textContent = originalText;
         delete sourceBtn.dataset.copyFlashing;
       }, 1600);
     };
-    const onSuccess = () => { flashButton(); showToast('Link copied'); };
-    const onFailure = () => showToast('Copy failed — select the URL');
+    const onSuccess = () => flashButton('Copied!');
+    const onFailure = () => flashButton('Try again');
     if (navigator.clipboard && window.isSecureContext) {
       navigator.clipboard.writeText(url).then(onSuccess, onFailure);
       return;
