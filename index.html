@@ -984,13 +984,11 @@ body.thread-empty .mo-ask-bar {
 }
 .mo-row-2line:last-child { border-bottom: none; }
 
-/* Rank-weighted rows. Add .mo-row-ranked with data-rank="1..3" to a
-   .mo-row-2line and the leader gets the deepest purple stripe down
-   the left edge, stepping down through the palette for #2 and #3.
-   Ranks 4 and 5 intentionally get no stripe — the hierarchy is in
-   the top 3, tail is just tail. Data-rank="1" → --primary-100,
-   "2" → --primary-60, "3" → --primary-40. Stripe sits inside a
-   10px left padding so text breathing room is preserved. */
+/* Rank-weighted rows. The top 3 rows of rank-ordered lists (Top primes,
+   Prime→Sub) get a colored left-border stripe, deepest purple at #1
+   stepping down through the palette for #2 and #3. Rows 4+ don't get
+   this class at all — they render as plain .mo-row-2line, identical to
+   before the stripe was introduced. */
 .mo-row-ranked {
   position: relative;
   padding-left: 10px;
@@ -1003,7 +1001,6 @@ body.thread-empty .mo-ask-bar {
   bottom: 14px;
   width: 3px;
   border-radius: 2px;
-  background: transparent;
 }
 .mo-row-ranked[data-rank="1"]::before { background: var(--primary-100); }
 .mo-row-ranked[data-rank="2"]::before { background: var(--primary-60); }
@@ -2091,9 +2088,9 @@ function analyzeSubawards(subs, marketLabel, opts = {}) {
   }
 
   // Top prime→sub relationships for the list view. Sorted by
-  // sub-award amount so visual rank (left-border stripe, applied
-  // via .mo-row-ranked on ranks 1-5 in the renderer) matches
-  // "biggest dollar deal at the top".
+  // sub-award amount so the biggest dollar deal shows at the top.
+  // rank 1-3 drives the left-border stripe (see .mo-row-ranked in CSS);
+  // rows beyond #3 render as plain .mo-row-2line with no stripe.
   const relationships = subs.slice(0, 25)
     .slice()
     .sort((a, b) => (parseFloat(b['Sub-Award Amount']) || 0) - (parseFloat(a['Sub-Award Amount']) || 0))
@@ -4114,13 +4111,11 @@ const App = {
       html += `<div class="mo-comp-head"><div class="mo-comp-title">Prime → Sub</div><div class="mo-comp-meta">${shownCount} of ${spec.totalSubs} shown</div></div><div class="mo-list">`;
       const renderRelRow = (r) => {
         const liUrl = `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(Utils.linkedinSearchTerm(r.sub))}&origin=GLOBAL_SEARCH_HEADER`;
-        // Ranked stripe only on the top 5 rows (ranks 1-5 use the same
-        // primary-100 → primary-20 ramp as Top primes). Rows 6+ render as
-        // plain .mo-row-2line with no stripe, which reads cleanly as
-        // "below the top 5" without bucketing into false-tie colors.
-        const rankedAttrs = (r.rank && r.rank <= 5)
-          ? ` mo-row-ranked" data-rank="${r.rank}`
-          : '';
+        // Rows 1-3 get the left-border stripe (same .mo-row-ranked pattern
+        // as Top primes). Rows 4+ render as plain .mo-row-2line with no
+        // stripe — the hierarchy signal is top 3, tail is just tail.
+        const isRanked = r.rank && r.rank <= 3;
+        const rankedAttrs = isRanked ? ` mo-row-ranked" data-rank="${r.rank}` : '';
         return `<div class="mo-row-2line${rankedAttrs}">
           <div class="mo-row-2line-top">
             <span class="mo-row-name"><span class="mo-sub-prime">${Html.escapeHtml(r.prime)}</span> <span class="mo-sub-arrow">→</span> ${Html.escapeHtml(r.sub)}</span>
@@ -4218,12 +4213,11 @@ const App = {
         const idShort = p.contractId ? p.contractId.slice(0, 24) + (p.contractId.length > 24 ? '…' : '') : '';
         const meta = [idShort, p.vehicle].filter(Boolean).join(' · ');
         const liUrl = `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(Utils.linkedinSearchTerm(p.name))}&origin=GLOBAL_SEARCH_HEADER`;
-        // data-rank drives the left-border stripe color. Only ranks 1-3
-        // get a visible stripe (see .mo-row-ranked[data-rank="N"] in CSS);
-        // ranks 4-5 keep the padding for alignment but show no stripe.
-        // Defensive default to 5 (no stripe) if rank happens to be missing.
-        const rank = p.rank || 5;
-        html += `<div class="mo-row-2line mo-row-ranked" data-rank="${rank}">
+        // Rows 1-3 get the left-border stripe via .mo-row-ranked.
+        // Rows 4-5 render as plain .mo-row-2line, identical to production.
+        const isRanked = p.rank && p.rank <= 3;
+        const rankedAttrs = isRanked ? ` mo-row-ranked" data-rank="${p.rank}` : '';
+        html += `<div class="mo-row-2line${rankedAttrs}">
           <div class="mo-row-2line-top">
             <span class="mo-row-name">${Html.escapeHtml(p.name)}</span>
             <span class="mo-row-amount">${Html.escapeHtml(p.spend)}</span>
