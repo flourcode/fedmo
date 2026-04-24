@@ -1517,6 +1517,28 @@ export function looksLikeFollowUp(question) {
     return true;
   }
 
+  // Deictic scoping references — words that can ONLY mean "in the
+  // context we already established". Common pattern in real seller
+  // chat: "who are my biggest channel partners here", "what's the
+  // pipeline like in this space", "show me competitors in that market".
+  // Without these patterns, the question gets misclassified as fresh
+  // and Mo loses the active card context entirely. Verified April 2026
+  // with the AWS@VA channel-partners test case.
+  //
+  // Match strategies:
+  //   - "here" at end of sentence ("...here", "...here?")  → deictic
+  //   - "in this/that/these/those <noun>"                  → deictic
+  //   - "for this/that/these/those <noun>"                 → deictic
+  //   - bare "this space|market|area|scope|territory|..."  → deictic
+  //
+  // We deliberately do NOT match "here" anywhere in the question,
+  // because real fresh queries can use it incidentally ("I sell AWS
+  // here in DC", "what's here at DoD"). The end-of-sentence rule is
+  // the conservative version.
+  if (/\bhere[\s.?!]*$/i.test(q)) return true;
+  if (/\b(in|for|on|at|with|to)\s+(this|that|these|those)\s+\w+/i.test(q)) return true;
+  if (/\b(this|that)\s+(space|market|area|scope|territory|account|deal|pursuit|contract|agency|vendor|prime|sub|opportunity)\b/i.test(q)) return true;
+
   // Very short messages (< 5 words) without a verb are usually refer-backs:
   // "Navy", "VA", "expiring", "above $5M", "small business set-asides"
   const wordCount = q.split(/\s+/).length;
