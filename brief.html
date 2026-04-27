@@ -374,7 +374,7 @@
 
 <div class="brief-header">
   <h1>Fedmo · Weekly Brief</h1>
-  <div class="subtitle">Find candidate signals from this week's federal contracting + SEC paper trail. Pick 2-6. Get a draft for LinkedIn or Substack.</div>
+  <div class="subtitle">Find candidate signals from this week's federal contracting + SEC paper trail. Pick as many as you want. Get a draft for LinkedIn or Substack.</div>
 </div>
 
 <!-- ── Stage 1: scan ─────────────────────────────────────────── -->
@@ -397,7 +397,7 @@
 
 <!-- ── Stage 3: pick bar ─────────────────────────────────────── -->
 <div class="pick-bar" id="pick-bar" hidden>
-  <div class="pick-count-text" id="pick-count">Pick 2-6 signals to draft</div>
+  <div class="pick-count-text" id="pick-count">Pick signals to draft</div>
   <button class="btn-primary" id="generate-draft" disabled>Draft these signals</button>
 </div>
 
@@ -464,8 +464,9 @@ let candidatesByBucket = {};   // bucket → array of candidates
 let pickedKeys = [];           // ordered array of "bucket:idx" keys
 let dateRange = null;
 
-const MIN_PICKS = 2;
-const MAX_PICKS = 6;
+// No min/max on picks. Mark wants flexibility to mix-and-match across
+// brackets and SEC filings, then edit/trim in Word before publishing.
+// The brief tool's job is curation, not enforcement.
 
 // ─────────────────────────────────────────────────────────────────────
 // Default since date = last Sunday
@@ -716,7 +717,6 @@ function togglePick(key) {
   if (idxInPicks >= 0) {
     pickedKeys.splice(idxInPicks, 1);
   } else {
-    if (pickedKeys.length >= MAX_PICKS) return;  // Cap
     pickedKeys.push(key);
   }
   // Update UI for this card and the pick bar
@@ -739,10 +739,7 @@ function updatePickCount() {
   const btn = document.getElementById('generate-draft');
   const n = pickedKeys.length;
   if (n === 0) {
-    text.textContent = 'Pick 2-6 signals to draft';
-    btn.disabled = true;
-  } else if (n < MIN_PICKS) {
-    text.textContent = `${n} picked (need at least ${MIN_PICKS})`;
+    text.textContent = 'Pick signals to draft';
     btn.disabled = true;
   } else {
     text.textContent = `${n} picked`;
@@ -756,7 +753,7 @@ function updatePickCount() {
 // scaffold he can edit. The brief tool's job is curation, not generation.
 // ─────────────────────────────────────────────────────────────────────
 document.getElementById('generate-draft').addEventListener('click', () => {
-  if (pickedKeys.length < MIN_PICKS) return;
+  if (pickedKeys.length === 0) return;
 
   const issueNum = document.getElementById('issue-num').value || '?';
   const lines = [];
