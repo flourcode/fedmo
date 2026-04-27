@@ -339,6 +339,9 @@
   <label>Since
     <input type="date" id="since-date">
   </label>
+  <label>Big-award floor ($M)
+    <input type="number" id="min-amount-m" value="25" min="1" max="1000" step="1">
+  </label>
   <button class="btn-primary" id="find-candidates">Find this week's signals</button>
 </div>
 <div class="stage-status" id="stage-1-status"></div>
@@ -422,6 +425,8 @@ document.getElementById('find-candidates').addEventListener('click', async () =>
   const btn = document.getElementById('find-candidates');
   const status = document.getElementById('stage-1-status');
   const sinceDate = document.getElementById('since-date').value;
+  const minAmountM = parseFloat(document.getElementById('min-amount-m').value) || 25;
+  const minAmount = Math.max(minAmountM * 1_000_000, 1_000_000);  // floor at $1M
 
   btn.disabled = true;
   status.textContent = 'Scanning USASpending + EDGAR (~10-20 seconds)...';
@@ -438,7 +443,7 @@ document.getElementById('find-candidates').addEventListener('click', async () =>
     const res = await fetch(FEDMO_LAMBDA_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ request_type: 'brief_candidates', since_date: sinceDate }),
+      body: JSON.stringify({ request_type: 'brief_candidates', since_date: sinceDate, min_amount: minAmount }),
     });
     if (!res.ok) throw new Error(`Lambda ${res.status}`);
     const data = await res.json();
@@ -525,7 +530,7 @@ function renderCandidateCard(bucket, idx, c) {
     link = c.contractLink;
   } else if (bucket === 'big_awards') {
     headline = `${titleCase(c.vendor || '')} · ${fmtMoney(c.amount)}`;
-    meta = c.agency || '';
+    meta = [c.agency, c.startDate ? `Started ${c.startDate}` : null].filter(Boolean).join(' · ');
     desc = c.description ? trim(c.description, 160) : '';
     link = c.contractLink;
   } else if (bucket === 'sec_paper_trail') {
@@ -689,7 +694,8 @@ function signalSummary(bucket, c) {
     return `${titleCase(c.vendor || '')} holds a ${c.popYears}-year, ${fmtMoney(c.amount)} contract with ${c.agency || ''} that expires in ${c.daysLeft} days. ${c.description ? '*Scope:* ' + trim(c.description, 200) : ''}`;
   }
   if (bucket === 'big_awards') {
-    return `${titleCase(c.vendor || '')} just received a ${fmtMoney(c.amount)} award from ${c.agency || ''}. ${c.description ? '*Scope:* ' + trim(c.description, 200) : ''}`;
+    const startedStr = c.startDate ? ` (signed ${c.startDate})` : '';
+    return `${titleCase(c.vendor || '')} just received a ${fmtMoney(c.amount)} award from ${c.agency || ''}${startedStr}. ${c.description ? '*Scope:* ' + trim(c.description, 200) : ''}`;
   }
   if (bucket === 'sec_paper_trail') {
     const itemsStr = c.items ? ` (Item ${c.items})` : '';
