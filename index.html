@@ -4996,6 +4996,21 @@ function initStateMaps(root) {
 // Carahsoft, GDIT, MITRE, ManTech are intentionally excluded — they
 // don't file. dsignals.com handles those via counterparty search.
 
+// Public-vendor allowlist for SEC filings enrichment on cards.
+// Inline constant — keeps fedmo.com page load instant (no fetch latency,
+// no async window where queries return null).
+//
+// IMPORTANT: this list MUST stay in sync with /public_vendors.json,
+// which the brief tool's Lambda fetches on cold-start. If you add a
+// vendor here, also add it to public_vendors.json. (The reverse is also
+// true — adding to public_vendors.json without adding here means the
+// main fedmo.com app won't show that vendor's filings on cards.)
+//
+// We accept this two-file maintenance because (a) editing fedmo.com's
+// experience to be async would slow down every page load to fix a
+// problem that only happens on weekly brief runs, and (b) adding a
+// vendor is a 30-second copy-paste, not a real ongoing burden.
+
 const FEDERAL_PUBLIC_VENDORS = {
   'accenture': { cik: '0001467373', display: 'Accenture', ticker: 'ACN' },
   'accenture federal services': { cik: '0001467373', display: 'Accenture', ticker: 'ACN' },
@@ -5053,10 +5068,10 @@ const FEDERAL_PUBLIC_VENDORS = {
   'general electric': { cik: '0000040545', display: 'GE', ticker: 'GE' },
   'google': { cik: '0001652044', display: 'Alphabet', ticker: 'GOOGL' },
   'hewlett packard enterprise': { cik: '0001645590', display: 'Hewlett Packard Enterprise', ticker: 'HPE' },
+  'hii': { cik: '0001501585', display: 'Huntington Ingalls', ticker: 'HII' },
   'honeywell': { cik: '0000773840', display: 'Honeywell', ticker: 'HON' },
   'hp inc': { cik: '0000047217', display: 'HP Inc', ticker: 'HPQ' },
   'hpe': { cik: '0001645590', display: 'Hewlett Packard Enterprise', ticker: 'HPE' },
-  'hii': { cik: '0001501585', display: 'Huntington Ingalls', ticker: 'HII' },
   'huntington ingalls': { cik: '0001501585', display: 'Huntington Ingalls', ticker: 'HII' },
   'huntington ingalls industries': { cik: '0001501585', display: 'Huntington Ingalls', ticker: 'HII' },
   'ibm': { cik: '0000051143', display: 'IBM', ticker: 'IBM' },
@@ -5069,8 +5084,8 @@ const FEDERAL_PUBLIC_VENDORS = {
   'kbr': { cik: '0001357615', display: 'KBR', ticker: 'KBR' },
   'kratos': { cik: '0001069258', display: 'Kratos Defense', ticker: 'KTOS' },
   'l-3': { cik: '0000202058', display: 'L3Harris Technologies', ticker: 'LHX' },
-  'l3': { cik: '0000202058', display: 'L3Harris Technologies', ticker: 'LHX' },
   'l-3 communications': { cik: '0000202058', display: 'L3Harris Technologies', ticker: 'LHX' },
+  'l3': { cik: '0000202058', display: 'L3Harris Technologies', ticker: 'LHX' },
   'l3harris': { cik: '0000202058', display: 'L3Harris Technologies', ticker: 'LHX' },
   'l3harris technologies': { cik: '0000202058', display: 'L3Harris Technologies', ticker: 'LHX' },
   'leidos': { cik: '0001336920', display: 'Leidos', ticker: 'LDOS' },
@@ -5088,9 +5103,6 @@ const FEDERAL_PUBLIC_VENDORS = {
   'nvidia': { cik: '0001045810', display: 'Nvidia', ticker: 'NVDA' },
   'okta': { cik: '0001660134', display: 'Okta', ticker: 'OKTA' },
   'oracle': { cik: '0001341439', display: 'Oracle', ticker: 'ORCL' },
-  // Oracle's federal subsidiaries — all roll up to the same CIK in EDGAR
-  // because Oracle Corp is the only filer. Listed explicitly so the
-  // pretty display name stays "Oracle" instead of e.g. "Oracle Health".
   'oracle america': { cik: '0001341439', display: 'Oracle', ticker: 'ORCL' },
   'oracle health': { cik: '0001341439', display: 'Oracle', ticker: 'ORCL' },
   'oracle health government services': { cik: '0001341439', display: 'Oracle', ticker: 'ORCL' },
@@ -5125,7 +5137,6 @@ const FEDERAL_PUBLIC_VENDORS = {
   'workday': { cik: '0001327811', display: 'Workday', ticker: 'WDAY' },
   'zscaler': { cik: '0001713683', display: 'Zscaler', ticker: 'ZS' },
 };
-
 // We only show these filing types. Skipping insider Form 4s (too noisy
 // without interpretation), 13F/13G/13D (institutional ownership, mostly
 // tangential to federal sales), and Form D (private placements).
