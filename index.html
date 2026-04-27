@@ -4987,9 +4987,12 @@ function initStateMaps(root) {
 const FEDERAL_PUBLIC_VENDORS = {
   'accenture': { cik: '0001467373', display: 'Accenture', ticker: 'ACN' },
   'accenture federal services': { cik: '0001467373', display: 'Accenture', ticker: 'ACN' },
+  'adobe': { cik: '0000796343', display: 'Adobe', ticker: 'ADBE' },
   'advanced micro devices': { cik: '0000002488', display: 'AMD', ticker: 'AMD' },
   'aecom': { cik: '0000868857', display: 'AECOM', ticker: 'AECOM' },
   'aerovironment': { cik: '0001368622', display: 'AeroVironment', ticker: 'AVAV' },
+  'akamai': { cik: '0001086222', display: 'Akamai', ticker: 'AKAM' },
+  'akamai technologies': { cik: '0001086222', display: 'Akamai', ticker: 'AKAM' },
   'alphabet': { cik: '0001652044', display: 'Alphabet', ticker: 'GOOGL' },
   'amazon': { cik: '0001018724', display: 'Amazon', ticker: 'AMZN' },
   'amazon web services': { cik: '0001018724', display: 'Amazon', ticker: 'AMZN' },
@@ -4998,11 +5001,14 @@ const FEDERAL_PUBLIC_VENDORS = {
   'amentum holdings': { cik: '0002011286', display: 'Amentum', ticker: 'AMTM' },
   'arista': { cik: '0001596532', display: 'Arista Networks', ticker: 'ANET' },
   'arista networks': { cik: '0001596532', display: 'Arista Networks', ticker: 'ANET' },
+  'at&t': { cik: '0000732717', display: 'AT&T', ticker: 'T' },
+  'att': { cik: '0000732717', display: 'AT&T', ticker: 'T' },
   'aws': { cik: '0001018724', display: 'Amazon', ticker: 'AMZN' },
   'bae systems': { cik: '0000895564', display: 'BAE Systems', ticker: 'BAESY' },
   'boeing': { cik: '0000012927', display: 'Boeing', ticker: 'BA' },
   'booz allen': { cik: '0001443646', display: 'Booz Allen Hamilton', ticker: 'BAH' },
   'booz allen hamilton': { cik: '0001443646', display: 'Booz Allen Hamilton', ticker: 'BAH' },
+  'box': { cik: '0001372612', display: 'Box', ticker: 'BOX' },
   'broadcom': { cik: '0001730168', display: 'Broadcom', ticker: 'AVGO' },
   'bwx technologies': { cik: '0001486957', display: 'BWX Technologies', ticker: 'BWXT' },
   'bwxt': { cik: '0001486957', display: 'BWX Technologies', ticker: 'BWXT' },
@@ -5013,13 +5019,19 @@ const FEDERAL_PUBLIC_VENDORS = {
   'cisco systems': { cik: '0000858877', display: 'Cisco Systems', ticker: 'CSCO' },
   'cloudflare': { cik: '0001477333', display: 'Cloudflare', ticker: 'NET' },
   'cognizant': { cik: '0001058290', display: 'Cognizant', ticker: 'CTSH' },
+  'confluent': { cik: '0001699838', display: 'Confluent', ticker: 'CFLT' },
   'crowdstrike': { cik: '0001535527', display: 'CrowdStrike', ticker: 'CRWD' },
   'curtiss wright': { cik: '0000026324', display: 'Curtiss-Wright', ticker: 'CW' },
   'curtiss-wright': { cik: '0000026324', display: 'Curtiss-Wright', ticker: 'CW' },
   'datadog': { cik: '0001561550', display: 'Datadog', ticker: 'DDOG' },
   'dell': { cik: '0001571996', display: 'Dell Technologies', ticker: 'DELL' },
   'dell technologies': { cik: '0001571996', display: 'Dell Technologies', ticker: 'DELL' },
+  'docusign': { cik: '0001261333', display: 'DocuSign', ticker: 'DOCU' },
+  'dropbox': { cik: '0001467623', display: 'Dropbox', ticker: 'DBX' },
   'dxc technology': { cik: '0001688568', display: 'DXC Technology', ticker: 'DXC' },
+  'elastic': { cik: '0001707753', display: 'Elastic', ticker: 'ESTC' },
+  'f5': { cik: '0001048695', display: 'F5 Networks', ticker: 'FFIV' },
+  'f5 networks': { cik: '0001048695', display: 'F5 Networks', ticker: 'FFIV' },
   'fortinet': { cik: '0001262039', display: 'Fortinet', ticker: 'FTNT' },
   'ge healthcare': { cik: '0001932393', display: 'GE HealthCare', ticker: 'GEHC' },
   'ge vernova': { cik: '0001996810', display: 'GE Vernova', ticker: 'GEV' },
@@ -5038,6 +5050,7 @@ const FEDERAL_PUBLIC_VENDORS = {
   'international business machines': { cik: '0000051143', display: 'IBM', ticker: 'IBM' },
   'jacobs': { cik: '0000052988', display: 'Jacobs Solutions', ticker: 'J' },
   'jacobs solutions': { cik: '0000052988', display: 'Jacobs Solutions', ticker: 'J' },
+  'jfrog': { cik: '0001800667', display: 'JFrog', ticker: 'FROG' },
   'kbr': { cik: '0001357615', display: 'KBR', ticker: 'KBR' },
   'kratos': { cik: '0001069258', display: 'Kratos Defense', ticker: 'KTOS' },
   'l3harris': { cik: '0000202058', display: 'L3Harris Technologies', ticker: 'LHX' },
@@ -5049,17 +5062,28 @@ const FEDERAL_PUBLIC_VENDORS = {
   'maximus': { cik: '0001032220', display: 'Maximus', ticker: 'MMS' },
   'mercury systems': { cik: '0001049521', display: 'Mercury Systems', ticker: 'MRCY' },
   'microsoft': { cik: '0000789019', display: 'Microsoft', ticker: 'MSFT' },
+  'mongodb': { cik: '0001441816', display: 'MongoDB', ticker: 'MDB' },
+  'motorola solutions': { cik: '0000068505', display: 'Motorola Solutions', ticker: 'MSI' },
+  'netapp': { cik: '0001002047', display: 'NetApp', ticker: 'NTAP' },
   'northrop': { cik: '0001133421', display: 'Northrop Grumman', ticker: 'NOC' },
   'northrop grumman': { cik: '0001133421', display: 'Northrop Grumman', ticker: 'NOC' },
   'nvidia': { cik: '0001045810', display: 'Nvidia', ticker: 'NVDA' },
   'okta': { cik: '0001660134', display: 'Okta', ticker: 'OKTA' },
   'oracle': { cik: '0001341439', display: 'Oracle', ticker: 'ORCL' },
+  // Oracle's federal subsidiaries — all roll up to the same CIK in EDGAR
+  // because Oracle Corp is the only filer. Listed explicitly so the
+  // pretty display name stays "Oracle" instead of e.g. "Oracle Health".
+  'oracle america': { cik: '0001341439', display: 'Oracle', ticker: 'ORCL' },
+  'oracle health': { cik: '0001341439', display: 'Oracle', ticker: 'ORCL' },
+  'oracle health government services': { cik: '0001341439', display: 'Oracle', ticker: 'ORCL' },
   'palantir': { cik: '0001321655', display: 'Palantir', ticker: 'PLTR' },
   'palantir technologies': { cik: '0001321655', display: 'Palantir', ticker: 'PLTR' },
   'palo alto': { cik: '0001327567', display: 'Palo Alto Networks', ticker: 'PANW' },
   'palo alto networks': { cik: '0001327567', display: 'Palo Alto Networks', ticker: 'PANW' },
   'parsons': { cik: '0000275880', display: 'Parsons', ticker: 'PSN' },
   'pc connection': { cik: '0001050377', display: 'PC Connection', ticker: 'CNXN' },
+  'pure storage': { cik: '0001474432', display: 'Pure Storage', ticker: 'PSTG' },
+  'qualys': { cik: '0001107843', display: 'Qualys', ticker: 'QLYS' },
   'rapid7': { cik: '0001560327', display: 'Rapid7', ticker: 'RPD' },
   'raytheon': { cik: '0000101829', display: 'RTX Corp', ticker: 'RTX' },
   'rtx': { cik: '0000101829', display: 'RTX Corp', ticker: 'RTX' },
@@ -5077,6 +5101,10 @@ const FEDERAL_PUBLIC_VENDORS = {
   'textron': { cik: '0000217346', display: 'Textron', ticker: 'TXT' },
   'tyler technologies': { cik: '0000860731', display: 'Tyler Technologies', ticker: 'TYL' },
   'v2x': { cik: '0001601548', display: 'V2X', ticker: 'V2X' },
+  'veeva': { cik: '0001393052', display: 'Veeva Systems', ticker: 'VEEV' },
+  'veeva systems': { cik: '0001393052', display: 'Veeva Systems', ticker: 'VEEV' },
+  'verizon': { cik: '0000732712', display: 'Verizon', ticker: 'VZ' },
+  'workday': { cik: '0001327811', display: 'Workday', ticker: 'WDAY' },
   'zscaler': { cik: '0001713683', display: 'Zscaler', ticker: 'ZS' },
 };
 
@@ -5095,22 +5123,58 @@ const SEC_FILING_TYPES_KEEP = new Set([
 
 // Match a USASpending vendor name to our public-vendor map. USASpending
 // names come back ALL-CAPS with corporate suffixes ("LOCKHEED MARTIN
-// CORPORATION", "BOOZ ALLEN HAMILTON INC."). We strip suffixes and
-// lowercase for the lookup. Returns the matching entry or null.
+// CORPORATION", "BOOZ ALLEN HAMILTON INC."). Federal subsidiaries are
+// also common: "ORACLE HEALTH GOVERNMENT SERVICES, INC." needs to
+// resolve to Oracle. We do this in three passes:
+//   1. Strip corporate suffixes, try direct match.
+//   2. Strip federal-subsidiary qualifiers (federal, government, health,
+//      public sector, america, services, etc.) and retry.
+//   3. Try progressively shorter token prefixes to catch "ORACLE HEALTH
+//      GOVERNMENT SERVICES" → "oracle".
+// Returns the matching entry or null.
 function matchPublicVendor(vendorName) {
   if (!vendorName) return null;
   let cleaned = String(vendorName).toLowerCase().trim();
-  // Strip common corporate suffixes
+  // Strip common corporate suffixes (corp, inc, llc, etc.)
   cleaned = cleaned
     .replace(/\b(corp|corporation|inc|incorporated|llc|l\.l\.c\.|ltd|limited|plc|holdings?|company|co)\b\.?$/i, '')
     .replace(/\s*[,\.]\s*$/, '')
     .trim();
+  // Pass 1: direct match
   if (FEDERAL_PUBLIC_VENDORS[cleaned]) return FEDERAL_PUBLIC_VENDORS[cleaned];
-  // Try progressively shorter prefixes — USASpending may name them
-  // "ACCENTURE FEDERAL SERVICES LLC" but our key is "accenture federal services"
-  // (already handled above) or just "accenture" (handled by the strip-and-retry).
-  cleaned = cleaned.replace(/\s+(federal|government|public sector|gov|services).*$/, '').trim();
-  if (FEDERAL_PUBLIC_VENDORS[cleaned]) return FEDERAL_PUBLIC_VENDORS[cleaned];
+
+  // Pass 2: strip federal-subsidiary qualifiers anywhere in the name,
+  // not just at the end. Order matters — strip multi-word phrases
+  // first so "public sector" doesn't get partially eaten.
+  const QUALIFIER_PATTERNS = [
+    /\bpublic sector\b/g,
+    /\bgovernment services\b/g,
+    /\bgovernment solutions\b/g,
+    /\bfederal services\b/g,
+    /\bfederal solutions\b/g,
+    /\binformation technology\b/g,
+    /\bmission systems\b/g,
+    /\bspace systems\b/g,
+    /\b(federal|government|gov|health|america|americas|public|services|solutions)\b/g,
+  ];
+  let stripped = cleaned;
+  QUALIFIER_PATTERNS.forEach(p => { stripped = stripped.replace(p, ' '); });
+  stripped = stripped.replace(/\s+/g, ' ').trim();
+  if (stripped !== cleaned && FEDERAL_PUBLIC_VENDORS[stripped]) {
+    return FEDERAL_PUBLIC_VENDORS[stripped];
+  }
+
+  // Pass 3: progressively shorter token prefixes. Take the leftmost
+  // 1-3 tokens and try each as a key. This catches "ORACLE HEALTH
+  // GOVERNMENT SERVICES" → "oracle" even if Pass 2 left some residue,
+  // and handles unknown subsidiary patterns we haven't enumerated.
+  const tokens = cleaned.split(/\s+/).filter(Boolean);
+  // Try 3 tokens, then 2, then 1 — longest-first so "general dynamics
+  // information technology" matches "general dynamics" before "general"
+  for (let n = Math.min(3, tokens.length); n >= 1; n--) {
+    const prefix = tokens.slice(0, n).join(' ');
+    if (FEDERAL_PUBLIC_VENDORS[prefix]) return FEDERAL_PUBLIC_VENDORS[prefix];
+  }
   return null;
 }
 
