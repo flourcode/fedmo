@@ -340,7 +340,7 @@
     <input type="date" id="since-date">
   </label>
   <label>Big-award floor ($M)
-    <input type="number" id="min-amount-m" value="25" min="1" max="1000" step="1">
+    <input type="number" id="min-amount-m" value="10" min="1" max="1000" step="1">
   </label>
   <button class="btn-primary" id="find-candidates">Find this week's signals</button>
 </div>
@@ -425,7 +425,7 @@ document.getElementById('find-candidates').addEventListener('click', async () =>
   const btn = document.getElementById('find-candidates');
   const status = document.getElementById('stage-1-status');
   const sinceDate = document.getElementById('since-date').value;
-  const minAmountM = parseFloat(document.getElementById('min-amount-m').value) || 25;
+  const minAmountM = parseFloat(document.getElementById('min-amount-m').value) || 10;
   const minAmount = Math.max(minAmountM * 1_000_000, 1_000_000);  // floor at $1M
 
   btn.disabled = true;
