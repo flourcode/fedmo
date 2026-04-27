@@ -459,6 +459,106 @@ const BIG_AWARDS_BRACKETS = [
   { key: '100k_1m',  label: '$100K-$1M', blurb: 'Smallest reportable awards (mostly noise)',          defaultOpen: false },
 ];
 
+// ─────────────────────────────────────────────────────────────────────
+// LinkedIn / Google dork helpers for the newsletter footer.
+//
+// Federal legal entity names ("GENERAL DYNAMICS INFORMATION TECHNOLOGY,
+// INC.") return zero LinkedIn results. People put what's on their badge
+// — "GDIT", "Tantus", "Sprezzatura". We need to clean the legal name
+// to the brand-ish form a person would actually have on their profile.
+//
+// Strategy from oldmo.html: explicit brand map for the top federal
+// primes (no guessing), then conservative suffix stripping.
+//
+// Mark's empirical principle (lots of dorking): adding role qualifiers
+// like "BD" or "Federal" tends to drop more useful matches than it
+// surfaces. The dork lands on the company-wide list and the reader
+// filters visually. Just the cleaned company name + site:linkedin.com/in.
+// ─────────────────────────────────────────────────────────────────────
+const LINKEDIN_BRAND_MAP = {
+  'GENERAL DYNAMICS INFORMATION TECHNOLOGY': 'GDIT',
+  'GENERAL DYNAMICS IT': 'GDIT',
+  'SCIENCE APPLICATIONS INTERNATIONAL': 'SAIC',
+  'SCIENCE APPLICATIONS INTERNATIONAL CORPORATION': 'SAIC',
+  'WORLD WIDE TECHNOLOGY': 'WWT',
+  'WORLDWIDE TECHNOLOGY': 'WWT',
+  'BOOZ ALLEN HAMILTON': 'Booz Allen Hamilton',
+  'CARAHSOFT TECHNOLOGY': 'Carahsoft',
+  'LEIDOS INNOVATIONS': 'Leidos',
+  'LOCKHEED MARTIN CORPORATION': 'Lockheed Martin',
+  'NORTHROP GRUMMAN SYSTEMS': 'Northrop Grumman',
+  'NORTHROP GRUMMAN CORPORATION': 'Northrop Grumman',
+  'RAYTHEON TECHNOLOGIES': 'Raytheon',
+  'RAYTHEON COMPANY': 'Raytheon',
+  'L3HARRIS TECHNOLOGIES': 'L3Harris',
+  'HONEYWELL INTERNATIONAL': 'Honeywell',
+  'INTERNATIONAL BUSINESS MACHINES': 'IBM',
+  'AMAZON WEB SERVICES': 'Amazon Web Services',
+  'MICROSOFT CORPORATION': 'Microsoft',
+  'GOOGLE LLC': 'Google',
+  'ORACLE AMERICA': 'Oracle',
+  'SALESFORCE.COM': 'Salesforce',
+  'PALO ALTO NETWORKS': 'Palo Alto Networks',
+  'ACCENTURE FEDERAL SERVICES': 'Accenture Federal',
+  'DELOITTE CONSULTING': 'Deloitte',
+  'DELOITTE AND TOUCHE': 'Deloitte',
+  'MAXIMUS FEDERAL SERVICES': 'Maximus',
+  'MAXIMUS': 'Maximus',
+  'CACI INC - FEDERAL': 'CACI',
+  'CACI NATIONAL SECURITY': 'CACI',
+  'CACI INTERNATIONAL': 'CACI',
+  'PERATON INC': 'Peraton',
+  'MANTECH INTERNATIONAL': 'ManTech',
+  'MANTECH ADVANCED SYSTEMS INTERNATIONAL': 'ManTech',
+  'KBR SERVICES': 'KBR',
+  'KBR WYLE SERVICES': 'KBR',
+  'DELL FEDERAL SYSTEMS': 'Dell Federal',
+};
+
+const LINKEDIN_STRIP_TRAILING = [
+  'INC', 'LLC', 'LTD', 'CORP', 'CORPORATION', 'CO', 'COMPANY',
+  'PLC', 'LLP', 'LP', 'LIMITED', 'HOLDINGS', 'GROUP',
+  // Common geographic tails from legal entity names
+  'GAITHERSBURG', 'HERNDON', 'RESTON', 'ARLINGTON', 'MCLEAN',
+  'CHANTILLY', 'TYSONS', 'FAIRFAX',
+];
+
+// Clean a federal legal entity name into the brand form people use
+// on LinkedIn. Returns a string suitable for the dork query.
+function brandizeForDork(vendorName) {
+  if (!vendorName) return '';
+  const upper = vendorName.toUpperCase().trim();
+  // Exact brand map match — highest confidence
+  if (LINKEDIN_BRAND_MAP[upper]) return LINKEDIN_BRAND_MAP[upper];
+  // Brand map keys that are a prefix of the legal name
+  for (const [legalName, brand] of Object.entries(LINKEDIN_BRAND_MAP)) {
+    if (upper.startsWith(legalName + ' ') || upper.startsWith(legalName + ',')) {
+      return brand;
+    }
+  }
+  // Strip punctuation, then strip trailing legal/geo suffix tokens
+  let name = upper.replace(/[.,]/g, '').trim();
+  const tokens = name.split(/\s+/);
+  while (tokens.length > 1 && LINKEDIN_STRIP_TRAILING.includes(tokens[tokens.length - 1])) {
+    tokens.pop();
+  }
+  return titleCase(tokens.join(' '));
+}
+
+// Build a Google dork URL targeting LinkedIn people pages for the company.
+// Just the company name in quotes — no role qualifiers, no location
+// scoping. Reader filters visually on LinkedIn. Empirically this returns
+// more useful matches than any boolean refinement.
+function buildDorkUrl(vendorName) {
+  const brand = brandizeForDork(vendorName);
+  if (!brand) return null;
+  const q = `site:linkedin.com/in "${brand}"`;
+  return {
+    label: brand,
+    url: 'https://www.google.com/search?q=' + encodeURIComponent(q),
+  };
+}
+
 // State
 let candidatesByBucket = {};   // bucket → array of candidates
 let pickedKeys = [];           // ordered array of "bucket:idx" keys
@@ -787,6 +887,46 @@ document.getElementById('generate-draft').addEventListener('click', () => {
     lines.push('');
   });
 
+  // ─── Job Dork footer ──────────────────────────────────────────────
+  // For every picked candidate, pull every vendor-like field and dedupe
+  // by clean brand label. SEC filings are included — a 10-Q from
+  // Lockheed is a real reason to want to find people in their federal
+  // segment. Subawards contribute BOTH the prime and the sub.
+  const dorkMap = new Map();  // brandLabel → dork object
+  pickedKeys.forEach((key) => {
+    const c = findCandidateByKey(key);
+    if (!c) return;
+    const bucket = key.split(':')[0];
+    const vendors = [];
+    if (bucket === 'big_awards' || bucket === 'recompete_watchlist') {
+      if (c.vendor) vendors.push(c.vendor);
+    } else if (bucket === 'sec_paper_trail') {
+      if (c.vendor) vendors.push(c.vendor);
+    } else if (bucket === 'subaward_moves') {
+      if (c.prime) vendors.push(c.prime);
+      if (c.sub) vendors.push(c.sub);
+    }
+    vendors.forEach(v => {
+      const dork = buildDorkUrl(v);
+      if (dork && !dorkMap.has(dork.label)) {
+        dorkMap.set(dork.label, dork);
+      }
+    });
+  });
+
+  if (dorkMap.size > 0) {
+    lines.push('## Want to reach the people behind these wins?');
+    lines.push('');
+    lines.push('*Google dorks land you on each company\'s full LinkedIn people list. Filter visually for the federal/BD/capture folks who matter to you.*');
+    lines.push('');
+    for (const dork of dorkMap.values()) {
+      lines.push(`- [${dork.label}](${dork.url})`);
+    }
+    lines.push('');
+    lines.push('---');
+    lines.push('');
+  }
+
   lines.push('*Want signals like this in your inbox? Reply to this post.*');
   lines.push('');
   lines.push('*Built with [fedmo.com](https://fedmo.com).*');
@@ -900,9 +1040,34 @@ function flashButton(id, msg) {
 // ─────────────────────────────────────────────────────────────────────
 // Utilities
 // ─────────────────────────────────────────────────────────────────────
+// Acronym-aware title-case. Without the acronym set, IBM becomes "Ibm",
+// SAIC becomes "Saic", RTX becomes "Rtx", L3HARRIS becomes "L3harris".
+// List ported from oldmo.html — focused on federal-contracting acronyms
+// that appear as vendor names or in agency names.
+const TITLE_CASE_ACRONYMS = new Set([
+  // Agencies
+  'VA','DHS','DOD','DOJ','DOE','DOT','DOL','DOS','HHS','GSA','NASA','NSA','CIA','FBI',
+  'DISA','DARPA','SOCOM','JSOC','DLA','DFAS','NIH','CDC','FDA','CMS','DEA',
+  'ATF','CBP','ICE','TSA','FEMA','USCIS','USCG','USMC','USAF','USA','USN',
+  'NSF','NRC','SEC','IRS','OPM','OMB','GAO','CBO','DIA','NGA','NRO','NIST','NOAA',
+  'EPA','FCC','FTC','FDIC','CISA','CYBERCOM','STRATCOM','INDOPACOM','CENTCOM',
+  // Vendors / acronyms in vendor names
+  'IBM','SAIC','GDIT','WWT','RTX','HPE','HPI','CGI','CACI','KBR','ICF','LMT','LHX',
+  'NOC','SBA','USDA','HUD','SSA','FCN','BPA','LMS',
+  // Tech / domain
+  'AI','IT','HR','BD','PM','CO','PO','ID','US','UK','EU','API','SDK',
+  'AWS','GCP','SaaS','CSP','VAR','GWAC','IDIQ','NAICS','PSC',
+]);
+const TITLE_CASE_SMALL = new Set(['AND','OR','OF','THE','FOR','IN','ON','AT','TO','BY','AN','A','DBA']);
+
 function titleCase(s) {
   if (!s) return '';
-  return String(s).toLowerCase().replace(/\b\w+/g, w => w.charAt(0).toUpperCase() + w.slice(1));
+  return String(s).toLowerCase().replace(/\b\w+/g, (w, i) => {
+    const up = w.toUpperCase();
+    if (TITLE_CASE_ACRONYMS.has(up)) return up;
+    if (i > 0 && TITLE_CASE_SMALL.has(up)) return w;
+    return w.charAt(0).toUpperCase() + w.slice(1);
+  });
 }
 function trim(s, n) {
   if (!s) return '';
