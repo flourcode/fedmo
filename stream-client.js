@@ -423,6 +423,7 @@ const AWARD_FIELDS = [
   'Awarding Office', 'Award Amount', 'Description', 'generated_internal_id',
   'Start Date', 'End Date', 'NAICS', 'PSC',
   'Contract Award Type', 'Type of Set Aside',
+  'Place of Performance State Code',
 ];
 // Subawards endpoint returns different fields, prime+sub relationships,
 // not prime contracts alone. Same URL, different shape.
