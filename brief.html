@@ -175,6 +175,52 @@
       color: var(--text-faint);
     }
 
+    /* ── Bracket sub-sections (within big_awards bucket) ──────── */
+    .bracket-section {
+      margin: 8px 0;
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+    }
+    .bracket-head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      background: var(--bg-tint);
+      cursor: pointer;
+      user-select: none;
+    }
+    .bracket-head:hover {
+      background: var(--primary-20);
+    }
+    .bracket-toggle {
+      font-size: 10px;
+      color: var(--text-faint);
+      width: 12px;
+      flex-shrink: 0;
+    }
+    .bracket-label {
+      font-weight: 600;
+      font-size: 13px;
+      color: var(--text-title);
+      flex-shrink: 0;
+    }
+    .bracket-blurb {
+      font-size: 12px;
+      color: var(--text-muted);
+      flex: 1;
+    }
+    .bracket-count {
+      font-size: 12px;
+      color: var(--text-faint);
+      font-variant-numeric: tabular-nums;
+      flex-shrink: 0;
+    }
+    .bracket-body {
+      padding: 8px 12px 4px;
+    }
+
     /* ── Candidate card ─────────────────────────────────────── */
     .candidate {
       background: white;
@@ -339,8 +385,8 @@
   <label>Since
     <input type="date" id="since-date">
   </label>
-  <label>Big-award floor ($M)
-    <input type="number" id="min-amount-m" value="10" min="1" max="1000" step="1">
+  <label>Per-bracket cap
+    <input type="number" id="per-bracket-cap" value="5" min="1" max="20" step="1">
   </label>
   <button class="btn-primary" id="find-candidates">Find this week's signals</button>
 </div>
@@ -386,7 +432,7 @@ const BUCKET_CONFIG = {
   },
   big_awards: {
     title: 'Big new awards',
-    blurb: '$50M+ contract awards in the past week',
+    blurb: 'Newly-signed Fed IT contracts, grouped by dollar bracket',
   },
   sec_paper_trail: {
     title: 'SEC paper trail',
@@ -400,6 +446,18 @@ const BUCKET_CONFIG = {
 
 // Bucket order in the UI
 const BUCKET_ORDER = ['recompete_watchlist', 'big_awards', 'sec_paper_trail', 'subaward_moves'];
+
+// Big_awards brackets, in display order. Top brackets default-expand
+// (rare and important); bottom brackets default-collapse (common, more
+// noise potential — user expands if they want to dig).
+const BIG_AWARDS_BRACKETS = [
+  { key: '50m_plus', label: '$50M+',     blurb: 'Strategic whales',                                  defaultOpen: true  },
+  { key: '25_50m',   label: '$25M-$50M', blurb: 'Mid-tier strategic deals',                          defaultOpen: true  },
+  { key: '10_25m',   label: '$10M-$25M', blurb: 'CSP/SaaS sweet spot',                               defaultOpen: true  },
+  { key: '5_10m',    label: '$5M-$10M',  blurb: 'Task orders and seeded technology',                 defaultOpen: false },
+  { key: '1_5m',     label: '$1M-$5M',   blurb: 'Pilots, POCs, and new-entrant signals',             defaultOpen: false },
+  { key: '100k_1m',  label: '$100K-$1M', blurb: 'Smallest reportable awards (mostly noise)',          defaultOpen: false },
+];
 
 // State
 let candidatesByBucket = {};   // bucket → array of candidates
@@ -425,8 +483,7 @@ document.getElementById('find-candidates').addEventListener('click', async () =>
   const btn = document.getElementById('find-candidates');
   const status = document.getElementById('stage-1-status');
   const sinceDate = document.getElementById('since-date').value;
-  const minAmountM = parseFloat(document.getElementById('min-amount-m').value) || 10;
-  const minAmount = Math.max(minAmountM * 1_000_000, 1_000_000);  // floor at $1M
+  const perBracketCap = Math.max(parseInt(document.getElementById('per-bracket-cap').value, 10) || 5, 1);
 
   btn.disabled = true;
   status.textContent = 'Scanning USASpending + EDGAR (~10-20 seconds)...';
@@ -443,7 +500,7 @@ document.getElementById('find-candidates').addEventListener('click', async () =>
     const res = await fetch(FEDMO_LAMBDA_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ request_type: 'brief_candidates', since_date: sinceDate, min_amount: minAmount }),
+      body: JSON.stringify({ request_type: 'brief_candidates', since_date: sinceDate, per_bracket_cap: perBracketCap }),
     });
     if (!res.ok) throw new Error(`Lambda ${res.status}`);
     const data = await res.json();
@@ -453,7 +510,13 @@ document.getElementById('find-candidates').addEventListener('click', async () =>
     dateRange = { since: data.since_date, generatedAt: data.generated_at };
     const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
 
-    const totalCount = Object.values(candidatesByBucket).reduce((s, b) => s + b.length, 0);
+    // big_awards is a bracket-keyed object; everything else is a flat array
+    const totalCount = Object.entries(candidatesByBucket).reduce((s, [bucket, value]) => {
+      if (bucket === 'big_awards') {
+        return s + Object.values(value || {}).reduce((ss, arr) => ss + (arr?.length || 0), 0);
+      }
+      return s + (value?.length || 0);
+    }, 0);
     status.innerHTML = `<span class="total-pill">${totalCount} candidates</span> scanned in ${elapsed}s`;
     renderCandidates();
     document.getElementById('pick-bar').hidden = false;
@@ -466,38 +529,119 @@ document.getElementById('find-candidates').addEventListener('click', async () =>
 });
 
 // ─────────────────────────────────────────────────────────────────────
-// Render candidates organized by bucket
-// ─────────────────────────────────────────────────────────────────────
+// Look up a candidate object given a key. Keys are either two-part
+// (`bucket:idx`) for flat-array buckets, or three-part
+// (`big_awards:bracketKey:idx`) for the bracketed big_awards bucket.
+// Returns null if the lookup fails (e.g., stale key after re-scan).
+function findCandidateByKey(key) {
+  const parts = key.split(':');
+  if (parts.length === 2) {
+    const [bucket, idxStr] = parts;
+    return (candidatesByBucket[bucket] || [])[parseInt(idxStr, 10)] || null;
+  }
+  if (parts.length === 3) {
+    const [bucket, bracketKey, idxStr] = parts;
+    return ((candidatesByBucket[bucket] || {})[bracketKey] || [])[parseInt(idxStr, 10)] || null;
+  }
+  return null;
+}
+
+// Render candidates organized by bucket. big_awards is special — it's
+// an object of bracket-keyed arrays, rendered as a series of collapsible
+// sections within the big_awards section.
 function renderCandidates() {
   const area = document.getElementById('candidates-area');
   area.innerHTML = '';
 
   for (const bucket of BUCKET_ORDER) {
     const config = BUCKET_CONFIG[bucket];
-    const candidates = candidatesByBucket[bucket] || [];
-
     const section = document.createElement('div');
     section.className = 'bucket-section';
-    section.innerHTML = `
-      <div class="bucket-head">
-        <div>
-          <div class="bucket-title">${config.title}</div>
-          <div class="candidate-meta" style="margin-top:2px;">${config.blurb}</div>
-        </div>
-        <div class="bucket-count">${candidates.length} candidate${candidates.length === 1 ? '' : 's'}</div>
-      </div>
-    `;
 
-    if (candidates.length === 0) {
-      const empty = document.createElement('div');
-      empty.className = 'empty-state';
-      empty.textContent = 'Nothing in this bucket this week.';
-      section.appendChild(empty);
+    if (bucket === 'big_awards') {
+      // Special bracketed render
+      const bracketsByKey = candidatesByBucket.big_awards || {};
+      const totalCount = Object.values(bracketsByKey).reduce((s, arr) => s + (arr?.length || 0), 0);
+
+      section.innerHTML = `
+        <div class="bucket-head">
+          <div>
+            <div class="bucket-title">${config.title}</div>
+            <div class="candidate-meta" style="margin-top:2px;">${config.blurb}</div>
+          </div>
+          <div class="bucket-count">${totalCount} candidate${totalCount === 1 ? '' : 's'}</div>
+        </div>
+      `;
+
+      if (totalCount === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'empty-state';
+        empty.textContent = 'Nothing in this bucket this week.';
+        section.appendChild(empty);
+      } else {
+        // Render each bracket as its own collapsible sub-section
+        BIG_AWARDS_BRACKETS.forEach(bracket => {
+          const candidates = bracketsByKey[bracket.key] || [];
+          const bracketSection = document.createElement('div');
+          bracketSection.className = 'bracket-section';
+          // Bracket header doubles as toggle. Default-open status comes
+          // from the BIG_AWARDS_BRACKETS config above.
+          const isOpen = bracket.defaultOpen;
+          bracketSection.innerHTML = `
+            <div class="bracket-head" data-bracket="${bracket.key}">
+              <span class="bracket-toggle">${isOpen ? '▼' : '▶'}</span>
+              <span class="bracket-label">${bracket.label}</span>
+              <span class="bracket-blurb">${bracket.blurb}</span>
+              <span class="bracket-count">${candidates.length}</span>
+            </div>
+            <div class="bracket-body" ${isOpen ? '' : 'hidden'}></div>
+          `;
+          const body = bracketSection.querySelector('.bracket-body');
+          if (candidates.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'empty-state';
+            empty.style.padding = '8px 12px';
+            empty.textContent = 'Nothing in this bracket.';
+            body.appendChild(empty);
+          } else {
+            candidates.forEach((c, idx) => {
+              const card = renderCandidateCard('big_awards', `${bracket.key}:${idx}`, c);
+              body.appendChild(card);
+            });
+          }
+          // Wire up the toggle
+          const head = bracketSection.querySelector('.bracket-head');
+          head.addEventListener('click', () => {
+            const open = !body.hidden ? false : true;
+            body.hidden = !open;
+            head.querySelector('.bracket-toggle').textContent = open ? '▼' : '▶';
+          });
+          section.appendChild(bracketSection);
+        });
+      }
     } else {
-      candidates.forEach((c, idx) => {
-        const card = renderCandidateCard(bucket, idx, c);
-        section.appendChild(card);
-      });
+      // Flat-array buckets (recompete, sec_paper_trail, subaward_moves)
+      const candidates = candidatesByBucket[bucket] || [];
+      section.innerHTML = `
+        <div class="bucket-head">
+          <div>
+            <div class="bucket-title">${config.title}</div>
+            <div class="candidate-meta" style="margin-top:2px;">${config.blurb}</div>
+          </div>
+          <div class="bucket-count">${candidates.length} candidate${candidates.length === 1 ? '' : 's'}</div>
+        </div>
+      `;
+      if (candidates.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'empty-state';
+        empty.textContent = 'Nothing in this bucket this week.';
+        section.appendChild(empty);
+      } else {
+        candidates.forEach((c, idx) => {
+          const card = renderCandidateCard(bucket, idx, c);
+          section.appendChild(card);
+        });
+      }
     }
     area.appendChild(section);
   }
@@ -505,7 +649,9 @@ function renderCandidates() {
 
 // Build a single candidate card. Rendering shape varies by bucket because
 // the data shape varies — recompete has vendor + days left, SEC has filing
-// type + date, etc.
+// type + date, etc. The `idx` param is either an integer (flat buckets)
+// or a "bracketKey:idx" string (big_awards), forming the second/third
+// path component of the data-key.
 function renderCandidateCard(bucket, idx, c) {
   const card = document.createElement('div');
   card.className = 'candidate';
@@ -624,10 +770,9 @@ document.getElementById('generate-draft').addEventListener('click', () => {
   lines.push('');
 
   pickedKeys.forEach((key, i) => {
-    const [bucket, idxStr] = key.split(':');
-    const idx = parseInt(idxStr, 10);
-    const c = (candidatesByBucket[bucket] || [])[idx];
+    const c = findCandidateByKey(key);
     if (!c) return;
+    const bucket = key.split(':')[0];
 
     const heading = signalHeading(bucket, c);
     lines.push(`## ${i + 1}. ${heading}`);
