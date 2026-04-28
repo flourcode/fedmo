@@ -314,6 +314,20 @@ export function dataAttrsToResolverInput(attrs) {
   if (attrs.vendors) input.vendors = attrs.vendors; // resolver splits comma-sep strings
   if (attrs.agency) input.agency = attrs.agency;
   if (attrs.topic) input.topic = attrs.topic;
+  // Plural form: when Mo needs MULTIPLE concepts, she emits
+  // topics="renewal,cybersecurity" (comma-separated, max 2 words each).
+  // The resolver splits this into separate keyword entries which
+  // USASpending OR's at the API level. This is fedhoo's pattern —
+  // a single string like "renewal cybersecurity" matches the literal
+  // 2-word phrase in description text, which almost never exists.
+  // Comma-separating splits the search into two distinct keywords.
+  if (attrs.topics) {
+    const parts = String(attrs.topics)
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean);
+    if (parts.length > 0) input.topics = parts;
+  }
   if (attrs.naics) input.naics = attrs.naics;
   if (attrs.psc) input.psc = attrs.psc;
   if (attrs.expiring_only === 'true') input.expiring_only = true;
@@ -545,13 +559,15 @@ function buildNoDataMessage(resolverInput) {
     suggestions.push('drop "SaaS" and try just the category (e.g., "cybersecurity" or "endpoint security") — we\'ll catch the cloud-as-service deals via PSC code');
   }
 
-  // Reason 3: multi-word topic with no agency scope (the keyword search
-  // is too narrow against a federal-wide pull). Single-word topics work
-  // better unless scoped.
+  // Reason 3: multi-word topic that's actually two concepts (the keyword
+  // search becomes a literal phrase match against contract description
+  // text, which almost never works for 2+ word strings). Comma-separating
+  // into multiple keywords is the fedhoo pattern — but Mo emits the tag,
+  // not the user, so the message frames it as "ask Mo to split the search."
   const topicWords = String(ri.topic || '').trim().split(/\s+/).filter(Boolean);
-  if (topicWords.length >= 2 && !ri.agency && !ri.vendor && !topicLower.includes('saas')) {
-    reasons.push('a multi-word topic across all federal agencies');
-    suggestions.push('try a shorter topic word, or scope to a specific agency');
+  if (topicWords.length >= 2 && !topicLower.includes('saas')) {
+    reasons.push(`a multi-word topic ("${ri.topic}") that USASpending reads as a literal phrase`);
+    suggestions.push(`rephrase as two separate concepts (e.g., "${topicWords[0]} contracts that mention ${topicWords.slice(1).join(' ')}") so I can split them into separate keywords`);
   }
 
   // Reason 4: tight dollar bounds
