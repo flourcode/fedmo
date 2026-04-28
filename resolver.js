@@ -554,61 +554,36 @@ const norm = (s) => String(s || '').toLowerCase().trim()
 // search, same as if the agency term is unknown).
 // ─────────────────────────────────────────────────────────────────────
 
-// ─────────────────────────────────────────────────────────────────────
-// LAZY LOAD (Apr 2026): entities.json is no longer fetched on module
-// init. It's ~170KB raw / ~12KB gzipped, and most first-turn queries
-// hit the hand-curated AGENCIES table and never need it. We now defer
-// until either:
-//   (a) a caller explicitly warms it via warmEntities() — oldmo.html
-//       kicks this off on idle and on chip tap, so the file is loading
-//       in parallel with the Lambda call
-//   (b) a lookup misses AGENCIES and lookupEntitiesAgency() triggers
-//       a background load — the miss itself is served from empty
-//       (same behavior as pre-load), but the NEXT miss will hit the
-//       warmed table
-//
-// `resolverReady` is preserved as a resolved promise for backwards
-// compat with anything that was awaiting it. Code that needs the
-// entities table loaded before a specific operation should await
-// warmEntities() instead.
-// ─────────────────────────────────────────────────────────────────────
-
 let _entities = {};       // { searchKey: [entityObj, ...] }
 let _entitiesLoaded = false;
-let _entitiesLoading = null;   // promise guard, prevents double-fetch
 
-export function warmEntities() {
-  if (_entitiesLoaded) return Promise.resolve();
-  if (_entitiesLoading) return _entitiesLoading;
-  _entitiesLoading = (async () => {
-    try {
-      const url = new URL('./entities.json', import.meta.url);
-      const res = await fetch(url);
-      if (!res.ok) {
-        console.warn(`[resolver] entities.json fetch failed: HTTP ${res.status}. Falling back to hand-curated tables only.`);
-        _entitiesLoaded = true;
-        return;
-      }
-      const data = await res.json();
-      if (data && typeof data.entities === 'object' && data.entities !== null) {
-        _entities = data.entities;
-        _entitiesLoaded = true;
-      } else {
-        console.warn('[resolver] entities.json has unexpected shape. Falling back to hand-curated tables only.');
-        _entitiesLoaded = true;
-      }
-    } catch (err) {
-      console.warn('[resolver] entities.json load error:', err.message, '— falling back to hand-curated tables only.');
+export const resolverReady = (async () => {
+  // Where to load from. Same directory as this module, as a plain static
+  // file. If resolver.js moves, this URL will move with it thanks to
+  // import.meta.url.
+  try {
+    const url = new URL('./entities.json', import.meta.url);
+    const res = await fetch(url);
+    if (!res.ok) {
+      console.warn(`[resolver] entities.json fetch failed: HTTP ${res.status}. Falling back to hand-curated tables only.`);
+      _entitiesLoaded = true;
+      return;
+    }
+    const data = await res.json();
+    if (data && typeof data.entities === 'object' && data.entities !== null) {
+      _entities = data.entities;
+      _entitiesLoaded = true;
+      // Don't log entity count on success — keeps console clean in production.
+    } else {
+      console.warn('[resolver] entities.json has unexpected shape. Falling back to hand-curated tables only.');
       _entitiesLoaded = true;
     }
-  })();
-  return _entitiesLoading;
-}
-
-// Backwards-compat. Old code awaited this before first resolve() call.
-// resolve() now works against AGENCIES immediately; misses trigger a
-// background entities fetch but don't block.
-export const resolverReady = Promise.resolve();
+  } catch (err) {
+    // Network error, CORS, JSON parse error, etc. Non-fatal.
+    console.warn('[resolver] entities.json load error:', err.message, '— falling back to hand-curated tables only.');
+    _entitiesLoaded = true;
+  }
+})();
 
 // Look up an agency term in entities.json. Returns the first match as a
 // USASpending-shaped filter object, or null if no match.
@@ -616,14 +591,7 @@ export const resolverReady = Promise.resolve();
 // entities.json keys are pre-normalized (lowercase, no dots, collapsed
 // whitespace) by the build script using the same norm rules as below.
 function lookupEntitiesAgency(term) {
-  // Not loaded yet? Kick off a background warm so future lookups hit,
-  // and return null for THIS lookup — same behavior as a table miss.
-  // Callers fall through to keyword search either way.
-  if (!_entitiesLoaded) {
-    warmEntities();
-    return null;
-  }
-  if (!_entities) return null;
+  if (!_entitiesLoaded || !_entities) return null;
   const key = norm(term);
   const hits = _entities[key];
   if (!hits || hits.length === 0) return null;
@@ -1205,12 +1173,48 @@ export function resolve(input) {
     .filter(p => /^[A-Z][A-Z0-9]{1,3}$/.test(p));
   if (pscList.length > 0) filters.psc_codes = pscList;
 
-  // ── Amount / expiring — these are post-filters applied client-side ──
-  // USASpending's API supports award_amounts but it's finicky; simpler to
-  // return everything and slice in the browser.
+  // ── Amount window — server-side via USASpending's award_amounts filter.
+  // Verified working in the brief tool: { lower_bound, upper_bound } as
+  // a single object filters at the API level, eliminating the wasteful
+  // pull-100-and-throw-most-away pattern of post-filtering. We still
+  // keep expiring_only as a post-filter because USASpending doesn't
+  // expose period-of-performance end-date as a server-side filter.
   if (input.expiring_only) postFilters.expiring_only = true;
-  if (typeof input.min_amount === 'number') postFilters.min_amount = input.min_amount;
-  if (typeof input.max_amount === 'number') postFilters.max_amount = input.max_amount;
+  if (typeof input.min_amount === 'number' || typeof input.max_amount === 'number') {
+    const range = {};
+    if (typeof input.min_amount === 'number') range.lower_bound = input.min_amount;
+    if (typeof input.max_amount === 'number') range.upper_bound = input.max_amount;
+    filters.award_amounts = [range];
+  }
+
+  // ── Date window — server-side via USASpending's time_period filter.
+  // When `since` and/or `until` are provided, emit a time_period block
+  // with date_type='date_signed' by default. This is what users mean
+  // 99% of the time when they say "past N days" or "in May" — they want
+  // contracts originally signed in that window, not contracts that had
+  // any action in that window. Mo can override with date_type='action_date'
+  // for explicit "any activity" queries.
+  //
+  // The fetcher reads filters.time_period if present and uses it instead
+  // of the default trailing-12-months. If neither since nor until is set
+  // here, the fetcher's default kicks in.
+  if (input.since || input.until) {
+    const tp = { date_type: input.date_type || 'date_signed' };
+    if (input.since) tp.start_date = input.since;
+    if (input.until) tp.end_date = input.until;
+    // USASpending requires both start and end. Fill in the missing side:
+    // - missing start: epoch sensible default (10 years ago)
+    // - missing end: today
+    if (!tp.start_date) {
+      const d = new Date();
+      d.setFullYear(d.getFullYear() - 10);
+      tp.start_date = d.toISOString().slice(0, 10);
+    }
+    if (!tp.end_date) {
+      tp.end_date = new Date().toISOString().slice(0, 10);
+    }
+    filters.time_period = [tp];
+  }
 
   return { filters, postFilters };
 }
@@ -1375,6 +1379,11 @@ export function applyPostFilters(rows, postFilters) {
     });
   }
 
+  // NOTE: min_amount/max_amount post-filters below are now dead code in
+  // normal flow — resolve() builds award_amounts as a server-side filter
+  // via USASpending's API, so postFilters never carries these fields.
+  // Kept here as a safety net in case some caller bypasses resolve()
+  // and pushes min/max into postFilters directly. Cheap to keep.
   if (typeof postFilters.min_amount === 'number') {
     out = out.filter(r => (parseFloat(r['Award Amount']) || 0) >= postFilters.min_amount);
   }
