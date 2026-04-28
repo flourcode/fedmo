@@ -1205,12 +1205,49 @@ export function resolve(input) {
     .filter(p => /^[A-Z][A-Z0-9]{1,3}$/.test(p));
   if (pscList.length > 0) filters.psc_codes = pscList;
 
-  // ── Amount / expiring — these are post-filters applied client-side ──
-  // USASpending's API supports award_amounts but it's finicky; simpler to
-  // return everything and slice in the browser.
+  // ── Amount window — server-side via USASpending's award_amounts filter.
+  // Verified working in the brief tool: { lower_bound, upper_bound } as
+  // a single object filters at the API level, eliminating the wasteful
+  // pull-100-and-throw-most-away pattern of post-filtering. We still
+  // keep expiring_only as a post-filter because USASpending doesn't
+  // expose period-of-performance end-date as a server-side filter.
   if (input.expiring_only) postFilters.expiring_only = true;
-  if (typeof input.min_amount === 'number') postFilters.min_amount = input.min_amount;
-  if (typeof input.max_amount === 'number') postFilters.max_amount = input.max_amount;
+  if (typeof input.min_amount === 'number' || typeof input.max_amount === 'number') {
+    const range = {};
+    if (typeof input.min_amount === 'number') range.lower_bound = input.min_amount;
+    if (typeof input.max_amount === 'number') range.upper_bound = input.max_amount;
+    filters.award_amounts = [range];
+  }
+
+  // ── Date window — server-side via USASpending's time_period filter.
+  // When `since` and/or `until` are provided, emit a time_period block
+  // with date_type='date_signed' by default. This is what users mean
+  // 99% of the time when they say "past N days" or "in May" — they want
+  // contracts originally signed in that window, not contracts that had
+  // any action in that window. Mo can override with date_type='action_date'
+  // for explicit "any activity" queries.
+  //
+  // The fetcher merges this into the payload via spread: ...resolvedFilters
+  // comes after the default time_period, so this override wins. If neither
+  // since nor until is set here, the fetcher's trailing-12-month default
+  // kicks in.
+  if (input.since || input.until) {
+    const tp = { date_type: input.date_type || 'date_signed' };
+    if (input.since) tp.start_date = input.since;
+    if (input.until) tp.end_date = input.until;
+    // USASpending requires both start and end. Fill in the missing side:
+    // - missing start: 10 years ago (sensible "everything reportable")
+    // - missing end: today
+    if (!tp.start_date) {
+      const d = new Date();
+      d.setFullYear(d.getFullYear() - 10);
+      tp.start_date = d.toISOString().slice(0, 10);
+    }
+    if (!tp.end_date) {
+      tp.end_date = new Date().toISOString().slice(0, 10);
+    }
+    filters.time_period = [tp];
+  }
 
   return { filters, postFilters };
 }
@@ -1375,6 +1412,11 @@ export function applyPostFilters(rows, postFilters) {
     });
   }
 
+  // NOTE: min_amount/max_amount post-filters below are now dead code in
+  // normal flow — resolve() builds award_amounts as a server-side filter
+  // via USASpending's API, so postFilters never carries these fields.
+  // Kept as a safety net in case some caller bypasses resolve() and
+  // pushes min/max into postFilters directly. Cheap to keep.
   if (typeof postFilters.min_amount === 'number') {
     out = out.filter(r => (parseFloat(r['Award Amount']) || 0) >= postFilters.min_amount);
   }

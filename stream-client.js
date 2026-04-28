@@ -325,6 +325,26 @@ export function dataAttrsToResolverInput(attrs) {
     const n = Number(attrs.max_amount);
     if (!isNaN(n)) input.max_amount = n;
   }
+  // Date window — when Mo detects time language in the user's question
+  // ("past 30 days", "this fiscal year", "since April"), it emits since
+  // and/or until attrs as YYYY-MM-DD. The resolver passes these into the
+  // USASpending time_period filter. date_type defaults to 'date_signed'
+  // because that's what users almost always mean — they want NEWLY signed
+  // contracts, not modifications to old ones. (USASpending's default
+  // 'action_date' returns any contract with any action in the window,
+  // including 20-year-old contracts with a routine modification, which
+  // is the bug that drove the brief tool to switch to date_signed.)
+  // Mo can override with date_type='action_date' for explicit "any
+  // activity in this window" queries — rare but supported.
+  if (attrs.since && /^\d{4}-\d{2}-\d{2}$/.test(attrs.since)) {
+    input.since = attrs.since;
+  }
+  if (attrs.until && /^\d{4}-\d{2}-\d{2}$/.test(attrs.until)) {
+    input.until = attrs.until;
+  }
+  if (attrs.date_type === 'action_date' || attrs.date_type === 'date_signed') {
+    input.date_type = attrs.date_type;
+  }
   // Competitor mode: if Mo emits competitors="true", the browser will call
   // mo_competitors first to get a vendor's head-to-head competitors, then
   // expand input.vendors to include the original vendor + its competitors
@@ -541,17 +561,19 @@ export async function fetchUsaspending(resolverInput, endpoint) {
         ...fallback.keywords,
       ];
       const retryFilters = {
-        time_period: trailing12Mo(),
+        time_period: resolvedFilters.time_period || trailing12Mo(),
         award_type_codes: CONTRACT_TYPES,
         agencies: fallback.agencies,
         keywords: [...new Set(mergedKeywords)],
       };
       // Preserve non-agency filters the resolver produced (PSC, NAICS,
-      // recipient, date refinements, etc.), only swap the agency filter.
+      // recipient, date refinements, dollar windows, etc.), only swap
+      // the agency filter. time_period is handled above (preserved if
+      // resolver set it, otherwise defaults to trailing 12 months).
       for (const key of Object.keys(resolvedFilters)) {
-        if (key !== 'agencies' && key !== 'keywords' && !retryFilters[key]) {
-          retryFilters[key] = resolvedFilters[key];
-        }
+        if (key === 'agencies' || key === 'keywords') continue;
+        if (key === 'time_period') continue;  // already preserved above
+        retryFilters[key] = resolvedFilters[key];
       }
       const retryPayload = { filters: retryFilters, fields: AWARD_FIELDS, limit: 100, sort: 'Award Amount', order: 'desc' };
       try {
