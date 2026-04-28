@@ -4247,11 +4247,20 @@ const App = {
     }
     try { localStorage.setItem('fedmo_returning', '1'); } catch (e) { /* private mode */ }
 
-    // Auto-scroll the user turn into view
+    // Auto-scroll the user turn into a position that leaves room for
+    // Mo's response below it. Previously we pinned the question to the
+    // top of the viewport (just below the header), which meant Mo's
+    // streaming prose and card rendered off-screen. Now we position the
+    // question roughly 25% down the viewport so the user can see both
+    // their question AND the start of Mo's response without manual
+    // scrolling. Three-quarters of the viewport below the question is
+    // enough room for the typical Mo opening + the top of a card.
     setTimeout(() => {
       const header = document.getElementById('moHeader');
       const headerH = header ? header.getBoundingClientRect().height : 60;
-      const target = wrap.getBoundingClientRect().top + window.pageYOffset - headerH - 12;
+      const viewportH = window.innerHeight;
+      const offsetIntoViewport = Math.max(headerH + 12, viewportH * 0.25);
+      const target = wrap.getBoundingClientRect().top + window.pageYOffset - offsetIntoViewport;
       window.scrollTo({ top: target, behavior: 'smooth' });
     }, 50);
   },
