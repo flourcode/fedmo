@@ -476,6 +476,10 @@ function trailing12Mo() {
 // Returns null if we can't build a sensible fallback (no resolved agency,
 // or the agency was already a toptier).
 function buildKeywordFallbackFilters(resolverInput, resolvedFilters) {
+  const agencies = resolvedFilters.agencies;
+  if (!Array.isArray(agencies) || agencies.length === 0) return null;
+  const a = agencies[0];
+  if (a.tier !== 'subtier' || !a.toptier_name) return null;
 
   // Pull the user's original agency term so we can use the acronym if they
   // typed one. Falls back to the canonical subtier name.
