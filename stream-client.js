@@ -476,10 +476,6 @@ function trailing12Mo() {
 // Returns null if we can't build a sensible fallback (no resolved agency,
 // or the agency was already a toptier).
 function buildKeywordFallbackFilters(resolverInput, resolvedFilters) {
-  const agencies = resolvedFilters.agencies;
-  if (!Array.isArray(agencies) || agencies.length === 0) return null;
-  const a = agencies[0];
-  if (a.tier !== 'subtier' || !a.toptier_name) return null;
 
   // Pull the user's original agency term so we can use the acronym if they
   // typed one. Falls back to the canonical subtier name.
@@ -499,6 +495,83 @@ function buildKeywordFallbackFilters(resolverInput, resolvedFilters) {
     _retriedFromSubtier: a.name,
     _retryParent: a.toptier_name,
   };
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// buildNoDataMessage — generate a helpful message when a query returns 0
+// ─────────────────────────────────────────────────────────────────────
+//
+// The previous implementation was a single hardcoded string ("I couldn't
+// find anything matching that. Try a different agency..."), which read
+// as a dead end. It told the user nothing about WHY the query failed,
+// which constraint was likely the problem, or what to relax first.
+//
+// This helper inspects the resolver input to diagnose the most likely
+// reason for zero results and suggest a specific relaxation. Priority
+// order is empirical: narrow date windows fail more often than other
+// constraints, and SaaS-style multi-word topics fail almost always
+// because they're keyword searches against contract description text
+// where those exact phrases don't appear.
+//
+// Returns a single string suitable for render.renderError().
+function buildNoDataMessage(resolverInput) {
+  const ri = resolverInput || {};
+  const reasons = [];
+  const suggestions = [];
+
+  // Reason 1: narrow date window (most common cause of empty results)
+  if (ri.since) {
+    const sinceMs = new Date(ri.since).getTime();
+    const untilMs = ri.until ? new Date(ri.until).getTime() : Date.now();
+    const days = Math.round((untilMs - sinceMs) / 86400000);
+    if (days <= 14) {
+      reasons.push('a tight date window');
+      suggestions.push('try widening to "past 30 days" or "past 90 days"');
+    }
+  }
+
+  // Reason 2: SaaS-specific keyword gap (Mo emitted topic="SaaS X")
+  // SaaS rarely appears literally in contract descriptions. PSC 7H20
+  // (Cloud and Cloud-related as a Service) is the proper filter, but
+  // requires Mo to know to add psc="7H20" to the tag. If she didn't,
+  // tell the user to drop "SaaS" from the query.
+  const topicLower = String(ri.topic || '').toLowerCase();
+  if (topicLower.includes('saas') && !ri.psc) {
+    reasons.push('"SaaS" rarely appears in contract descriptions');
+    suggestions.push('drop "SaaS" and try just the category (e.g., "cybersecurity" or "endpoint security") — we\'ll catch the cloud-as-service deals via PSC code');
+  }
+
+  // Reason 3: multi-word topic with no agency scope (the keyword search
+  // is too narrow against a federal-wide pull). Single-word topics work
+  // better unless scoped.
+  const topicWords = String(ri.topic || '').trim().split(/\s+/).filter(Boolean);
+  if (topicWords.length >= 2 && !ri.agency && !ri.vendor && !topicLower.includes('saas')) {
+    reasons.push('a multi-word topic across all federal agencies');
+    suggestions.push('try a shorter topic word, or scope to a specific agency');
+  }
+
+  // Reason 4: tight dollar bounds
+  if (typeof ri.max_amount === 'number' && ri.max_amount < 100_000) {
+    reasons.push('a very low dollar ceiling (under $100K)');
+    suggestions.push('raise the max_amount or remove it');
+  }
+  if (typeof ri.min_amount === 'number' && ri.min_amount > 100_000_000) {
+    reasons.push('a high dollar floor (over $100M)');
+    suggestions.push('lower the min_amount');
+  }
+
+  // Build the message. Lead with what we tried, then the best suggestion.
+  if (reasons.length === 0) {
+    // Generic fallback when no specific cause stands out
+    return `Nothing came back for that. Try widening the scope — drop one filter (date window, dollar threshold, or specific topic) and ask again.`;
+  }
+
+  const reasonText = reasons.length === 1
+    ? reasons[0]
+    : reasons.slice(0, -1).join(', ') + ' and ' + reasons.slice(-1);
+  const suggestionText = suggestions[0]; // Lead with the most likely fix
+
+  return `Nothing came back. That query has ${reasonText}, which is usually the issue. Try this: ${suggestionText}.`;
 }
 
 export async function fetchUsaspending(resolverInput, endpoint) {
@@ -2222,8 +2295,10 @@ export async function askMo({ question, history, activeCardSummary, endpoint, re
 
     if (rows.length === 0) {
       // Path (c): no vendor filter to fall back from, or the pitch was
-      // federal-wide. Tell the user plainly and hand them escape chips.
-      render.renderError(`I couldn't find anything matching that. Try a different agency, or tell me more about what you're looking for.`);
+      // federal-wide. Build a smart message that looks at what was
+      // queried and suggests the most likely relaxation.
+      const msg = buildNoDataMessage(resolverInput);
+      render.renderError(msg);
       debug.mode = 'no_data';
       debug.fallbackType = 'no_data';
       debug.rowCountFinal = 0;
