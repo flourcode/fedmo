@@ -1527,6 +1527,23 @@ const _memoAlias = {};
 const Utils = {
   formatDateISO: date => date.toISOString().split('T')[0],
 
+  // Format the period-of-performance length as a short, glance-able string.
+  // Examples: "5.2yr term", "8mo term", "2.0yr term", "" (when dates missing).
+  // Used in card row meta lines to show contract duration alongside Start Date,
+  // so sellers can tell at a glance whether they're looking at a multi-year
+  // strategic deal or a short bridge.
+  contractTerm: (startStr, endStr) => {
+    if (!startStr || !endStr) return '';
+    const s = new Date(startStr).getTime();
+    const e = new Date(endStr).getTime();
+    if (!s || !e || e <= s) return '';
+    const days = (e - s) / 86400000;
+    const years = days / 365.25;
+    if (years >= 1) return years.toFixed(1) + 'yr term';
+    const months = Math.max(1, Math.round(days / 30.44));
+    return months + 'mo term';
+  },
+
   money: n => {
     if (!n && n !== 0) return '-';
     const absN = Math.abs(n);
@@ -2542,6 +2559,13 @@ function buildCardSpec(m, query, sellerLens, territory) {
       vehicle: vehicle,
       agency: agency,
       description: description,
+      // Date the biggest underlying contract was originally signed —
+      // raw YYYY-MM-DD string from USASpending. Surfaced in the row's
+      // meta line so sellers can see whether they're looking at a fresh
+      // win, a multi-year incumbent, or something old that just got a
+      // recent modification.
+      signed: biggest ? (biggest['Start Date'] || '') : '',
+      termText: biggest ? Utils.contractTerm(biggest['Start Date'], biggest['End Date']) : '',
       link: biggest && biggest['generated_internal_id']
         ? `https://www.usaspending.gov/award/${biggest['generated_internal_id']}`
         : null,
@@ -2564,6 +2588,8 @@ function buildCardSpec(m, query, sellerLens, territory) {
       contractId: c['Award ID'] || '',
       vehicle: Utils.detectVehicle(c),
       description: Utils.cleanDescription(c['Description'] || ''),
+      signed: c['Start Date'] || '',
+      termText: Utils.contractTerm(c['Start Date'], c['End Date']),
       days,
       urgent: days <= 30,
       patternKind: pattern.kind,
@@ -4501,7 +4527,11 @@ const App = {
       html += `<div class="mo-comp-head"><div class="mo-comp-title">Top primes</div><div class="mo-comp-meta">${spec.primes.length} shown</div></div><div class="mo-list">`;
       spec.primes.forEach(p => {
         const idShort = p.contractId ? p.contractId.slice(0, 24) + (p.contractId.length > 24 ? '…' : '') : '';
-        const meta = [idShort, p.vehicle].filter(Boolean).join(' · ');
+        // "Started 2021-08-15 · 6.0yr term" — gives sellers freshness and
+        // duration at a glance. Term computed from PoP start to PoP end;
+        // falls back to start-only if end is missing or invalid.
+        const startedTxt = p.signed ? `Started ${p.signed}${p.termText ? ' · ' + p.termText : ''}` : '';
+        const meta = [startedTxt, idShort, p.vehicle].filter(Boolean).join(' · ');
         const liUrl = `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(Utils.linkedinSearchTerm(p.name))}&origin=GLOBAL_SEARCH_HEADER`;
         // Rows 1-3 get the left-border stripe via .mo-row-ranked.
         // Rows 4-5 render as plain .mo-row-2line, identical to production.
@@ -4530,7 +4560,8 @@ const App = {
       html += `<div class="mo-comp-head"><div class="mo-comp-title">Expiring soon</div><div class="mo-comp-meta">next 90 days</div></div><div class="mo-list">`;
       const renderExpRow = (e) => {
         const idShort = e.contractId ? e.contractId.slice(0, 24) + (e.contractId.length > 24 ? '…' : '') : '';
-        const meta = [idShort, e.vehicle].filter(Boolean).join(' · ');
+        const startedTxt = e.signed ? `Started ${e.signed}${e.termText ? ' · ' + e.termText : ''}` : '';
+        const meta = [startedTxt, idShort, e.vehicle].filter(Boolean).join(' · ');
         const liUrl = `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(Utils.linkedinSearchTerm(e.vendor))}&origin=GLOBAL_SEARCH_HEADER`;
         // Show pattern UI ONLY for meaningful classifications. 'adjacent'
         // is the default-fallback kind that fires when nothing else matches,
