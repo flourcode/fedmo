@@ -1568,16 +1568,31 @@ function worst(row, sideLength) {
   )));
 }
 
-const TREEMAP_COLORS = ['#46446E', '#5E5B92', '#7572B7', '#9290C5', '#ACAAD4', '#C8C7E2', '#E3E3F1'];
+// 12-step purple palette — each step gets ~3 lightness points lighter so cells
+// are visually distinguishable when many are present. Last color is reserved
+// for the "Other" bucket and is the lightest.
+const TREEMAP_COLORS = [
+  '#46446E', '#534F82', '#5F5C95', '#6B6AA8', '#7572B7',
+  '#8682C2', '#9290C5', '#A09ECF', '#ACAAD4', '#BBB8DD',
+  '#C8C7E2', '#D6D5EA',
+];
+const TREEMAP_OTHER_COLOR = '#E3E3F1';
 
-// Aggregate rows for the treemap by a chosen dimension. Returns top 6 + "Other".
+// Aggregate rows for the treemap by a chosen dimension.
+//
+// Cell selection strategy: include every entity whose share is ≥3% of the
+// total (cells smaller than ~3% are too narrow to label readably anyway), up
+// to a maximum of 12 cells. Bucket the rest into "Other" only if there are
+// 2+ tiny entities to bucket — a single sub-3% leftover gets its own cell
+// instead of an opaque "Other (1)".
+//
+// For Pure Storage with 36 vendors where #1 is 19% and #10 is ~3%, this
+// surfaces 10 named vendors instead of the previous arbitrary top-6.
+// For AWS at DoD with only 4 vendors total, all 4 show — no Other.
 //
 // Dimensions:
 //   'vendor' — recipient name (default for keyword/reseller queries)
 //   'agency' — awarding (sub-)agency (default for single-vendor queries)
-//
-// For sub flow we always aggregate by sub recipient — agency view doesn't
-// make sense there because every prime is the same recipient anyway.
 function buildTreemapItems(rows, isSub, dimension) {
   const map = {};
   for (const r of rows) {
@@ -1595,12 +1610,29 @@ function buildTreemapItems(rows, isSub, dimension) {
     map[name] = (map[name] || 0) + amt;
   }
   const sorted = Object.entries(map).sort((a, b) => b[1] - a[1]);
-  const items = sorted.slice(0, 6).map(([name, value], i) => ({
-    name, value, color: TREEMAP_COLORS[i] || '#7572B7',
+  const total = sorted.reduce((s, [, v]) => s + v, 0);
+  if (total <= 0) return [];
+
+  const MIN_SHARE = 0.03;   // cells smaller than this are unlabel-readable
+  const MAX_CELLS = 12;
+
+  // Take every entity above the threshold, up to MAX_CELLS
+  let cutoff = sorted.findIndex(([, v]) => (v / total) < MIN_SHARE);
+  if (cutoff < 0) cutoff = sorted.length;        // none below threshold
+  cutoff = Math.min(cutoff, MAX_CELLS);
+
+  // If there's only one tiny leftover, give it its own cell rather than
+  // an opaque "Other (1)" bucket
+  const leftoverCount = sorted.length - cutoff;
+  if (leftoverCount === 1 && cutoff < MAX_CELLS) cutoff += 1;
+
+  const items = sorted.slice(0, cutoff).map(([name, value], i) => ({
+    name, value, color: TREEMAP_COLORS[i] || TREEMAP_COLORS[TREEMAP_COLORS.length - 1],
   }));
-  if (sorted.length > 6) {
-    const otherSum = sorted.slice(6).reduce((s, [, v]) => s + v, 0);
-    items.push({ name: `Other (${sorted.length - 6})`, value: otherSum, color: TREEMAP_COLORS[6] });
+  const remainder = sorted.length - cutoff;
+  if (remainder > 1) {
+    const otherSum = sorted.slice(cutoff).reduce((s, [, v]) => s + v, 0);
+    items.push({ name: `Other (${remainder})`, value: otherSum, color: TREEMAP_OTHER_COLOR });
   }
   return items.filter(x => x.value > 0);
 }
