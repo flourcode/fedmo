@@ -410,16 +410,23 @@ a:hover { text-decoration: underline; }
 }
 
 .mo-comp-head {
-  display: flex; align-items: baseline; justify-content: space-between;
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  flex-wrap: wrap;
   padding: var(--s-4) var(--s-5) var(--s-2);
 }
 .mo-comp-title {
-  font-size: 14px; font-weight: 700;
+  font-size: 14px;
+  font-weight: 600;
   color: var(--text-title);
   letter-spacing: var(--track-tight);
 }
 .mo-comp-meta {
-  font-size: 12px; color: var(--text-faint); font-weight: 500;
+  font-size: 12px;
+  color: var(--text-faint);
+  font-weight: 500;
+  margin-right: auto;
 }
 
 .mo-card-loading {
@@ -440,9 +447,11 @@ a:hover { text-decoration: underline; }
    the SVG inside uses preserveAspectRatio="none" with viewBox set to the
    measured pixel size, so any host margin/padding throws off the SVG unit
    math and you get giant stretched text. */
+/* Treemap — inset with side margins matching the row list, so it doesn't
+   bleed to the card edge. Rounded corners on the SVG itself keep the cells
+   from looking boxy. */
 .mo-treemap-host {
-  width: 100%;
-  height: 220px;
+  margin: 0 var(--s-5) var(--s-4);
   display: block;
 }
 .mo-treemap {
@@ -457,6 +466,34 @@ a:hover { text-decoration: underline; }
 .mo-treemap text {
   pointer-events: none;
   font-family: var(--font);
+}
+
+/* Treemap dimension toggle — ghost pill buttons in the comp-head row.
+   Wraps below the title on narrow screens. */
+.mo-tm-toggle {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.mo-tm-toggle-btn {
+  font-family: var(--font);
+  font-size: 11px;
+  background: transparent;
+  border: 1px solid var(--border-soft);
+  color: var(--text-muted);
+  padding: 3px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 120ms, color 120ms, border-color 120ms;
+}
+.mo-tm-toggle-btn:hover {
+  background: var(--bg-tint);
+  color: var(--text-body);
+}
+.mo-tm-toggle-btn.is-active {
+  background: var(--primary-100);
+  color: white;
+  border-color: var(--primary-100);
 }
 
 /* ── Rows ─────────────────────────────────────────────── */
@@ -707,10 +744,11 @@ a:hover { text-decoration: underline; }
 
 
 /* ── State map ────────────────────────────────────────── */
+/* Statemap — same side margins as the treemap and row list. No frame around
+   the tile grid; each tile is its own visual element with its own corners. */
 .mo-statemap-host {
   margin: 0 var(--s-5) var(--s-4);
-  border-radius: var(--radius-sm);
-  overflow: hidden;
+  display: block;
 }
 .mo-statemap { display: block; width: 100%; height: auto; }
 
@@ -2375,40 +2413,76 @@ function renderCard(rows, attrs, resolved) {
     return card;
   }
 
-  // ── Treemap ──
-  // Pick the most useful dimension for the question being asked:
-  //   - User asked about a single vendor (recipient filled) → agency view
-  //     ("where does this vendor sell?")
-  //   - Keyword query / reseller search / no specific recipient → vendor view
-  //     ("who's getting the work?")
-  // For sub flow, always vendor view (agencies are uniform within one prime's
-  // subaward outflow).
-  const treemapDimension = (!isSub && (resolved.recipientResolved || attrs.recipient))
+  // ── Treemap with dimension toggle ──
+  // Two views: by vendor ("who's getting the work?") and by agency ("where
+  // does the money flow to?"). Default picks based on query shape:
+  //   - User asked about a single vendor → start on agency (more useful)
+  //   - Keyword/reseller query → start on vendor (more useful)
+  // Subaward queries skip the toggle (every prime is the same recipient,
+  // so agency view doesn't make sense).
+  const initialDimension = (!isSub && (resolved.recipientResolved || attrs.recipient))
     ? 'agency'
     : 'vendor';
-  const tmItems = buildTreemapItems(rows, isSub, treemapDimension);
-  if (tmItems.length > 0) {
-    let uniqueCount, label, meta;
-    if (isSub) {
-      uniqueCount = new Set(rows.map(r => r._subName).filter(Boolean)).size;
-      label = 'Top subawardees';
-      meta = `top ${tmItems.length} of ${uniqueCount} subs`;
-    } else if (treemapDimension === 'agency') {
-      uniqueCount = new Set(rows.map(r => r['Awarding Sub Agency'] || r['Awarding Agency']).filter(Boolean)).size;
-      label = 'Where the money is by agency';
-      meta = `top ${tmItems.length} of ${uniqueCount} agencies`;
-    } else {
-      uniqueCount = new Set(rows.map(r => r['Recipient Name']).filter(Boolean)).size;
-      label = 'Where the money is by vendor';
-      meta = `top ${tmItems.length} of ${uniqueCount} primes`;
-    }
-    card.appendChild($$('div', { class: 'mo-comp-head' },
-      $$('div', { class: 'mo-comp-title', text: label }),
-      $$('div', { class: 'mo-comp-meta', text: meta }),
-    ));
+
+  // Skip treemap entirely if there's nothing to show
+  const initialItems = buildTreemapItems(rows, isSub, initialDimension);
+  if (initialItems.length > 0) {
+    // Build header — for non-sub queries with a toggle, the heading is
+    // "Where the money is" and the toggle lets the user pick the dimension.
+    // For sub queries, no toggle, just "Top subawardees".
+    const compHead = $$('div', { class: 'mo-comp-head' });
+    const titleEl = $$('div', { class: 'mo-comp-title' });
+    const metaEl = $$('div', { class: 'mo-comp-meta' });
+    compHead.appendChild(titleEl);
+    compHead.appendChild(metaEl);
+    card.appendChild(compHead);
+
     const tmHost = $$('div', { class: 'mo-treemap-host' });
+
+    // Helper: re-render treemap + update header for a given dimension
+    const renderForDimension = (dimension) => {
+      const items = buildTreemapItems(rows, isSub, dimension);
+      let uniqueCount, label, meta;
+      if (isSub) {
+        uniqueCount = new Set(rows.map(r => r._subName).filter(Boolean)).size;
+        label = 'Top subawardees';
+        meta = `top ${items.length} of ${uniqueCount} subs`;
+      } else if (dimension === 'agency') {
+        uniqueCount = new Set(rows.map(r => r['Awarding Sub Agency'] || r['Awarding Agency']).filter(Boolean)).size;
+        label = 'Where the money is';
+        meta = `top ${items.length} of ${uniqueCount} agencies`;
+      } else {
+        uniqueCount = new Set(rows.map(r => r['Recipient Name']).filter(Boolean)).size;
+        label = 'Where the money is';
+        meta = `top ${items.length} of ${uniqueCount} primes`;
+      }
+      titleEl.textContent = label;
+      metaEl.textContent = meta;
+      // Force re-render: clear data-rendered marker and call render
+      tmHost.removeAttribute('data-tm-items');
+      tmHost.innerHTML = '';
+      renderTreemapInto(tmHost, items);
+    };
+
+    // For non-sub queries, render a vendor/agency toggle above the treemap
+    if (!isSub) {
+      const toggle = $$('div', { class: 'mo-tm-toggle' });
+      toggle.innerHTML = `
+        <button class="mo-tm-toggle-btn${initialDimension === 'vendor' ? ' is-active' : ''}" data-dim="vendor">By vendor</button>
+        <button class="mo-tm-toggle-btn${initialDimension === 'agency' ? ' is-active' : ''}" data-dim="agency">By agency</button>
+      `;
+      compHead.appendChild(toggle);
+      toggle.querySelectorAll('.mo-tm-toggle-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          toggle.querySelectorAll('.mo-tm-toggle-btn').forEach(b => b.classList.remove('is-active'));
+          btn.classList.add('is-active');
+          renderForDimension(btn.dataset.dim);
+        });
+      });
+    }
+
     card.appendChild(tmHost);
-    requestAnimationFrame(() => renderTreemapInto(tmHost, tmItems));
+    requestAnimationFrame(() => renderForDimension(initialDimension));
   }
 
   // ── Rows ──
