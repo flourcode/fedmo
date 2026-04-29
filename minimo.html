@@ -335,6 +335,71 @@ a:hover { text-decoration: underline; }
 .mo-sub-prime { color: var(--text-muted); font-weight: 400; }
 .mo-sub-arrow { color: var(--text-faint); margin: 0 4px; }
 
+/* Period-of-performance line — sits between agency/ID line and description.
+   Hosts a status chip + the dates. */
+.mo-row-meta-pop {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 3px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* Status chip — one of: active, expiring, expired, future, unknown.
+   Color-coded so users can scan a list and see contract health at a glance. */
+.mo-status-chip {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 7px;
+  border-radius: 4px;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+.mo-status-active   { background: #DCFCE7; color: #166534; }
+.mo-status-expiring { background: #FEF3C7; color: #92400E; }
+.mo-status-expired  { background: #F3F4F6; color: #6B7280; }
+.mo-status-future   { background: #DBEAFE; color: #1E40AF; }
+
+/* Sort bar — sits above the row list, lets user re-sort without re-fetching */
+.mo-sort-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 0 var(--s-5) var(--s-3);
+  font-size: 13px;
+}
+.mo-sort-label {
+  color: var(--text-faint);
+  font-weight: 500;
+  margin-right: 2px;
+}
+.mo-sort-btn {
+  font-family: var(--font);
+  font-size: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-soft);
+  color: var(--text-muted);
+  padding: 4px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 120ms, color 120ms, border-color 120ms;
+}
+.mo-sort-btn:hover {
+  background: var(--bg-tint);
+  color: var(--text-body);
+}
+.mo-sort-btn.is-active {
+  background: var(--primary-100);
+  color: white;
+  border-color: var(--primary-100);
+}
+
 /* Aggregate sub row: tap to expand. The expand affordance is on the .mo-row-meta
    line only, so the name and amount stay selectable for copy. */
 .mo-sub-agg .mo-row-meta {
@@ -729,20 +794,54 @@ async function resolveAgency(name) {
 }
 
 async function resolveRecipient(name) {
+  // The bug we're fixing: searching "Palantir" returned LONELY MOUNTAIN PALANTIR
+  // ENTERPRISES (a small biz with the word in its name) instead of PALANTIR USG INC.
+  // USASpending's autocomplete doesn't rank by relevance the way users expect —
+  // a substring match on a smaller entity can outrank the obvious target.
+  //
+  // Ranking strategy (prefer in order):
+  //   1. Exact name match (case-insensitive)
+  //   2. Name starts with the search term (e.g. "PALANTIR USG INC" beats "LONELY MOUNTAIN PALANTIR")
+  //   3. Word-boundary match with shortest name (less embedded noise)
+  //   4. USASpending's default order
   try {
     const r = await fetch(`${USASPENDING}/autocomplete/recipient/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ search_text: name, limit: 5 }),
+      body: JSON.stringify({ search_text: name, limit: 10 }),
     });
     if (!r.ok) return null;
     const body = await r.json();
     const results = body.results || [];
     if (!results.length) return null;
-    const upName = name.toUpperCase();
-    const wbRe = new RegExp(`\\b${upName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`);
-    const wordMatch = results.find(x => wbRe.test(String(x.recipient_name || '').toUpperCase()));
-    if (wordMatch) return wordMatch.recipient_name;
+
+    const up = name.toUpperCase().trim();
+    const wbRe = new RegExp(`\\b${up.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`);
+
+    const named = results
+      .map(x => ({ raw: x, n: String(x.recipient_name || '').toUpperCase() }))
+      .filter(x => x.n);
+
+    // 1. Exact match
+    const exact = named.find(x => x.n === up);
+    if (exact) return exact.raw.recipient_name;
+
+    // 2. Starts-with match — sort by length so "PALANTIR USG INC" beats
+    // "PALANTIR TECHNOLOGIES INC" only if shorter, but both beat embedded noise.
+    const startsWith = named.filter(x => x.n.startsWith(up + ' ') || x.n.startsWith(up + ',') || x.n.startsWith(up + '.'));
+    if (startsWith.length) {
+      startsWith.sort((a, b) => a.n.length - b.n.length);
+      return startsWith[0].raw.recipient_name;
+    }
+
+    // 3. Word-boundary match — sort by length (shorter = less likely to be small biz with embedded keyword)
+    const wordMatches = named.filter(x => wbRe.test(x.n));
+    if (wordMatches.length) {
+      wordMatches.sort((a, b) => a.n.length - b.n.length);
+      return wordMatches[0].raw.recipient_name;
+    }
+
+    // 4. Default order
     return results[0].recipient_name || null;
   } catch { return null; }
 }
@@ -1456,24 +1555,113 @@ async function loadSecFilings(rows) {
 const SHOW_INITIAL = 25;
 const SHOW_MAX = 100;
 
+// Compute period-of-performance status for a row.
+//   active       — today is within PoP
+//   expiring     — PoP ends in next 90 days
+//   expired      — PoP ended before today
+//   future       — PoP hasn't started yet
+//   unknown      — missing dates
+function computeStatus(row) {
+  const start = row['Start Date'] ? new Date(row['Start Date']) : null;
+  const end = row['End Date'] ? new Date(row['End Date']) : null;
+  const now = new Date();
+  if (!end) return 'unknown';
+  const msPerDay = 86400000;
+  const daysUntilEnd = Math.round((end - now) / msPerDay);
+  if (daysUntilEnd < 0) return 'expired';
+  if (start && start > now) return 'future';
+  if (daysUntilEnd <= 90) return 'expiring';
+  return 'active';
+}
+
+// Build a "PoP: 2024-01-15 → 2027-01-15" line, or partial if one date is missing.
+function formatPoP(row) {
+  const s = row['Start Date'] || '';
+  const e = row['End Date'] || '';
+  if (s && e) return `${s} → ${e}`;
+  if (s) return `from ${s}`;
+  if (e) return `through ${e}`;
+  return '';
+}
+
+// Sort rows by various keys. Returns a new array.
+function sortRows(rows, sortKey) {
+  const sorted = [...rows];
+  if (sortKey === 'amount') {
+    sorted.sort((a, b) => (Number(b['Award Amount']) || 0) - (Number(a['Award Amount']) || 0));
+  } else if (sortKey === 'end-asc') {
+    // Soonest end date first — useful for "what's expiring"
+    sorted.sort((a, b) => {
+      const ea = a['End Date'] ? new Date(a['End Date']).getTime() : Infinity;
+      const eb = b['End Date'] ? new Date(b['End Date']).getTime() : Infinity;
+      return ea - eb;
+    });
+  } else if (sortKey === 'end-desc') {
+    sorted.sort((a, b) => {
+      const ea = a['End Date'] ? new Date(a['End Date']).getTime() : 0;
+      const eb = b['End Date'] ? new Date(b['End Date']).getTime() : 0;
+      return eb - ea;
+    });
+  } else if (sortKey === 'start-desc') {
+    // Most recently signed first
+    sorted.sort((a, b) => {
+      const sa = a['Start Date'] ? new Date(a['Start Date']).getTime() : 0;
+      const sb = b['Start Date'] ? new Date(b['Start Date']).getTime() : 0;
+      return sb - sa;
+    });
+  }
+  return sorted;
+}
+
 function renderContractRows(card, rows) {
   card.appendChild($$('div', { class: 'mo-comp-head' },
     $$('div', { class: 'mo-comp-title', text: 'Contracts' }),
-    $$('div', { class: 'mo-comp-meta', text: `${rows.length} rows · sorted by amount` }),
+    $$('div', { class: 'mo-comp-meta', text: `${rows.length} rows` }),
   ));
-  const list = $$('div', { class: 'mo-list' });
-  let html = '';
-  const initialRows = rows.slice(0, SHOW_INITIAL);
-  const moreRows = rows.slice(SHOW_INITIAL, SHOW_MAX);
 
+  // Sort selector — client-side re-sort, no re-fetch
+  const sortBar = $$('div', { class: 'mo-sort-bar' });
+  sortBar.innerHTML = `
+    <span class="mo-sort-label">Sort:</span>
+    <button class="mo-sort-btn is-active" data-sort="amount">Amount</button>
+    <button class="mo-sort-btn" data-sort="end-asc">Expiring soon</button>
+    <button class="mo-sort-btn" data-sort="end-desc">Latest end</button>
+    <button class="mo-sort-btn" data-sort="start-desc">Recently signed</button>
+  `;
+  card.appendChild(sortBar);
+
+  const list = $$('div', { class: 'mo-list' });
+
+  // Render a single row. The "rank stripe" is based on the row's index in
+  // the CURRENT sort, not a fixed top-3 — when you sort by expiring, the
+  // 3 most-imminent rows get the stripe.
   const renderRow = (r, idx) => {
     const isRanked = idx < 3;
     const recipient = r['Recipient Name'] || '—';
     const amount = r['Award Amount'];
     const desc = r['Description'] || '';
     const agency = r['Awarding Sub Agency'] || r['Awarding Agency'] || '';
-    const startDate = r['Start Date'] || '';
-    const meta = [agency, startDate].filter(Boolean).join(' · ');
+    const awardId = r['Award ID'] || '';
+    const status = computeStatus(r);
+    const pop = formatPoP(r);
+
+    // Status chip — shows current state of the PoP
+    const chipLabel = {
+      active: 'Active',
+      expiring: 'Expiring soon',
+      expired: 'Expired',
+      future: 'Future',
+      unknown: '',
+    }[status];
+    const chip = chipLabel
+      ? `<span class="mo-status-chip mo-status-${status}">${chipLabel}</span>`
+      : '';
+
+    // First meta line: agency · Award ID
+    const metaLine1Parts = [agency, awardId ? `ID: ${awardId}` : ''].filter(Boolean);
+    // Second meta line: PoP dates
+    const metaLine2 = pop ? `PoP: ${pop}` : '';
+
     const cls = `mo-row-2line${isRanked ? ' mo-row-ranked' : ''}`;
     const rankAttr = isRanked ? ` data-rank="${idx + 1}"` : '';
     return `<div class="${cls}"${rankAttr}>
@@ -1481,28 +1669,48 @@ function renderContractRows(card, rows) {
         <span class="mo-row-name" title="${escapeHtml(recipient)}">${escapeHtml(recipient)}</span>
         <span class="mo-row-amount">${fmtMoney(amount)}</span>
       </div>
-      ${meta ? `<div class="mo-row-meta">${escapeHtml(meta)}</div>` : ''}
+      ${metaLine1Parts.length ? `<div class="mo-row-meta">${escapeHtml(metaLine1Parts.join(' · '))}</div>` : ''}
+      ${metaLine2 ? `<div class="mo-row-meta-pop">${chip}${escapeHtml(metaLine2)}</div>` : (chip ? `<div class="mo-row-meta-pop">${chip}</div>` : '')}
       ${desc ? `<div class="mo-row-desc">${escapeHtml(desc)}</div>` : ''}
     </div>`;
   };
 
-  initialRows.forEach((r, i) => { html += renderRow(r, i); });
-  if (moreRows.length > 0) {
-    html += `<button class="mo-show-more" data-action="show-more">Show ${moreRows.length} more</button>`;
-    html += `<div class="mo-show-more-rows" style="display:none;">`;
-    moreRows.forEach((r, i) => { html += renderRow(r, i + SHOW_INITIAL); });
-    html += `</div>`;
-  }
-  list.innerHTML = html;
+  // Render the list for a given sort key. Replaces list contents.
+  const renderForSort = (sortKey) => {
+    const sorted = sortRows(rows, sortKey);
+    let html = '';
+    const initialRows = sorted.slice(0, SHOW_INITIAL);
+    const moreRows = sorted.slice(SHOW_INITIAL, SHOW_MAX);
+    initialRows.forEach((r, i) => { html += renderRow(r, i); });
+    if (moreRows.length > 0) {
+      html += `<button class="mo-show-more" data-action="show-more">Show ${moreRows.length} more</button>`;
+      html += `<div class="mo-show-more-rows" style="display:none;">`;
+      moreRows.forEach((r, i) => { html += renderRow(r, i + SHOW_INITIAL); });
+      html += `</div>`;
+    }
+    list.innerHTML = html;
+    // Wire up show-more after every re-render
+    const btn = list.querySelector('[data-action="show-more"]');
+    if (btn) {
+      btn.addEventListener('click', () => {
+        list.querySelector('.mo-show-more-rows').style.display = '';
+        btn.remove();
+      });
+    }
+  };
 
-  // Wire up show-more
-  const btn = list.querySelector('[data-action="show-more"]');
-  if (btn) {
+  // Initial render — by amount
+  renderForSort('amount');
+
+  // Wire up sort buttons
+  sortBar.querySelectorAll('.mo-sort-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      list.querySelector('.mo-show-more-rows').style.display = '';
-      btn.remove();
+      sortBar.querySelectorAll('.mo-sort-btn').forEach(b => b.classList.remove('is-active'));
+      btn.classList.add('is-active');
+      renderForSort(btn.dataset.sort);
     });
-  }
+  });
+
   card.appendChild(list);
 }
 
