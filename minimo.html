@@ -338,6 +338,40 @@ a:hover { text-decoration: underline; }
   line-height: 1.45;
   margin-bottom: var(--s-3);
 }
+
+/* Time-window + filter chips. Sit between subtitle and insight, telling
+   the user what's been filtered. Without these, "AWS at DoD past year"
+   and "AWS at DoD lifetime" look identical except for numbers. */
+.mo-card-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: var(--s-3);
+}
+.mo-card-chip {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 500;
+  background: var(--primary-20);
+  color: var(--primary-100);
+  padding: 3px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Auto-generated insight — the headline of the card. Reads like a sales
+   analyst summarizing the data. Production has this and it's load-bearing. */
+.mo-card-insight {
+  font-size: 14px;
+  color: var(--text-title);
+  font-weight: 500;
+  line-height: 1.45;
+  margin-bottom: var(--s-3);
+  padding-left: 10px;
+  border-left: 3px solid var(--primary-60);
+}
 .mo-card-meta {
   font-size: 13px; color: var(--text-muted);
   font-weight: 500;
@@ -499,6 +533,26 @@ a:hover { text-decoration: underline; }
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+/* Row actions — View link to usaspending.gov detail page. Right-aligned,
+   subtle, doesn't compete with the row content. */
+.mo-row-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 6px;
+}
+.mo-row-view {
+  font-size: 12px;
+  color: var(--primary-80);
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 6px;
+  text-decoration: none;
+}
+.mo-row-view:hover {
+  background: var(--primary-20);
+  color: var(--primary-100);
 }
 
 /* Subaward direction: prime → sub */
@@ -980,6 +1034,8 @@ const FIELDS = [
   'Start Date', 'End Date',
   'Awarding Agency', 'Awarding Sub Agency',
   'Place of Performance State Code',
+  // generated_internal_id powers the per-row View link to usaspending.gov
+  'generated_internal_id',
 ];
 const SUB_FIELDS = [
   'Sub-Award ID', 'Sub-Awardee Name', 'Sub-Award Amount', 'Sub-Award Description',
@@ -1473,17 +1529,28 @@ function worst(row, sideLength) {
 
 const TREEMAP_COLORS = ['#46446E', '#5E5B92', '#7572B7', '#9290C5', '#ACAAD4', '#C8C7E2', '#E3E3F1'];
 
-function buildTreemapItems(rows, isSub) {
-  // Aggregate by recipient — top 6 + "Other".
-  // For sub flow: aggregate by sub recipient using flattened _subName/_amount.
+// Aggregate rows for the treemap by a chosen dimension. Returns top 6 + "Other".
+//
+// Dimensions:
+//   'vendor' — recipient name (default for keyword/reseller queries)
+//   'agency' — awarding (sub-)agency (default for single-vendor queries)
+//
+// For sub flow we always aggregate by sub recipient — agency view doesn't
+// make sense there because every prime is the same recipient anyway.
+function buildTreemapItems(rows, isSub, dimension) {
   const map = {};
   for (const r of rows) {
-    const name = isSub
-      ? (r._subName || '(unknown sub)')
-      : (r['Recipient Name'] || '(unknown)');
-    const amt = isSub
-      ? (Number(r._amount) || 0)
-      : (Number(r['Award Amount']) || 0);
+    let name, amt;
+    if (isSub) {
+      name = r._subName || '(unknown sub)';
+      amt = Number(r._amount) || 0;
+    } else if (dimension === 'agency') {
+      name = r['Awarding Sub Agency'] || r['Awarding Agency'] || '(unknown)';
+      amt = Number(r['Award Amount']) || 0;
+    } else {
+      name = r['Recipient Name'] || '(unknown)';
+      amt = Number(r['Award Amount']) || 0;
+    }
     map[name] = (map[name] || 0) + amt;
   }
   const sorted = Object.entries(map).sort((a, b) => b[1] - a[1]);
@@ -1982,11 +2049,20 @@ function renderContractRows(card, rows) {
       ? `<span class="mo-status-chip mo-status-${status}">${chipLabel}</span>`
       : '';
 
+    const internalId = r.generated_internal_id || '';
+    const viewUrl = internalId ? `https://www.usaspending.gov/award/${internalId}` : '';
+
     // First meta line: agency · Award ID
     const metaLine1Parts = [agency, awardId ? `ID: ${awardId}` : ''].filter(Boolean);
     // Second meta line: PoP dates · term length (so the user can spot 10-year
     // ceiling vehicles vs transactional buys)
     const popLine = [pop ? `PoP: ${pop}` : '', term].filter(Boolean).join(' · ');
+
+    // View link — opens the USASpending detail page in a new tab. Can't render
+    // it without an internal_id, so we only show it when the field is present.
+    const viewLink = viewUrl
+      ? `<a class="mo-row-view" href="${escapeHtml(viewUrl)}" target="_blank" rel="noopener" aria-label="View on USASpending">View ↗</a>`
+      : '';
 
     const cls = `mo-row-2line${isRanked ? ' mo-row-ranked' : ''}`;
     const rankAttr = isRanked ? ` data-rank="${idx + 1}"` : '';
@@ -1998,6 +2074,7 @@ function renderContractRows(card, rows) {
       ${metaLine1Parts.length ? `<div class="mo-row-meta">${escapeHtml(metaLine1Parts.join(' · '))}</div>` : ''}
       ${popLine ? `<div class="mo-row-meta-pop">${chip}${escapeHtml(popLine)}</div>` : (chip ? `<div class="mo-row-meta-pop">${chip}</div>` : '')}
       ${desc ? `<div class="mo-row-desc">${escapeHtml(desc)}</div>` : ''}
+      ${viewLink ? `<div class="mo-row-actions">${viewLink}</div>` : ''}
     </div>`;
   };
 
@@ -2209,12 +2286,19 @@ function renderCard(rows, attrs, resolved) {
   }
   head.appendChild($$('div', { class: 'mo-card-subtitle', text: subtitleBits.join(' ') + '.' }));
 
-  // ── Three-stat row: Obligated · Vendors · Top vendor share ──
-  // Three numbers that together tell the concentration story:
-  //   - Obligated: total dollars flowing
-  //   - Vendors: how many distinct primes/subs (low = funneled, high = spread)
-  //   - Top share: what % the #1 player owns (>80% = single-vendor channel)
-  // Computed below from the rows we already have, no extra API calls.
+  // ── Time-window chip ──
+  // If Mo emitted explicit dates (since/until), tell the user. Without this,
+  // they have no way to know whether minimo gave them lifetime or filtered.
+  // "Lifetime" is implicit when no chip is shown.
+  if (attrs.since || attrs.until) {
+    const chips = $$('div', { class: 'mo-card-chips' });
+    const since = attrs.since || '...';
+    const until = attrs.until || 'today';
+    chips.innerHTML = `<span class="mo-card-chip">${escapeHtml(since)} → ${escapeHtml(until)}</span>`;
+    head.appendChild(chips);
+  }
+
+  // ── Pre-compute aggregates used by both the insight line and the stats ──
   const amountField = isSub ? '_amount' : 'Award Amount';
   const nameField = isSub ? '_subName' : 'Recipient Name';
   const byVendor = new Map();
@@ -2222,12 +2306,51 @@ function renderCard(rows, attrs, resolved) {
     const n = r[nameField] || '(unknown)';
     byVendor.set(n, (byVendor.get(n) || 0) + (Number(r[amountField]) || 0));
   }
-  const vendorTotals = [...byVendor.values()].sort((a, b) => b - a);
+  const vendorEntries = [...byVendor.entries()].sort((a, b) => b[1] - a[1]);
   const vendorCount = byVendor.size;
-  const topShare = total > 0 && vendorTotals.length > 0
-    ? Math.round((vendorTotals[0] / total) * 100)
-    : 0;
+  // Top-3 share is a stronger oligopoly signal than top-1 — federal market
+  // analysis cares about the top of the distribution, not just the leader.
+  const top3Sum = vendorEntries.slice(0, 3).reduce((s, [, v]) => s + v, 0);
+  const top3Share = total > 0 ? Math.round((top3Sum / total) * 100) : 0;
 
+  // Count expiring-soon (next 90 days) for the insight line
+  let expiringCount = 0;
+  if (!isSub) {
+    for (const r of rows) {
+      if (computeStatus(r) === 'expiring') expiringCount++;
+    }
+  }
+
+  // ── Auto-generated insight line ──
+  // Two-sentence summary derived from the rows. First sentence: who dominates.
+  // Second sentence: where to focus (expiring contracts).
+  // Production has this line and it's load-bearing — it's the headline of the
+  // card. The user's eye lands here, not on the prose above.
+  const insightBits = [];
+  if (vendorEntries.length > 0 && total > 0) {
+    const [topName, topAmount] = vendorEntries[0];
+    const topPct = Math.round((topAmount / total) * 100);
+    if (vendorEntries.length === 1) {
+      insightBits.push(`All of this volume sits with ${topName} (${fmtMoney(topAmount)}).`);
+    } else if (topPct >= 50) {
+      insightBits.push(`${topName} dominates here at ${fmtMoney(topAmount)}, ${topPct}% of the volume.`);
+    } else if (topPct >= 30) {
+      insightBits.push(`${topName} leads at ${fmtMoney(topAmount)} but the field is split — ${vendorCount} vendors total.`);
+    } else {
+      insightBits.push(`No single dominant player — top vendor is ${topName} at ${fmtMoney(topAmount)} (${topPct}%).`);
+    }
+  }
+  if (expiringCount > 0) {
+    insightBits.push(`${expiringCount} contract${expiringCount === 1 ? '' : 's'} expiring in the next 90 days.`);
+  }
+  if (insightBits.length > 0) {
+    head.appendChild($$('div', { class: 'mo-card-insight', text: insightBits.join(' ') }));
+  }
+
+  // ── Three-stat row ──
+  // Obligated · Vendors · Top 3 share. Top-3 reads concentration better than
+  // top-1 — for federal markets the question is "is this an oligopoly?",
+  // which top-3 answers directly.
   const stats = $$('div', { class: 'mo-stats' });
   stats.innerHTML = `
     <div class="mo-stat">
@@ -2239,8 +2362,8 @@ function renderCard(rows, attrs, resolved) {
       <div class="mo-stat-label">${isSub ? 'Subs' : 'Vendors'}</div>
     </div>
     <div class="mo-stat">
-      <div class="mo-stat-value">${topShare}%</div>
-      <div class="mo-stat-label">Top vendor share</div>
+      <div class="mo-stat-value">${top3Share}%</div>
+      <div class="mo-stat-label">Top 3 share</div>
     </div>
   `;
   head.appendChild(stats);
@@ -2253,17 +2376,32 @@ function renderCard(rows, attrs, resolved) {
   }
 
   // ── Treemap ──
-  // Both contracts and subawards get a treemap; the sub treemap shows the
-  // top sub recipients (which firms are getting GDIT's outflow).
-  const tmItems = buildTreemapItems(rows, isSub);
+  // Pick the most useful dimension for the question being asked:
+  //   - User asked about a single vendor (recipient filled) → agency view
+  //     ("where does this vendor sell?")
+  //   - Keyword query / reseller search / no specific recipient → vendor view
+  //     ("who's getting the work?")
+  // For sub flow, always vendor view (agencies are uniform within one prime's
+  // subaward outflow).
+  const treemapDimension = (!isSub && (resolved.recipientResolved || attrs.recipient))
+    ? 'agency'
+    : 'vendor';
+  const tmItems = buildTreemapItems(rows, isSub, treemapDimension);
   if (tmItems.length > 0) {
-    const uniqueCount = isSub
-      ? new Set(rows.map(r => r._subName).filter(Boolean)).size
-      : new Set(rows.map(r => r['Recipient Name']).filter(Boolean)).size;
-    const label = isSub ? 'Top subawardees' : 'Where the money is';
-    const meta = isSub
-      ? `top ${tmItems.length} of ${uniqueCount} subs`
-      : `top ${tmItems.length} of ${uniqueCount} primes`;
+    let uniqueCount, label, meta;
+    if (isSub) {
+      uniqueCount = new Set(rows.map(r => r._subName).filter(Boolean)).size;
+      label = 'Top subawardees';
+      meta = `top ${tmItems.length} of ${uniqueCount} subs`;
+    } else if (treemapDimension === 'agency') {
+      uniqueCount = new Set(rows.map(r => r['Awarding Sub Agency'] || r['Awarding Agency']).filter(Boolean)).size;
+      label = 'Where the money is by agency';
+      meta = `top ${tmItems.length} of ${uniqueCount} agencies`;
+    } else {
+      uniqueCount = new Set(rows.map(r => r['Recipient Name']).filter(Boolean)).size;
+      label = 'Where the money is by vendor';
+      meta = `top ${tmItems.length} of ${uniqueCount} primes`;
+    }
     card.appendChild($$('div', { class: 'mo-comp-head' },
       $$('div', { class: 'mo-comp-title', text: label }),
       $$('div', { class: 'mo-comp-meta', text: meta }),
