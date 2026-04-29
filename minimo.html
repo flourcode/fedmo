@@ -273,10 +273,12 @@ a:hover { text-decoration: underline; }
 .mo-sub-prime { color: var(--text-muted); font-weight: 400; }
 .mo-sub-arrow { color: var(--text-faint); margin: 0 4px; }
 
-/* Aggregate sub row: tappable to expand */
-.mo-sub-agg {
+/* Aggregate sub row: tap to expand. The expand affordance is on the .mo-row-meta
+   line only, so the name and amount stay selectable for copy. */
+.mo-sub-agg .mo-row-meta {
   cursor: pointer;
   user-select: none;
+  -webkit-user-select: none;
 }
 .mo-sub-agg .mo-row-meta::after {
   content: ' ▾';
@@ -294,25 +296,49 @@ a:hover { text-decoration: underline; }
   color: var(--text-muted);
 }
 .mo-sub-agg.is-expanded .mo-sub-detail { display: block; }
+
+/* Each prime-award detail card inside the drill-down */
+.mo-sub-detail-award {
+  padding: var(--s-2) 0;
+  border-bottom: 1px dashed var(--border-soft);
+}
+.mo-sub-detail-award:last-child { border-bottom: none; }
 .mo-sub-detail-row {
   display: flex;
   justify-content: space-between;
   gap: var(--s-3);
-  padding: 3px 0;
-  border-bottom: 1px dashed var(--border-soft);
+  align-items: baseline;
 }
-.mo-sub-detail-row:last-child { border-bottom: none; }
 .mo-sub-detail-prime {
   flex: 1;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 11px;
+  color: var(--text-body);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .mo-sub-detail-amount {
   font-variant-numeric: tabular-nums;
-  font-weight: 500;
-  color: var(--text-body);
+  font-weight: 600;
+  color: var(--text-title);
   white-space: nowrap;
+  font-size: 12px;
+}
+.mo-sub-detail-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 3px;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.mo-sub-detail-meta {
+  font-size: 11px;
+  color: var(--text-faint);
+  margin-top: 2px;
 }
 
 .mo-show-more {
@@ -721,8 +747,9 @@ async function searchPrimeAwardsForSubaward(filters) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         filters,
-        fields: ['Award ID', 'Recipient Name', 'Award Amount', 'generated_internal_id'],
-        limit: 25,  // pull a buffer so we can take the top 10 with internal_id present
+        fields: ['Award ID', 'Recipient Name', 'Award Amount', 'Description',
+                 'Awarding Agency', 'Awarding Sub Agency', 'generated_internal_id'],
+        limit: 25,
         sort: 'Award Amount',
         order: 'desc',
       }),
@@ -806,10 +833,13 @@ async function pull(attrs) {
         if (!r.ok) return [];
         const body = await r.json();
         const subs = body.results || [];
-        // Tag each sub with the prime context for aggregation+drilldown
+        // Tag each sub with the prime context — used by aggregation+drilldown
         return subs.map(s => ({
           _primeName: pr['Recipient Name'],
           _primeAwardId: pr['Award ID'],
+          _primeAgency: pr['Awarding Sub Agency'] || pr['Awarding Agency'] || '',
+          _primeDescription: pr['Description'] || '',
+          _primeTotal: Number(pr['Award Amount']) || 0,
           _subName: s.recipient_name || s.subawardee_name || '—',
           _amount: Number(s.amount) || 0,
           _description: s.description || '',
@@ -1382,19 +1412,36 @@ function renderContractRows(card, rows) {
 // Each row shows the sub's total spend across GDIT (or whatever prime), and
 // taps to reveal which specific prime awards the sub appears on.
 function renderSubawardRows(card, rows, attrs, resolved) {
-  // Aggregate by sub recipient name
+  // Aggregate by sub recipient, keeping each individual subaward action so
+  // the drill-down can show real per-action context. Group inside by prime
+  // AWARD (not prime name — every prime is GDIT in this flow).
   const bySub = new Map();
   for (const r of rows) {
-    const name = r._subName || r['Sub-Awardee Name'] || '—';
+    const name = r._subName || '—';
     if (!bySub.has(name)) {
-      bySub.set(name, { name, total: 0, count: 0, primeBreakdown: new Map() });
+      bySub.set(name, { name, total: 0, count: 0, byPrimeAward: new Map() });
     }
     const entry = bySub.get(name);
-    const amt = Number(r._amount || r['Sub-Award Amount']) || 0;
+    const amt = Number(r._amount) || 0;
     entry.total += amt;
     entry.count += 1;
-    const prime = r._primeName || 'Unknown prime';
-    entry.primeBreakdown.set(prime, (entry.primeBreakdown.get(prime) || 0) + amt);
+    const awardKey = r._primeAwardId || 'unknown';
+    if (!entry.byPrimeAward.has(awardKey)) {
+      entry.byPrimeAward.set(awardKey, {
+        awardId: awardKey,
+        agency: r._primeAgency || '',
+        primeDesc: r._primeDescription || '',
+        actions: [],
+        total: 0,
+      });
+    }
+    const awardBucket = entry.byPrimeAward.get(awardKey);
+    awardBucket.actions.push({
+      amount: amt,
+      desc: r._description || '',
+      date: r._subActionDate || '',
+    });
+    awardBucket.total += amt;
   }
   const aggregated = [...bySub.values()].sort((a, b) => b.total - a.total);
 
@@ -1414,20 +1461,36 @@ function renderSubawardRows(card, rows, attrs, resolved) {
     const isRanked = idx < 3;
     const cls = `mo-row-2line mo-sub-agg${isRanked ? ' mo-row-ranked' : ''}`;
     const rankAttr = isRanked ? ` data-rank="${idx + 1}"` : '';
-    // Build the drill-down detail (hidden by default)
-    const primesEntries = [...sub.primeBreakdown.entries()].sort((a, b) => b[1] - a[1]);
-    const detailHtml = primesEntries.map(([prime, amount]) =>
-      `<div class="mo-sub-detail-row">
-        <span class="mo-sub-detail-prime" title="${escapeHtml(prime)}">${escapeHtml(prime)}</span>
-        <span class="mo-sub-detail-amount">${fmtMoney(amount)}</span>
-      </div>`
-    ).join('');
+    // Drill-down: per-prime-award detail, with each subaward action under it
+    const awards = [...sub.byPrimeAward.values()].sort((a, b) => b.total - a.total);
+    const detailHtml = awards.map(award => {
+      const actionsHtml = award.actions.slice(0, 5).map(a =>
+        `<div class="mo-sub-detail-meta">
+          ${fmtMoney(a.amount)} · ${escapeHtml(a.date || '')}${a.desc ? ` · ${escapeHtml(a.desc.slice(0, 100))}` : ''}
+        </div>`
+      ).join('');
+      const moreActions = award.actions.length > 5
+        ? `<div class="mo-sub-detail-meta">+ ${award.actions.length - 5} more action${award.actions.length - 5 === 1 ? '' : 's'}</div>`
+        : '';
+      const agencyLine = award.agency
+        ? `<div class="mo-sub-detail-meta">Funded by: ${escapeHtml(award.agency)}</div>`
+        : '';
+      return `<div class="mo-sub-detail-award">
+        <div class="mo-sub-detail-row">
+          <span class="mo-sub-detail-prime" title="Prime Award ID: ${escapeHtml(award.awardId)}">${escapeHtml(award.awardId)}</span>
+          <span class="mo-sub-detail-amount">${fmtMoney(award.total)}</span>
+        </div>
+        ${agencyLine}
+        ${actionsHtml}${moreActions}
+      </div>`;
+    }).join('');
+
     return `<div class="${cls}"${rankAttr}>
       <div class="mo-row-2line-top">
         <span class="mo-row-name" title="${escapeHtml(sub.name)}">${escapeHtml(sub.name)}</span>
         <span class="mo-row-amount">${fmtMoney(sub.total)}</span>
       </div>
-      <div class="mo-row-meta">${sub.count} subaward${sub.count === 1 ? '' : 's'} from ${primesEntries.length} prime${primesEntries.length === 1 ? '' : 's'}</div>
+      <div class="mo-row-meta">${sub.count} subaward action${sub.count === 1 ? '' : 's'} on ${awards.length} prime award${awards.length === 1 ? '' : 's'}</div>
       <div class="mo-sub-detail">${detailHtml}</div>
     </div>`;
   };
@@ -1441,9 +1504,13 @@ function renderSubawardRows(card, rows, attrs, resolved) {
   }
   list.innerHTML = html;
 
-  // Tap to expand each agg row
-  list.querySelectorAll('.mo-sub-agg').forEach(rowEl => {
-    rowEl.addEventListener('click', () => rowEl.classList.toggle('is-expanded'));
+  // Click the meta line (the "N subaward actions on K prime awards" line)
+  // to expand. The name and amount stay selectable for copy.
+  list.querySelectorAll('.mo-sub-agg .mo-row-meta').forEach(metaEl => {
+    metaEl.addEventListener('click', (e) => {
+      const row = e.currentTarget.closest('.mo-sub-agg');
+      if (row) row.classList.toggle('is-expanded');
+    });
   });
   // Show-more button
   const btn = list.querySelector('[data-action="show-more"]');
