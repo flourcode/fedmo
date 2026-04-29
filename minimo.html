@@ -321,7 +321,7 @@ a:hover { text-decoration: underline; }
   overflow: hidden;
 }
 .mo-card-head {
-  padding: var(--s-4) var(--s-5) var(--s-3);
+  padding: var(--s-4) var(--s-5) var(--s-4);
   border-bottom: 1px solid var(--border-soft);
 }
 .mo-card-title {
@@ -330,21 +330,49 @@ a:hover { text-decoration: underline; }
   letter-spacing: var(--track-tight);
   margin: 0 0 var(--s-1);
 }
+/* Plain-English restatement of what the user asked. Sentence form,
+   muted color, sits right below the title. */
+.mo-card-subtitle {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.45;
+  margin-bottom: var(--s-3);
+}
 .mo-card-meta {
   font-size: 13px; color: var(--text-muted);
   font-weight: 500;
 }
-.mo-card-resolved {
-  font-size: 12px; color: var(--text-faint);
-  padding: var(--s-2) var(--s-5);
-  background: var(--bg-tint);
-  border-bottom: 1px solid var(--border-soft);
+
+/* Three-stat row — the headline numbers that frame the result:
+   total dollars, vendor count, top-vendor share. Together they tell the
+   concentration story at a glance. */
+.mo-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--s-3);
+  margin-top: var(--s-1);
 }
-.mo-card-resolved code {
-  background: var(--primary-20); color: var(--primary-100);
-  padding: 1px 6px; border-radius: 4px;
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+.mo-stat {
+  min-width: 0;
+}
+.mo-stat-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-title);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--track-tight);
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mo-stat-label {
   font-size: 11px;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 500;
+  margin-top: 2px;
 }
 
 .mo-comp-head {
@@ -751,13 +779,11 @@ a:hover { text-decoration: underline; }
 
 /* ── Mobile tweaks ────────────────────────────────────── */
 @media (max-width: 600px) {
-  .mo-card-head { padding: var(--s-3) var(--s-4) var(--s-2); }
+  .mo-card-head { padding: var(--s-3) var(--s-4) var(--s-3); }
   .mo-comp-head { padding: var(--s-3) var(--s-4) var(--s-2); }
-  .mo-card-resolved { padding-left: var(--s-4); padding-right: var(--s-4); }
   .mo-treemap-host, .mo-statemap-host, .mo-sec-list, .mo-list {
     margin-left: var(--s-3); margin-right: var(--s-3);
   }
-  .mo-card-resolved { padding-left: var(--s-4); padding-right: var(--s-4); }
   .mo-amount-note { padding-left: var(--s-4); padding-right: var(--s-4); }
 }
 </style>
@@ -1862,6 +1888,26 @@ function formatPoP(row) {
   return '';
 }
 
+// Compute term length (start → end) in human-readable form.
+// Production pattern: "1.5yr term", "8mo term", "10yr term".
+// Long term + low obligation = IDIQ/IDV ceiling vehicle still ramping.
+// Short term + full obligation = transactional buy. Surface this so the user
+// can spot the $500/10-year ceiling vehicles without doing date math.
+function formatTerm(row) {
+  const s = row['Start Date'];
+  const e = row['End Date'];
+  if (!s || !e) return '';
+  const start = new Date(s);
+  const end = new Date(e);
+  const days = Math.round((end - start) / 86400000);
+  if (days < 0) return '';
+  if (days < 60) return `${days}d term`;
+  const months = Math.round(days / 30);
+  if (months < 18) return `${months}mo term`;
+  const years = (days / 365);
+  return `${years.toFixed(1)}yr term`;
+}
+
 // Sort rows by various keys. Returns a new array.
 function sortRows(rows, sortKey) {
   const sorted = [...rows];
@@ -1922,6 +1968,7 @@ function renderContractRows(card, rows) {
     const awardId = r['Award ID'] || '';
     const status = computeStatus(r);
     const pop = formatPoP(r);
+    const term = formatTerm(r);
 
     // Status chip — shows current state of the PoP
     const chipLabel = {
@@ -1937,8 +1984,9 @@ function renderContractRows(card, rows) {
 
     // First meta line: agency · Award ID
     const metaLine1Parts = [agency, awardId ? `ID: ${awardId}` : ''].filter(Boolean);
-    // Second meta line: PoP dates
-    const metaLine2 = pop ? `PoP: ${pop}` : '';
+    // Second meta line: PoP dates · term length (so the user can spot 10-year
+    // ceiling vehicles vs transactional buys)
+    const popLine = [pop ? `PoP: ${pop}` : '', term].filter(Boolean).join(' · ');
 
     const cls = `mo-row-2line${isRanked ? ' mo-row-ranked' : ''}`;
     const rankAttr = isRanked ? ` data-rank="${idx + 1}"` : '';
@@ -1948,7 +1996,7 @@ function renderContractRows(card, rows) {
         <span class="mo-row-amount">${fmtMoney(amount)}</span>
       </div>
       ${metaLine1Parts.length ? `<div class="mo-row-meta">${escapeHtml(metaLine1Parts.join(' · '))}</div>` : ''}
-      ${metaLine2 ? `<div class="mo-row-meta-pop">${chip}${escapeHtml(metaLine2)}</div>` : (chip ? `<div class="mo-row-meta-pop">${chip}</div>` : '')}
+      ${popLine ? `<div class="mo-row-meta-pop">${chip}${escapeHtml(popLine)}</div>` : (chip ? `<div class="mo-row-meta-pop">${chip}</div>` : '')}
       ${desc ? `<div class="mo-row-desc">${escapeHtml(desc)}</div>` : ''}
     </div>`;
   };
@@ -2129,25 +2177,75 @@ function renderCard(rows, attrs, resolved) {
   if (isSub) titleBits.push('outgoing subawards');
   if (titleBits.length === 0) titleBits.push('Federal contracts');
 
+  // ── Card title ──
+  // Title stays compact: "AMAZON WEB SERVICES, INC · DOD · outgoing subawards"
+  // — fine as a header chip, but on its own reads like a database key.
   const head = $$('div', { class: 'mo-card-head' });
   head.appendChild($$('div', { class: 'mo-card-title', text: titleBits.join(' · ') }));
-  const metaLabel = isSub
-    ? `${rows.length} subaward action${rows.length === 1 ? '' : 's'} · ${fmtMoney(total)}`
-    : `${rows.length} contracts · ${fmtMoney(total)}`;
-  head.appendChild($$('div', { class: 'mo-card-meta', text: metaLabel }));
-  card.appendChild(head);
 
-  // Resolution detail line
-  const resolveBits = [];
-  if (resolved.agencyAsked && resolved.agencyResolved && resolved.agencyAsked !== resolved.agencyResolved) {
-    resolveBits.push(`agency "${resolved.agencyAsked}" → ${resolved.agencyResolved}`);
+  // ── Plain-English subtitle ──
+  // Restates the question in human form so the result is self-explanatory.
+  // "Amazon Web Services as a prime at the Department of Defense."
+  // Built from the resolved entities (preferring the user's phrasing for the
+  // agency since "Department of Defense" reads better than "DOD").
+  const subtitleBits = [];
+  if (isSub) {
+    const primeName = resolved.recipientResolved || attrs.recipient || 'a prime';
+    subtitleBits.push(`Subawards flowing out from ${primeName}`);
+    if (resolved.agencyAsked || attrs.agency) {
+      subtitleBits.push(`on prime contracts at ${resolved.agencyAsked || attrs.agency}`);
+    }
+  } else {
+    if (resolved.recipientResolved || attrs.recipient) {
+      subtitleBits.push(`${resolved.recipientResolved || attrs.recipient} as a prime`);
+    } else if (attrs.keywords) {
+      subtitleBits.push(`Contracts mentioning "${attrs.keywords}"`);
+    } else {
+      subtitleBits.push('Federal contracts');
+    }
+    if (resolved.agencyAsked || attrs.agency) {
+      subtitleBits.push(`at ${resolved.agencyAsked || attrs.agency}`);
+    }
   }
-  if (resolved.recipientAsked && resolved.recipientResolved && resolved.recipientAsked !== resolved.recipientResolved) {
-    resolveBits.push(`recipient "${resolved.recipientAsked}" → ${resolved.recipientResolved}`);
+  head.appendChild($$('div', { class: 'mo-card-subtitle', text: subtitleBits.join(' ') + '.' }));
+
+  // ── Three-stat row: Obligated · Vendors · Top vendor share ──
+  // Three numbers that together tell the concentration story:
+  //   - Obligated: total dollars flowing
+  //   - Vendors: how many distinct primes/subs (low = funneled, high = spread)
+  //   - Top share: what % the #1 player owns (>80% = single-vendor channel)
+  // Computed below from the rows we already have, no extra API calls.
+  const amountField = isSub ? '_amount' : 'Award Amount';
+  const nameField = isSub ? '_subName' : 'Recipient Name';
+  const byVendor = new Map();
+  for (const r of rows) {
+    const n = r[nameField] || '(unknown)';
+    byVendor.set(n, (byVendor.get(n) || 0) + (Number(r[amountField]) || 0));
   }
-  if (resolveBits.length) {
-    card.appendChild($$('div', { class: 'mo-card-resolved', text: resolveBits.join(' · ') }));
-  }
+  const vendorTotals = [...byVendor.values()].sort((a, b) => b - a);
+  const vendorCount = byVendor.size;
+  const topShare = total > 0 && vendorTotals.length > 0
+    ? Math.round((vendorTotals[0] / total) * 100)
+    : 0;
+
+  const stats = $$('div', { class: 'mo-stats' });
+  stats.innerHTML = `
+    <div class="mo-stat">
+      <div class="mo-stat-value">${fmtMoney(total)}</div>
+      <div class="mo-stat-label">${isSub ? 'Sub spend' : 'Obligated'}</div>
+    </div>
+    <div class="mo-stat">
+      <div class="mo-stat-value">${vendorCount}</div>
+      <div class="mo-stat-label">${isSub ? 'Subs' : 'Vendors'}</div>
+    </div>
+    <div class="mo-stat">
+      <div class="mo-stat-value">${topShare}%</div>
+      <div class="mo-stat-label">Top vendor share</div>
+    </div>
+  `;
+  head.appendChild(stats);
+
+  card.appendChild(head);
 
   if (rows.length === 0) {
     card.appendChild($$('div', { class: 'mo-card-empty', text: 'No rows. Try widening the date or dollar window, or rephrasing.' }));
