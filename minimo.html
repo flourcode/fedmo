@@ -95,7 +95,7 @@
 // =============================================================================
 // CONFIG
 // =============================================================================
-const LAMBDA_URL = 'https://4gxuwrrugc4s6zqcxsos2exg5y0sjcrc.lambda-url.us-east-1.on.aws/';
+const LAMBDA_URL = 'https://YOUR-MINI-LAMBDA-URL.lambda-url.us-east-1.on.aws/';
 const USASPENDING = 'https://api.usaspending.gov/api/v2';
 
 // =============================================================================
@@ -111,14 +111,32 @@ const $send = document.getElementById('send');
 // =============================================================================
 // TAG PARSER
 // =============================================================================
-const TAG_RE = /<data\b([^>]*?)\/>/i;
+//
+// Self-closing <data ... /> only. We're strict on purpose: if Mo writes
+// commentary inside an attribute value (it has happened — she put prose
+// inside until="..."), the tag becomes structurally broken. Better to fail
+// to fire than to fire with garbage attributes that the API will 422 on.
+//
+// Rules:
+//   - tag content (between <data and />) is at most 600 chars
+//   - attribute values cannot contain newlines or > characters
+//   - attribute values are bounded by the same quote char on both ends
+const TAG_RE = /<data\b([^>]{1,600}?)\/>/i;
+
 function findDataTag(text) {
   const m = TAG_RE.exec(text);
   if (!m) return null;
+  const inside = m[1];
+  // If the matched content has any newlines, reject — Mo wrote commentary in
+  // an attribute. Better to leave the tag in the visible prose so the user
+  // sees something went wrong, rather than fire a broken query.
+  if (/\n/.test(inside)) return null;
   const attrs = {};
-  const attrRe = /(\w+)\s*=\s*"([^"]*)"/g;
+  // Quote-balanced attribute extractor: name="value" or name='value'.
+  // Disallows > inside the value (which would break the surrounding tag).
+  const attrRe = /(\w+)\s*=\s*("([^">\n]*)"|'([^'>\n]*)')/g;
   let am;
-  while ((am = attrRe.exec(m[1]))) attrs[am[1]] = am[2];
+  while ((am = attrRe.exec(inside))) attrs[am[1]] = am[3] !== undefined ? am[3] : am[4];
   return { match: m[0], start: m.index, end: m.index + m[0].length, attrs };
 }
 
@@ -157,21 +175,21 @@ async function resolveAgency(name) {
     const body = await r.json();
     const top = (body.results || [])[0];
     if (!top) return null;
-    // Prefer toptier match; fall back to subtier.
+    // Return TWO things separately so the display label can never leak
+    // into the USASpending filter payload (USASpending 422s on unknown
+    // fields like `_label`):
+    //   - filter: the exact shape USASpending expects in agencies[]
+    //   - label: human-friendly display string for the resolution line
     if (top.toptier_flag && top.toptier_agency?.name) {
       return {
-        tier: 'toptier',
-        name: top.toptier_agency.name,
-        type: 'awarding',
-        _label: top.toptier_agency.abbreviation || top.toptier_agency.name,
+        filter: { tier: 'toptier', name: top.toptier_agency.name, type: 'awarding' },
+        label: top.toptier_agency.abbreviation || top.toptier_agency.name,
       };
     }
     if (top.subtier_agency?.name) {
       return {
-        tier: 'subtier',
-        name: top.subtier_agency.name,
-        type: 'awarding',
-        _label: `${top.subtier_agency.abbreviation || top.subtier_agency.name} (${top.toptier_agency?.abbreviation || ''})`,
+        filter: { tier: 'subtier', name: top.subtier_agency.name, type: 'awarding' },
+        label: `${top.subtier_agency.abbreviation || top.subtier_agency.name} (${top.toptier_agency?.abbreviation || ''})`,
       };
     }
     return null;
@@ -238,19 +256,31 @@ function buildBaseFilters(attrs, agencyFilter) {
     if (pf) f.psc_codes = pf;
   }
 
-  if (attrs.since || attrs.until) {
+  // Validate dates as YYYY-MM-DD only. If Mo emitted prose where a date
+  // belongs (it has happened — "until" once contained a paragraph), drop
+  // the bad attribute and proceed without the time window. Better an
+  // open-window query than a 400 from USASpending.
+  const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+  const since = DATE_RE.test(String(attrs.since || '')) ? attrs.since : null;
+  const until = DATE_RE.test(String(attrs.until || '')) ? attrs.until : null;
+  if (since || until) {
     const today = new Date().toISOString().slice(0, 10);
     f.time_period = [{
       date_type: 'date_signed',
-      start_date: attrs.since || '2020-01-01',
-      end_date: attrs.until || today,
+      start_date: since || '2020-01-01',
+      end_date: until || today,
     }];
   }
 
-  if (attrs.min_amount || attrs.max_amount) {
+  // Validate amounts as positive finite numbers; drop garbage.
+  const minA = Number(attrs.min_amount);
+  const maxA = Number(attrs.max_amount);
+  const validMin = Number.isFinite(minA) && minA > 0;
+  const validMax = Number.isFinite(maxA) && maxA > 0;
+  if (validMin || validMax) {
     const range = {};
-    if (attrs.min_amount) range.lower_bound = Number(attrs.min_amount);
-    if (attrs.max_amount) range.upper_bound = Number(attrs.max_amount);
+    if (validMin) range.lower_bound = minA;
+    if (validMax) range.upper_bound = maxA;
     f.award_amounts = [range];
   }
 
@@ -306,17 +336,20 @@ const matchesAny = (haystacks, needles) =>
 // Returns { rows, resolved: { agency, recipient, ... }, error }.
 async function pull(attrs) {
   // 1. Resolve names in parallel
-  const [agencyFilter, recipientName] = await Promise.all([
+  const [agencyResolution, recipientName] = await Promise.all([
     attrs.agency ? resolveAgency(attrs.agency) : Promise.resolve(null),
     attrs.recipient ? resolveRecipient(attrs.recipient) : Promise.resolve(null),
   ]);
 
+  // resolveAgency returns { filter, label } — pass only the API-shape filter
+  // to buildBaseFilters. The label is for the resolution UI line.
+  const agencyFilter = agencyResolution?.filter || null;
   const baseFilters = buildBaseFilters(attrs, agencyFilter);
   const isSub = attrs.subawards === 'true';
 
   const resolved = {
     agencyAsked: attrs.agency || null,
-    agencyResolved: agencyFilter?._label || null,
+    agencyResolved: agencyResolution?.label || null,
     recipientAsked: attrs.recipient || null,
     recipientResolved: recipientName || null,
   };
