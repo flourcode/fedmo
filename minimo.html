@@ -193,51 +193,141 @@ a:hover { text-decoration: underline; }
   font-family: var(--font);
 }
 
-/* ── Table ────────────────────────────────────────────── */
-.mo-table-wrap {
+/* ── Rows ─────────────────────────────────────────────── */
+/* Production fedmo uses vertical 2-line rows, not a spreadsheet table.
+   Each row is a self-contained card-like block: name + amount on top,
+   agency/date on second line, description on third line in italic.
+   Top 3 rows get a colored left-border stripe in primary purple. */
+.mo-list {
   margin: 0 var(--s-5) var(--s-4);
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-soft);
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
+  background: var(--bg-card);
+  overflow: hidden;
 }
-.mo-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-}
-.mo-table th, .mo-table td {
-  text-align: left;
-  padding: var(--s-2) var(--s-3);
+.mo-row-2line {
+  padding: var(--s-3) var(--s-4);
   border-bottom: 1px solid var(--border-soft);
+  position: relative;
 }
-.mo-table th {
-  background: var(--bg-tint);
+.mo-row-2line:last-child { border-bottom: none; }
+.mo-row-2line:hover { background: var(--bg-tint); }
+
+/* Top 3 ranked stripe: deepest purple at #1 stepping through palette */
+.mo-row-ranked { padding-left: calc(var(--s-4) + 6px); }
+.mo-row-ranked::before {
+  content: '';
+  position: absolute;
+  left: var(--s-2);
+  top: 14px;
+  bottom: 14px;
+  width: 3px;
+  border-radius: 2px;
+}
+.mo-row-ranked[data-rank="1"]::before { background: var(--primary-100); }
+.mo-row-ranked[data-rank="2"]::before { background: var(--primary-60); }
+.mo-row-ranked[data-rank="3"]::before { background: var(--primary-40); }
+
+.mo-row-2line-top {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-3);
+  min-height: 22px;
+}
+.mo-row-name {
+  flex: 1; min-width: 0;
   font-weight: 600;
-  color: var(--text-muted);
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  position: sticky; top: 0;
-}
-.mo-table tbody tr:last-child td { border-bottom: none; }
-.mo-table tbody tr:hover { background: var(--bg-tint); }
-.mo-td-recipient {
-  font-weight: 500; color: var(--text-title);
+  color: var(--text-title);
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 220px;
-  overflow: hidden; text-overflow: ellipsis;
 }
-.mo-td-amount {
+.mo-row-amount {
   font-variant-numeric: tabular-nums;
-  text-align: right; white-space: nowrap;
-  font-weight: 600; color: var(--text-title);
+  font-weight: 600;
+  color: var(--text-title);
+  white-space: nowrap;
+  font-size: 14px;
 }
-.mo-td-desc {
+.mo-row-meta {
+  font-size: 12px;
   color: var(--text-muted);
-  max-width: 380px;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
+.mo-row-desc {
+  font-size: 12px;
+  color: var(--text-faint);
+  font-style: italic;
+  margin-top: 3px;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Subaward direction: prime → sub */
+.mo-sub-prime { color: var(--text-muted); font-weight: 400; }
+.mo-sub-arrow { color: var(--text-faint); margin: 0 4px; }
+
+/* Aggregate sub row: tappable to expand */
+.mo-sub-agg {
+  cursor: pointer;
+  user-select: none;
+}
+.mo-sub-agg .mo-row-meta::after {
+  content: ' ▾';
+  color: var(--text-faint);
+  font-size: 10px;
+}
+.mo-sub-agg.is-expanded .mo-row-meta::after { content: ' ▴'; }
+.mo-sub-detail {
+  display: none;
+  margin-top: var(--s-2);
+  padding: var(--s-2) var(--s-3);
+  background: var(--bg-tint);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.mo-sub-agg.is-expanded .mo-sub-detail { display: block; }
+.mo-sub-detail-row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s-3);
+  padding: 3px 0;
+  border-bottom: 1px dashed var(--border-soft);
+}
+.mo-sub-detail-row:last-child { border-bottom: none; }
+.mo-sub-detail-prime {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mo-sub-detail-amount {
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  color: var(--text-body);
+  white-space: nowrap;
+}
+
+.mo-show-more {
+  width: 100%;
+  background: var(--bg-tint);
+  border: none;
+  border-top: 1px solid var(--border-soft);
+  padding: var(--s-3);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--primary-80);
+  cursor: pointer;
+}
+.mo-show-more:hover { background: var(--primary-20); }
+
 
 /* ── State map ────────────────────────────────────────── */
 .mo-statemap-host {
@@ -346,7 +436,7 @@ a:hover { text-decoration: underline; }
   .mo-app { padding: var(--s-2); }
   .mo-card-head { padding: var(--s-3) var(--s-4) var(--s-2); }
   .mo-comp-head { padding: var(--s-3) var(--s-4) var(--s-2); }
-  .mo-treemap-host, .mo-statemap-host, .mo-sec-list, .mo-table-wrap {
+  .mo-treemap-host, .mo-statemap-host, .mo-sec-list, .mo-list {
     margin-left: var(--s-3); margin-right: var(--s-3);
   }
   .mo-card-resolved { padding-left: var(--s-4); padding-right: var(--s-4); }
@@ -620,6 +710,35 @@ async function searchAwards(filters, isSub) {
   }
 }
 
+// For the subaward fetch flow: pull the recipient's biggest prime awards,
+// each tagged with generated_internal_id so we can call /subawards/ per
+// award. Different from searchAwards because we need a different field set
+// (must include generated_internal_id, which isn't in our default FIELDS).
+async function searchPrimeAwardsForSubaward(filters) {
+  try {
+    const r = await fetch(`${USASPENDING}/search/spending_by_award/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        filters,
+        fields: ['Award ID', 'Recipient Name', 'Award Amount', 'generated_internal_id'],
+        limit: 25,  // pull a buffer so we can take the top 10 with internal_id present
+        sort: 'Award Amount',
+        order: 'desc',
+      }),
+    });
+    if (!r.ok) {
+      const text = await r.text().catch(() => '');
+      return { rows: [], error: `USASpending ${r.status}: ${text.slice(0, 200)}` };
+    }
+    const body = await r.json();
+    const rows = (body.results || []).filter(x => x.generated_internal_id);
+    return { rows, error: null };
+  } catch (e) {
+    return { rows: [], error: e.message };
+  }
+}
+
 // Word-boundary needle match — drops false positives where a keyword matched
 // a substring of another word ("AWS" inside "AWARD" or "Aegis Weapon System").
 const wbRe = (n) => new RegExp(`\\b${String(n).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
@@ -646,12 +765,62 @@ async function pull(attrs) {
     recipientResolved: recipientName || null,
   };
 
-  // Subaward branch
+  // Subaward branch — prime-then-fanout pattern.
+  //
+  // The user wants "who does X subaward to" (X is the prime). USASpending's
+  // /search/spending_by_award/ with subawards=true + recipient_search_text
+  // does the OPPOSITE — it returns rows where X is the SUB. There's no
+  // documented filter to flip direction.
+  //
+  // The working pattern (verified by probe):
+  //   1. Get X's top prime awards via the contract endpoint
+  //   2. For each prime award, POST /subawards/ with {award_id} to get
+  //      that award's outflow subs
+  //   3. Flatten and aggregate by sub recipient
+  //
+  // Top 10 prime awards is the chosen depth — solid signal at modest cost
+  // (11 total fetches, all parallel after the prime query).
   if (isSub) {
-    const filters = { ...baseFilters };
-    if (recipientName) filters.recipient_search_text = [recipientName];
-    const { rows, error } = await searchAwards(filters, true);
-    return { rows, resolved, error };
+    if (!recipientName && !attrs.recipient) {
+      return { rows: [], resolved, error: 'Subaward queries need a recipient.' };
+    }
+    // Step 1: get prime awards for this recipient
+    const primeFilters = { ...baseFilters };
+    if (recipientName) primeFilters.recipient_search_text = [recipientName];
+    const { rows: primeRows, error: primeErr } = await searchPrimeAwardsForSubaward(primeFilters);
+    if (primeErr) return { rows: [], resolved, error: primeErr };
+    if (!primeRows.length) return { rows: [], resolved, error: null };
+
+    // Step 2: fan out subaward fetches for top 10 by amount
+    const TOP_N = 10;
+    const top = primeRows.slice(0, TOP_N);
+    const subResults = await Promise.all(top.map(async (pr) => {
+      const internal = pr.generated_internal_id;
+      if (!internal) return [];
+      try {
+        const r = await fetch(`${USASPENDING}/subawards/`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ award_id: internal, limit: 100 }),
+        });
+        if (!r.ok) return [];
+        const body = await r.json();
+        const subs = body.results || [];
+        // Tag each sub with the prime context for aggregation+drilldown
+        return subs.map(s => ({
+          _primeName: pr['Recipient Name'],
+          _primeAwardId: pr['Award ID'],
+          _subName: s.recipient_name || s.subawardee_name || '—',
+          _amount: Number(s.amount) || 0,
+          _description: s.description || '',
+          _subActionDate: s.action_date || '',
+        }));
+      } catch { return []; }
+    }));
+
+    // Step 3: flatten
+    const allSubs = subResults.flat();
+    return { rows: allSubs, resolved, error: null };
   }
 
   // Vendor branch — dual-path union + word-boundary post-filter
@@ -780,12 +949,18 @@ function worst(row, sideLength) {
 
 const TREEMAP_COLORS = ['#46446E', '#5E5B92', '#7572B7', '#9290C5', '#ACAAD4', '#C8C7E2', '#E3E3F1'];
 
-function buildTreemapItems(rows) {
-  // Aggregate by recipient — top 6 + "Other"
+function buildTreemapItems(rows, isSub) {
+  // Aggregate by recipient — top 6 + "Other".
+  // For sub flow: aggregate by sub recipient using flattened _subName/_amount.
   const map = {};
   for (const r of rows) {
-    const name = r['Recipient Name'] || '(unknown)';
-    map[name] = (map[name] || 0) + (Number(r['Award Amount']) || 0);
+    const name = isSub
+      ? (r._subName || '(unknown sub)')
+      : (r['Recipient Name'] || '(unknown)');
+    const amt = isSub
+      ? (Number(r._amount) || 0)
+      : (Number(r['Award Amount']) || 0);
+    map[name] = (map[name] || 0) + amt;
   }
   const sorted = Object.entries(map).sort((a, b) => b[1] - a[1]);
   const items = sorted.slice(0, 6).map(([name, value], i) => ({
@@ -1143,12 +1318,156 @@ async function loadSecFilings(rows) {
 }
 
 // =============================================================================
+// ROW RENDERERS
+// =============================================================================
+//
+// Production fedmo uses 2-line vertical rows, not a spreadsheet table. Top 3
+// get a colored left-border stripe in primary purple. Names + amounts on the
+// top line, agency/date on the second, description italic on the third.
+
+const SHOW_INITIAL = 25;
+const SHOW_MAX = 100;
+
+function renderContractRows(card, rows) {
+  card.appendChild($$('div', { class: 'mo-comp-head' },
+    $$('div', { class: 'mo-comp-title', text: 'Contracts' }),
+    $$('div', { class: 'mo-comp-meta', text: `${rows.length} rows · sorted by amount` }),
+  ));
+  const list = $$('div', { class: 'mo-list' });
+  let html = '';
+  const initialRows = rows.slice(0, SHOW_INITIAL);
+  const moreRows = rows.slice(SHOW_INITIAL, SHOW_MAX);
+
+  const renderRow = (r, idx) => {
+    const isRanked = idx < 3;
+    const recipient = r['Recipient Name'] || '—';
+    const amount = r['Award Amount'];
+    const desc = r['Description'] || '';
+    const agency = r['Awarding Sub Agency'] || r['Awarding Agency'] || '';
+    const startDate = r['Start Date'] || '';
+    const meta = [agency, startDate].filter(Boolean).join(' · ');
+    const cls = `mo-row-2line${isRanked ? ' mo-row-ranked' : ''}`;
+    const rankAttr = isRanked ? ` data-rank="${idx + 1}"` : '';
+    return `<div class="${cls}"${rankAttr}>
+      <div class="mo-row-2line-top">
+        <span class="mo-row-name" title="${escapeHtml(recipient)}">${escapeHtml(recipient)}</span>
+        <span class="mo-row-amount">${fmtMoney(amount)}</span>
+      </div>
+      ${meta ? `<div class="mo-row-meta">${escapeHtml(meta)}</div>` : ''}
+      ${desc ? `<div class="mo-row-desc">${escapeHtml(desc)}</div>` : ''}
+    </div>`;
+  };
+
+  initialRows.forEach((r, i) => { html += renderRow(r, i); });
+  if (moreRows.length > 0) {
+    html += `<button class="mo-show-more" data-action="show-more">Show ${moreRows.length} more</button>`;
+    html += `<div class="mo-show-more-rows" style="display:none;">`;
+    moreRows.forEach((r, i) => { html += renderRow(r, i + SHOW_INITIAL); });
+    html += `</div>`;
+  }
+  list.innerHTML = html;
+
+  // Wire up show-more
+  const btn = list.querySelector('[data-action="show-more"]');
+  if (btn) {
+    btn.addEventListener('click', () => {
+      list.querySelector('.mo-show-more-rows').style.display = '';
+      btn.remove();
+    });
+  }
+  card.appendChild(list);
+}
+
+// Subaward render: aggregated by sub recipient with tap-to-expand drill-down.
+// Each row shows the sub's total spend across GDIT (or whatever prime), and
+// taps to reveal which specific prime awards the sub appears on.
+function renderSubawardRows(card, rows, attrs, resolved) {
+  // Aggregate by sub recipient name
+  const bySub = new Map();
+  for (const r of rows) {
+    const name = r._subName || r['Sub-Awardee Name'] || '—';
+    if (!bySub.has(name)) {
+      bySub.set(name, { name, total: 0, count: 0, primeBreakdown: new Map() });
+    }
+    const entry = bySub.get(name);
+    const amt = Number(r._amount || r['Sub-Award Amount']) || 0;
+    entry.total += amt;
+    entry.count += 1;
+    const prime = r._primeName || 'Unknown prime';
+    entry.primeBreakdown.set(prime, (entry.primeBreakdown.get(prime) || 0) + amt);
+  }
+  const aggregated = [...bySub.values()].sort((a, b) => b.total - a.total);
+
+  const primeLabel = resolved.recipientResolved || attrs.recipient || 'prime';
+
+  card.appendChild($$('div', { class: 'mo-comp-head' },
+    $$('div', { class: 'mo-comp-title', text: `Who ${primeLabel} subs to` }),
+    $$('div', { class: 'mo-comp-meta', text: `${aggregated.length} unique subs · ${rows.length} subaward actions` }),
+  ));
+
+  const list = $$('div', { class: 'mo-list' });
+  let html = '';
+  const initial = aggregated.slice(0, SHOW_INITIAL);
+  const more = aggregated.slice(SHOW_INITIAL, SHOW_MAX);
+
+  const renderAggRow = (sub, idx) => {
+    const isRanked = idx < 3;
+    const cls = `mo-row-2line mo-sub-agg${isRanked ? ' mo-row-ranked' : ''}`;
+    const rankAttr = isRanked ? ` data-rank="${idx + 1}"` : '';
+    // Build the drill-down detail (hidden by default)
+    const primesEntries = [...sub.primeBreakdown.entries()].sort((a, b) => b[1] - a[1]);
+    const detailHtml = primesEntries.map(([prime, amount]) =>
+      `<div class="mo-sub-detail-row">
+        <span class="mo-sub-detail-prime" title="${escapeHtml(prime)}">${escapeHtml(prime)}</span>
+        <span class="mo-sub-detail-amount">${fmtMoney(amount)}</span>
+      </div>`
+    ).join('');
+    return `<div class="${cls}"${rankAttr}>
+      <div class="mo-row-2line-top">
+        <span class="mo-row-name" title="${escapeHtml(sub.name)}">${escapeHtml(sub.name)}</span>
+        <span class="mo-row-amount">${fmtMoney(sub.total)}</span>
+      </div>
+      <div class="mo-row-meta">${sub.count} subaward${sub.count === 1 ? '' : 's'} from ${primesEntries.length} prime${primesEntries.length === 1 ? '' : 's'}</div>
+      <div class="mo-sub-detail">${detailHtml}</div>
+    </div>`;
+  };
+
+  initial.forEach((s, i) => { html += renderAggRow(s, i); });
+  if (more.length > 0) {
+    html += `<button class="mo-show-more" data-action="show-more">Show ${more.length} more</button>`;
+    html += `<div class="mo-show-more-rows" style="display:none;">`;
+    more.forEach((s, i) => { html += renderAggRow(s, i + SHOW_INITIAL); });
+    html += `</div>`;
+  }
+  list.innerHTML = html;
+
+  // Tap to expand each agg row
+  list.querySelectorAll('.mo-sub-agg').forEach(rowEl => {
+    rowEl.addEventListener('click', () => rowEl.classList.toggle('is-expanded'));
+  });
+  // Show-more button
+  const btn = list.querySelector('[data-action="show-more"]');
+  if (btn) {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      list.querySelector('.mo-show-more-rows').style.display = '';
+      btn.remove();
+    });
+  }
+  card.appendChild(list);
+}
+
+// =============================================================================
 // CARD RENDER
 // =============================================================================
 function renderCard(rows, attrs, resolved) {
   const card = $$('div', { class: 'mo-card' });
   const isSub = attrs.subawards === 'true';
-  const total = rows.reduce((s, r) => s + (Number(isSub ? r['Sub-Award Amount'] : r['Award Amount']) || 0), 0);
+  // Sub flow uses _amount; prime flow uses Award Amount
+  const total = rows.reduce((s, r) => {
+    if (isSub) return s + (Number(r._amount) || 0);
+    return s + (Number(r['Award Amount']) || 0);
+  }, 0);
 
   const titleBits = [];
   if (resolved.recipientResolved) titleBits.push(resolved.recipientResolved);
@@ -1156,12 +1475,15 @@ function renderCard(rows, attrs, resolved) {
   if (resolved.agencyResolved) titleBits.push(resolved.agencyResolved);
   else if (attrs.agency) titleBits.push(attrs.agency);
   if (attrs.keywords && !attrs.recipient) titleBits.push(`"${attrs.keywords}"`);
-  if (isSub) titleBits.push('subawards');
+  if (isSub) titleBits.push('outgoing subawards');
   if (titleBits.length === 0) titleBits.push('Federal contracts');
 
   const head = $$('div', { class: 'mo-card-head' });
   head.appendChild($$('div', { class: 'mo-card-title', text: titleBits.join(' · ') }));
-  head.appendChild($$('div', { class: 'mo-card-meta', text: `${rows.length} contracts · ${fmtMoney(total)}` }));
+  const metaLabel = isSub
+    ? `${rows.length} subaward action${rows.length === 1 ? '' : 's'} · ${fmtMoney(total)}`
+    : `${rows.length} contracts · ${fmtMoney(total)}`;
+  head.appendChild($$('div', { class: 'mo-card-meta', text: metaLabel }));
   card.appendChild(head);
 
   // Resolution detail line
@@ -1182,47 +1504,37 @@ function renderCard(rows, attrs, resolved) {
   }
 
   // ── Treemap ──
-  const tmItems = isSub ? [] : buildTreemapItems(rows);
+  // Both contracts and subawards get a treemap; the sub treemap shows the
+  // top sub recipients (which firms are getting GDIT's outflow).
+  const tmItems = buildTreemapItems(rows, isSub);
   if (tmItems.length > 0) {
+    const uniqueCount = isSub
+      ? new Set(rows.map(r => r._subName).filter(Boolean)).size
+      : new Set(rows.map(r => r['Recipient Name']).filter(Boolean)).size;
+    const label = isSub ? 'Top subawardees' : 'Where the money is';
+    const meta = isSub
+      ? `top ${tmItems.length} of ${uniqueCount} subs`
+      : `top ${tmItems.length} of ${uniqueCount} primes`;
     card.appendChild($$('div', { class: 'mo-comp-head' },
-      $$('div', { class: 'mo-comp-title', text: 'Where the money is' }),
-      $$('div', { class: 'mo-comp-meta', text: `top ${tmItems.length} of ${new Set(rows.map(r => r['Recipient Name']).filter(Boolean)).size} primes` }),
+      $$('div', { class: 'mo-comp-title', text: label }),
+      $$('div', { class: 'mo-comp-meta', text: meta }),
     ));
     const tmHost = $$('div', { class: 'mo-treemap-host' });
     card.appendChild(tmHost);
-    // Defer render until host is in DOM (so clientWidth is real)
     requestAnimationFrame(() => renderTreemapInto(tmHost, tmItems));
   }
 
-  // ── Table ──
-  card.appendChild($$('div', { class: 'mo-comp-head' },
-    $$('div', { class: 'mo-comp-title', text: 'Contracts' }),
-    $$('div', { class: 'mo-comp-meta', text: `${rows.length} rows · sorted by amount` }),
-  ));
-  const tableWrap = $$('div', { class: 'mo-table-wrap' });
-  let tbodyHtml = '';
-  for (const r of rows) {
-    const recipient = isSub ? r['Sub-Awardee Name'] : r['Recipient Name'];
-    const amount = isSub ? r['Sub-Award Amount'] : r['Award Amount'];
-    const desc = isSub ? r['Sub-Award Description'] : r['Description'];
-    tbodyHtml += `<tr>
-      <td class="mo-td-recipient" title="${escapeHtml(recipient || '')}">${escapeHtml(recipient || '—')}</td>
-      <td class="mo-td-amount">${fmtMoney(amount)}</td>
-      <td class="mo-td-desc" title="${escapeHtml(desc || '')}">${escapeHtml((desc || '').slice(0, 200))}</td>
-    </tr>`;
-  }
-  tableWrap.innerHTML = `<table class="mo-table">
-    <thead><tr>
-      <th>${isSub ? 'Sub-recipient' : 'Recipient'}</th>
-      <th style="text-align:right">Amount</th>
-      <th>Description</th>
-    </tr></thead>
-    <tbody>${tbodyHtml}</tbody>
-  </table>`;
-  card.appendChild(tableWrap);
+  // ── Rows ──
+  // Subaward queries get their own render path (aggregated by sub recipient
+  // with tap-to-expand prime drill-down). Contract queries use the standard
+  // 2-line row format with rank stripes for top 3.
+  if (isSub) {
+    renderSubawardRows(card, rows, attrs, resolved);
+  } else {
+    renderContractRows(card, rows);
 
-  // ── Cumulative-amount caveat ──
-  if (!isSub && rows.length > 0) {
+    // Cumulative-amount caveat (only for prime-award rows; subawards are
+    // per-action so the caveat doesn't apply)
     card.appendChild($$('div', { class: 'mo-amount-note',
       text: 'Amounts are USASpending Award Amount — cumulative obligated value over a contract\'s lifetime, not a single new obligation.' }));
   }
