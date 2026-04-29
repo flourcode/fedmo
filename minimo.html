@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mini Mo — Federal Sales</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #181b22;
+    --panel-2: #20242d;
+    --text: #e7e9ee;
+    --dim: #9aa0aa;
+    --accent: #6cf;
+    --good: #7ec97e;
+    --bad: #f88;
+    --border: #2a2f3a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+  .app { max-width: 880px; margin: 0 auto; padding: 24px 16px 110px; }
+  h1 { font-size: 18px; font-weight: 600; margin: 0 0 16px; }
+  h1 small { color: var(--dim); font-weight: 400; margin-left: 8px; }
+  .turn { margin-bottom: 22px; }
+  .turn .who { color: var(--dim); font-size: 12px; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .turn .text { white-space: pre-wrap; }
+  .turn.user .text { color: var(--accent); }
+
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; margin: 12px 0; overflow: hidden; }
+  .card-head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding: 10px 14px; background: var(--panel-2); border-bottom: 1px solid var(--border); font-size: 13px;
+  }
+  .card-head .title { color: var(--text); font-weight: 600; }
+  .card-head .meta { color: var(--dim); }
+  .card-body { padding: 0; }
+  .resolved {
+    padding: 8px 14px; font-size: 12px; color: var(--dim);
+    background: var(--panel-2); border-bottom: 1px solid var(--border);
+  }
+  .resolved code { color: var(--accent); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--dim); font-weight: 500; background: var(--panel-2); }
+  td.amount { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+  td.recipient { font-weight: 500; }
+  td.desc { color: var(--dim); max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .empty { padding: 32px; text-align: center; color: var(--dim); }
+  .loading-card {
+    padding: 24px; text-align: center; color: var(--dim);
+    background: var(--panel); border: 1px solid var(--border); border-radius: 8px; margin: 12px 0;
+  }
+  .err { padding: 14px; color: var(--bad); }
+
+  .composer {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    padding: 12px 16px 16px; background: linear-gradient(to top, var(--bg) 70%, transparent);
+  }
+  .composer-inner { max-width: 880px; margin: 0 auto; display: flex; gap: 8px; }
+  .composer textarea {
+    flex: 1; background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 12px; font: inherit; resize: none; min-height: 44px; max-height: 200px;
+  }
+  .composer textarea:focus { outline: none; border-color: var(--accent); }
+  .composer button {
+    background: var(--accent); color: #000; border: 0; border-radius: 8px;
+    padding: 0 18px; font: inherit; font-weight: 600; cursor: pointer;
+  }
+  .composer button:disabled { opacity: 0.5; cursor: not-allowed; }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <h1>Mini Mo <small>federal sales · USASpending direct</small></h1>
+  <div id="conversation"></div>
+</div>
+
+<form class="composer" id="composer">
+  <div class="composer-inner">
+    <textarea id="input" placeholder="Ask Mo… (e.g. 'show me AWS at DoD past year')" autofocus></textarea>
+    <button type="submit" id="send">Send</button>
+  </div>
+</form>
+
+<script>
+// =============================================================================
+// CONFIG
+// =============================================================================
+const LAMBDA_URL = 'https://4gxuwrrugc4s6zqcxsos2exg5y0sjcrc.lambda-url.us-east-1.on.aws/';
+const USASPENDING = 'https://api.usaspending.gov/api/v2';
+
+// =============================================================================
+// STATE
+// =============================================================================
+const history = [];   // [{role:'user'|'model', parts:[{text}]}]
+let busy = false;
+
+const $conv = document.getElementById('conversation');
+const $input = document.getElementById('input');
+const $send = document.getElementById('send');
+
+// =============================================================================
+// TAG PARSER
+// =============================================================================
+const TAG_RE = /<data\b([^>]*?)\/>/i;
+function findDataTag(text) {
+  const m = TAG_RE.exec(text);
+  if (!m) return null;
+  const attrs = {};
+  const attrRe = /(\w+)\s*=\s*"([^"]*)"/g;
+  let am;
+  while ((am = attrRe.exec(m[1]))) attrs[am[1]] = am[2];
+  return { match: m[0], start: m.index, end: m.index + m[0].length, attrs };
+}
+
+// =============================================================================
+// USASPENDING — autocomplete + search
+// =============================================================================
+const CSV = (s) => String(s || '').split(',').map(x => x.trim()).filter(Boolean);
+
+const AWARD_TYPE_GROUPS = {
+  contracts: ['A', 'B', 'C', 'D'],
+  idvs: ['IDV_A', 'IDV_B', 'IDV_B_A', 'IDV_B_B', 'IDV_B_C', 'IDV_C', 'IDV_D', 'IDV_E'],
+  grants: ['02', '03', '04', '05'],
+};
+
+const FIELDS = [
+  'Award ID', 'Recipient Name', 'Award Amount', 'Description',
+  'Start Date', 'End Date', 'Awarding Agency', 'Awarding Sub Agency',
+];
+const SUB_FIELDS = [
+  'Sub-Award ID', 'Sub-Awardee Name', 'Sub-Award Amount', 'Sub-Award Description',
+  'Sub-Award Date', 'Prime Recipient Name', 'Awarding Agency', 'Awarding Sub Agency',
+];
+
+const PSC_TIERS = { D: 'Service', R: 'Service', '7': 'Product', A: 'Research and Development', Y: 'Construction' };
+
+// Resolve a natural-language agency name to USASpending's canonical filter shape.
+// Returns null if no match — caller can fall back to keyword search.
+async function resolveAgency(name) {
+  try {
+    const r = await fetch(`${USASPENDING}/autocomplete/awarding_agency/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ search_text: name, limit: 5 }),
+    });
+    if (!r.ok) return null;
+    const body = await r.json();
+    const top = (body.results || [])[0];
+    if (!top) return null;
+    // Prefer toptier match; fall back to subtier.
+    if (top.toptier_flag && top.toptier_agency?.name) {
+      return {
+        tier: 'toptier',
+        name: top.toptier_agency.name,
+        type: 'awarding',
+        _label: top.toptier_agency.abbreviation || top.toptier_agency.name,
+      };
+    }
+    if (top.subtier_agency?.name) {
+      return {
+        tier: 'subtier',
+        name: top.subtier_agency.name,
+        type: 'awarding',
+        _label: `${top.subtier_agency.abbreviation || top.subtier_agency.name} (${top.toptier_agency?.abbreviation || ''})`,
+      };
+    }
+    return null;
+  } catch { return null; }
+}
+
+// Resolve a natural-language vendor name to the canonical legal name.
+// Returns null if no match. We filter results to skip obvious false-matches
+// (autocomplete is fuzzy: "AWS" returns "DAWSON" because it contains "aws").
+async function resolveRecipient(name) {
+  try {
+    const r = await fetch(`${USASPENDING}/autocomplete/recipient/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ search_text: name, limit: 5 }),
+    });
+    if (!r.ok) return null;
+    const body = await r.json();
+    const results = body.results || [];
+    if (!results.length) return null;
+    // Prefer results whose name starts with the search (or contains it as a
+    // word, not a substring). This filters out the "DAWSON ENTERPRISES" hit
+    // for the "AWS" search.
+    const upName = name.toUpperCase();
+    const wbRe = new RegExp(`\\b${upName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`);
+    const wordMatch = results.find(x => wbRe.test(String(x.recipient_name || '').toUpperCase()));
+    if (wordMatch) return wordMatch.recipient_name;
+    // Otherwise return the top result and trust that the user's query was specific
+    return results[0].recipient_name || null;
+  } catch { return null; }
+}
+
+function buildPscFilter(pscArr) {
+  const hier = [];
+  for (const code of pscArr) {
+    const c = code.toUpperCase();
+    if (c.length === 1) {
+      const t = PSC_TIERS[c];
+      if (t) hier.push([t, c]);
+    } else {
+      const t = PSC_TIERS[c.charAt(0)] || 'Service';
+      hier.push([t, c]);
+    }
+  }
+  return hier.length ? { require: hier } : null;
+}
+
+function buildBaseFilters(attrs, agencyFilter) {
+  const f = { award_type_codes: AWARD_TYPE_GROUPS.contracts };
+
+  if (attrs.award_types) {
+    const codes = AWARD_TYPE_GROUPS[attrs.award_types];
+    if (codes) f.award_type_codes = codes;
+  }
+
+  if (agencyFilter) f.agencies = [agencyFilter];
+
+  const naics = CSV(attrs.naics).filter(n => /^\d{6}$/.test(n));
+  if (naics.length) f.naics_codes = { require: naics };
+
+  const psc = CSV(attrs.psc);
+  if (psc.length) {
+    const pf = buildPscFilter(psc);
+    if (pf) f.psc_codes = pf;
+  }
+
+  if (attrs.since || attrs.until) {
+    const today = new Date().toISOString().slice(0, 10);
+    f.time_period = [{
+      date_type: 'date_signed',
+      start_date: attrs.since || '2020-01-01',
+      end_date: attrs.until || today,
+    }];
+  }
+
+  if (attrs.min_amount || attrs.max_amount) {
+    const range = {};
+    if (attrs.min_amount) range.lower_bound = Number(attrs.min_amount);
+    if (attrs.max_amount) range.upper_bound = Number(attrs.max_amount);
+    f.award_amounts = [range];
+  }
+
+  return f;
+}
+
+// One spending_by_award call. Returns { rows, error }.
+async function searchAwards(filters, isSub) {
+  const payload = {
+    filters,
+    fields: isSub ? SUB_FIELDS : FIELDS,
+    limit: 100,
+    sort: isSub ? 'Sub-Award Amount' : 'Award Amount',
+    order: 'desc',
+  };
+  if (isSub) payload.subawards = true;
+
+  try {
+    const r = await fetch(`${USASPENDING}/search/spending_by_award/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!r.ok) {
+      const text = await r.text().catch(() => '');
+      return { rows: [], error: `USASpending ${r.status}: ${text.slice(0, 200)}` };
+    }
+    const body = await r.json();
+    return { rows: body.results || [], error: null };
+  } catch (e) {
+    return { rows: [], error: e.message };
+  }
+}
+
+// Word-boundary needle match. Used as the post-filter for vendor queries to
+// drop rows where a keyword false-matched (e.g. "AWS" inside "AWARD" or the
+// Aegis Weapon System abbreviation).
+const wbRe = (n) => new RegExp(`\\b${String(n).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+const matchesAny = (haystacks, needles) =>
+  needles.some(n => haystacks.some(h => wbRe(n).test(String(h || ''))));
+
+// =============================================================================
+// PULL — orchestrate the right shape based on attrs
+// =============================================================================
+//
+// Three flows:
+//   1. Vendor query (recipient= present): dual-path union — direct
+//      recipient_search_text AND keyword search using aliases — then
+//      word-boundary post-filter.
+//   2. Subaward query (subawards="true"): single search with subawards flag.
+//   3. Everything else: single search with whatever filters the tag specifies.
+//
+// Returns { rows, resolved: { agency, recipient, ... }, error }.
+async function pull(attrs) {
+  // 1. Resolve names in parallel
+  const [agencyFilter, recipientName] = await Promise.all([
+    attrs.agency ? resolveAgency(attrs.agency) : Promise.resolve(null),
+    attrs.recipient ? resolveRecipient(attrs.recipient) : Promise.resolve(null),
+  ]);
+
+  const baseFilters = buildBaseFilters(attrs, agencyFilter);
+  const isSub = attrs.subawards === 'true';
+
+  const resolved = {
+    agencyAsked: attrs.agency || null,
+    agencyResolved: agencyFilter?._label || null,
+    recipientAsked: attrs.recipient || null,
+    recipientResolved: recipientName || null,
+  };
+
+  // ── Subaward branch
+  if (isSub) {
+    const filters = { ...baseFilters };
+    if (recipientName) filters.recipient_search_text = [recipientName];
+    const { rows, error } = await searchAwards(filters, true);
+    return { rows, resolved, error };
+  }
+
+  // ── Vendor branch (dual-path union + post-filter)
+  if (attrs.recipient) {
+    // Build the safe needle list. Always include the resolved canonical name
+    // and any user-provided aliases. Skip 3-char-or-shorter alias short-forms
+    // (the prompt warns against them but defend in code anyway).
+    const aliases = CSV(attrs.aliases);
+    const needles = [
+      ...(recipientName ? [recipientName] : []),
+      ...(attrs.recipient ? [attrs.recipient] : []),
+      ...aliases,
+    ].filter(n => String(n).length >= 4)  // drop "AWS", "SAP", "IBM" if they sneak in
+     .map(n => n.toUpperCase());
+
+    // Direct query — recipient_search_text on the resolved name
+    const directFilters = recipientName
+      ? { ...baseFilters, recipient_search_text: [recipientName] }
+      : null;
+
+    // Keyword query — keywords on aliases (PLUS attrs.keywords if set)
+    // Skip if no aliases AND no user keywords AND no recipient — nothing to search
+    const keywordNeedles = [
+      ...aliases,
+      ...CSV(attrs.keywords),
+    ].filter(n => String(n).length >= 4);
+
+    const keywordFilters = keywordNeedles.length > 0
+      ? { ...baseFilters, keywords: keywordNeedles }
+      : null;
+
+    // If the user passed plain `keywords=` and no recipient, fold them into
+    // the direct path's filters too (e.g. agency + keywords combo)
+    if (!directFilters && keywordFilters) {
+      const { rows, error } = await searchAwards(keywordFilters, false);
+      return { rows, resolved, error };
+    }
+
+    const queries = [];
+    if (directFilters) queries.push(searchAwards(directFilters, false));
+    if (keywordFilters) queries.push(searchAwards(keywordFilters, false));
+    const results = await Promise.all(queries);
+
+    // Surface first error if all queries failed; otherwise proceed with what we got
+    const errors = results.filter(r => r.error).map(r => r.error);
+    if (errors.length === results.length) {
+      return { rows: [], resolved, error: errors[0] };
+    }
+
+    // Union by Award ID
+    const seen = new Map();
+    for (const r of results) {
+      for (const row of r.rows) {
+        const id = row['Award ID'];
+        if (id && !seen.has(id)) seen.set(id, row);
+      }
+    }
+
+    // Word-boundary post-filter against needles. Drops false positives like
+    // "AWS" matching "AWARD" or the Aegis Weapon System.
+    let rows = [...seen.values()];
+    if (needles.length > 0) {
+      rows = rows.filter(row =>
+        matchesAny([row['Description'], row['Recipient Name']], needles)
+      );
+    }
+
+    // Re-sort by amount desc, cap at 100
+    rows.sort((a, b) => (Number(b['Award Amount']) || 0) - (Number(a['Award Amount']) || 0));
+    if (rows.length > 100) rows = rows.slice(0, 100);
+
+    return { rows, resolved, error: null };
+  }
+
+  // ── Default branch: single query with whatever filters the tag specifies
+  const filters = { ...baseFilters };
+  if (attrs.keywords) {
+    const kws = CSV(attrs.keywords);
+    if (kws.length) filters.keywords = kws;
+  }
+  const { rows, error } = await searchAwards(filters, false);
+  return { rows, resolved, error };
+}
+
+// =============================================================================
+// RENDER
+// =============================================================================
+const $$ = (tag, attrs = {}, ...kids) => {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === 'class') el.className = v;
+    else if (k === 'text') el.textContent = v;
+    else el.setAttribute(k, v);
+  }
+  for (const kid of kids.flat()) {
+    if (kid == null) continue;
+    el.appendChild(typeof kid === 'string' ? document.createTextNode(kid) : kid);
+  }
+  return el;
+};
+
+function fmtMoney(n) {
+  const x = Number(n) || 0;
+  if (x >= 1e9) return '$' + (x / 1e9).toFixed(1) + 'B';
+  if (x >= 1e6) return '$' + (x / 1e6).toFixed(1) + 'M';
+  if (x >= 1e3) return '$' + (x / 1e3).toFixed(0) + 'K';
+  return '$' + x.toFixed(0);
+}
+
+function renderUserTurn(text) {
+  $conv.appendChild($$('div', { class: 'turn user' },
+    $$('div', { class: 'who', text: 'You' }),
+    $$('div', { class: 'text', text }),
+  ));
+  scrollBottom();
+}
+
+function renderMoTurn() {
+  const proseEl = $$('div', { class: 'text' });
+  const turn = $$('div', { class: 'turn mo' },
+    $$('div', { class: 'who', text: 'Mo' }),
+    proseEl,
+  );
+  $conv.appendChild(turn);
+  scrollBottom();
+  return {
+    appendText: (t) => { proseEl.append(document.createTextNode(t)); scrollBottom(); },
+    insertEl: (el) => { turn.appendChild(el); scrollBottom(); },
+    setError: (msg) => { turn.appendChild($$('div', { class: 'err', text: msg })); },
+    _shown: 0,
+  };
+}
+
+function renderLoadingCard() {
+  return $$('div', { class: 'loading-card', text: 'Pulling from USASpending…' });
+}
+
+function renderCard(rows, attrs, resolved) {
+  const card = $$('div', { class: 'card' });
+
+  const isSub = attrs.subawards === 'true';
+  const total = rows.reduce((s, r) => s + (Number(isSub ? r['Sub-Award Amount'] : r['Award Amount']) || 0), 0);
+
+  const titleBits = [];
+  if (resolved.recipientResolved) titleBits.push(resolved.recipientResolved);
+  else if (attrs.recipient) titleBits.push(attrs.recipient);
+  if (resolved.agencyResolved) titleBits.push(resolved.agencyResolved);
+  else if (attrs.agency) titleBits.push(attrs.agency);
+  if (attrs.keywords && !attrs.recipient) titleBits.push(`"${attrs.keywords}"`);
+  if (isSub) titleBits.push('subawards');
+  if (titleBits.length === 0) titleBits.push('Federal contracts');
+
+  card.appendChild($$('div', { class: 'card-head' },
+    $$('div', { class: 'title', text: titleBits.join(' · ') }),
+    $$('div', { class: 'meta', text: `${rows.length} rows · ${fmtMoney(total)}` }),
+  ));
+
+  // Resolution detail line: tells the user what the natural-language names
+  // resolved to, so they can spot bad autocomplete picks.
+  const resolveBits = [];
+  if (resolved.agencyAsked && resolved.agencyResolved && resolved.agencyAsked !== resolved.agencyResolved) {
+    resolveBits.push(`agency "${resolved.agencyAsked}" → ${resolved.agencyResolved}`);
+  }
+  if (resolved.recipientAsked && resolved.recipientResolved && resolved.recipientAsked !== resolved.recipientResolved) {
+    resolveBits.push(`recipient "${resolved.recipientAsked}" → ${resolved.recipientResolved}`);
+  }
+  if (resolveBits.length) {
+    card.appendChild($$('div', { class: 'resolved', text: resolveBits.join(' · ') }));
+  }
+
+  if (rows.length === 0) {
+    card.appendChild($$('div', { class: 'empty', text: 'No rows. Try widening the date or dollar window, or rephrasing.' }));
+    return card;
+  }
+
+  const tbody = $$('tbody');
+  for (const r of rows) {
+    const recipient = isSub ? r['Sub-Awardee Name'] : r['Recipient Name'];
+    const amount = isSub ? r['Sub-Award Amount'] : r['Award Amount'];
+    const desc = isSub ? r['Sub-Award Description'] : r['Description'];
+    tbody.appendChild($$('tr', {},
+      $$('td', { class: 'recipient', text: recipient || '—' }),
+      $$('td', { class: 'amount', text: fmtMoney(amount) }),
+      $$('td', { class: 'desc', text: (desc || '').slice(0, 200) }),
+    ));
+  }
+  card.appendChild($$('table', {},
+    $$('thead', {}, $$('tr', {},
+      $$('th', { text: isSub ? 'Sub-recipient' : 'Recipient' }),
+      $$('th', { class: 'amount', text: 'Amount' }),
+      $$('th', { text: 'Description' }),
+    )),
+    tbody,
+  ));
+  return card;
+}
+
+function scrollBottom() {
+  window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+}
+
+// =============================================================================
+// CORE LOOP — askMo
+// =============================================================================
+async function askMo(question) {
+  if (busy) return;
+  busy = true;
+  $send.disabled = true;
+
+  renderUserTurn(question);
+  history.push({ role: 'user', parts: [{ text: question }] });
+
+  const moTurn = renderMoTurn();
+  let fullText = '';
+  let tagFired = false;
+  let loadingEl = null;
+
+  try {
+    const res = await fetch(LAMBDA_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ history }),
+    });
+    if (!res.ok || !res.body) throw new Error(`Lambda ${res.status}`);
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      fullText += decoder.decode(value, { stream: true });
+
+      if (!tagFired) {
+        const tag = findDataTag(fullText);
+        if (tag) {
+          tagFired = true;
+          // Show prose up to the tag start
+          const upToTag = fullText.slice(0, tag.start);
+          if (upToTag.length > moTurn._shown) {
+            moTurn.appendText(upToTag.slice(moTurn._shown));
+            moTurn._shown = upToTag.length;
+          }
+          // Strip the tag from the displayed stream — collapse fullText so
+          // post-tag prose continues from where the tag ended.
+          fullText = upToTag + fullText.slice(tag.end);
+
+          // Show loading card; replace with real card when fetch resolves
+          loadingEl = renderLoadingCard();
+          moTurn.insertEl(loadingEl);
+
+          pull(tag.attrs)
+            .then(({ rows, resolved, error }) => {
+              const cardEl = renderCard(rows, tag.attrs, resolved);
+              if (loadingEl && loadingEl.parentNode) {
+                loadingEl.parentNode.replaceChild(cardEl, loadingEl);
+              } else {
+                moTurn.insertEl(cardEl);
+              }
+              if (error) moTurn.setError(error);
+            })
+            .catch(err => {
+              if (loadingEl && loadingEl.parentNode) loadingEl.remove();
+              moTurn.setError(`Couldn't pull data: ${err.message}`);
+            });
+        }
+      }
+
+      // Stream prose tail
+      if (fullText.length > moTurn._shown) {
+        moTurn.appendText(fullText.slice(moTurn._shown));
+        moTurn._shown = fullText.length;
+      }
+    }
+
+    history.push({ role: 'model', parts: [{ text: fullText }] });
+  } catch (err) {
+    if (loadingEl && loadingEl.parentNode) loadingEl.remove();
+    moTurn.setError(err.message);
+  } finally {
+    busy = false;
+    $send.disabled = false;
+    $input.focus();
+  }
+}
+
+// =============================================================================
+// COMPOSER
+// =============================================================================
+document.getElementById('composer').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const q = $input.value.trim();
+  if (!q || busy) return;
+  $input.value = '';
+  $input.style.height = 'auto';
+  askMo(q);
+});
+
+$input.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    document.getElementById('composer').requestSubmit();
+  }
+});
+
+$input.addEventListener('input', () => {
+  $input.style.height = 'auto';
+  $input.style.height = Math.min(200, $input.scrollHeight) + 'px';
+});
+</script>
+
+</body>
+</html>
