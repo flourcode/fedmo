@@ -53,7 +53,6 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
-  padding-bottom: calc(96px + env(safe-area-inset-bottom));
   overflow-x: hidden;
   -webkit-text-size-adjust: 100%;
 }
@@ -567,20 +566,18 @@ a:hover { text-decoration: underline; }
 }
 
 /* ── Composer ─────────────────────────────────────────── */
-/* Production pill-shaped composer: single rounded container with input + circular send button.
-   Cleaner than the boxy textarea + side button pattern. */
+/* In-flow composer: sits at the bottom of the conversation, scrolls with content.
+   Avoids the iOS-keyboard / safe-area / scroll-anchor quirks that come with
+   position: fixed, and gives the page a calmer feel — content ends naturally
+   instead of being permanently overlapped by a floating bar. */
 .mo-composer {
-  position: fixed;
-  left: 0; right: 0; bottom: 0;
-  z-index: 60;
-  background: var(--bg-screen);
-  padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
+  max-width: 720px;
+  margin: 16px auto 0;
+  padding: 0 12px calc(16px + env(safe-area-inset-bottom));
   display: flex;
   justify-content: center;
-  pointer-events: none;
 }
 .mo-composer-inner {
-  max-width: 720px;
   width: 100%;
   display: flex;
   align-items: center;
@@ -589,7 +586,6 @@ a:hover { text-decoration: underline; }
   border: 1px solid var(--border);
   border-radius: 999px;
   padding: 6px 6px 6px 20px;
-  pointer-events: auto;
   box-shadow: var(--shadow-lift);
 }
 .mo-composer-inner:focus-within {
