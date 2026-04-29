@@ -101,6 +101,20 @@ a:hover { text-decoration: underline; }
   white-space: pre-wrap; word-wrap: break-word;
 }
 
+/* Mo's face avatar next to assistant turns */
+.mo-turn-mo {
+  display: flex;
+  gap: var(--s-3);
+  align-items: flex-start;
+}
+.mo-turn-mo .mo-face {
+  flex-shrink: 0;
+  width: 36px; height: 36px;
+  margin-top: 2px;
+}
+.mo-turn-mo .mo-turn-body {
+  flex: 1; min-width: 0;
+}
 .mo-turn-mo .mo-prose {
   font-size: 15px; line-height: 1.55;
   color: var(--text-body);
@@ -113,6 +127,54 @@ a:hover { text-decoration: underline; }
   padding: var(--s-2) var(--s-3);
   background: #FEF2F2; color: #991B1B;
   border-radius: var(--radius-sm); font-size: 13px;
+}
+
+/* ── Greeting (welcome screen) ─────────────────────────── */
+.mo-greeting {
+  display: flex;
+  gap: var(--s-4);
+  align-items: flex-start;
+  padding: var(--s-6) var(--s-3);
+  margin-top: var(--s-4);
+}
+.mo-greeting-face {
+  flex-shrink: 0;
+  width: 56px; height: 56px;
+}
+.mo-greeting-text { flex: 1; min-width: 0; }
+.mo-greeting-hello {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text-title);
+  margin-bottom: 4px;
+}
+.mo-greeting-tagline {
+  font-size: 15px;
+  color: var(--text-muted);
+  margin-bottom: var(--s-4);
+}
+.mo-greeting-examples {
+  font-size: 13px;
+  color: var(--text-faint);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+}
+.mo-example {
+  font-family: var(--font);
+  font-size: 13px;
+  background: var(--bg-tint);
+  border: 1px solid var(--border-soft);
+  color: var(--primary-80);
+  padding: 6px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 120ms;
+}
+.mo-example:hover {
+  background: var(--primary-20);
+  color: var(--primary-100);
 }
 
 /* ── Card ──────────────────────────────────────────────── */
@@ -472,6 +534,29 @@ a:hover { text-decoration: underline; }
 </head>
 <body>
 
+<!-- Mo's face sprite. Three expressions: open (smile), watch (working), locked (error).
+     Same green head, only the mouth changes. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="icon-face-open" viewBox="0 0 40 40">
+    <circle cx="20" cy="20" r="20" fill="#7CB583"/>
+    <circle cx="14" cy="16" r="2.4" fill="#2D5033"/>
+    <circle cx="26" cy="16" r="2.4" fill="#2D5033"/>
+    <path d="M12 24 Q20 31 28 24" fill="none" stroke="#2D5033" stroke-width="2.8" stroke-linecap="round"/>
+  </symbol>
+  <symbol id="icon-face-watch" viewBox="0 0 40 40">
+    <circle cx="20" cy="20" r="20" fill="#7CB583"/>
+    <circle cx="14" cy="16" r="2.4" fill="#2D5033"/>
+    <circle cx="26" cy="16" r="2.4" fill="#2D5033"/>
+    <line x1="13" y1="26" x2="27" y2="26" stroke="#2D5033" stroke-width="2.8" stroke-linecap="round"/>
+  </symbol>
+  <symbol id="icon-face-locked" viewBox="0 0 40 40">
+    <circle cx="20" cy="20" r="20" fill="#7CB583"/>
+    <circle cx="14" cy="16" r="2.4" fill="#2D5033"/>
+    <circle cx="26" cy="16" r="2.4" fill="#2D5033"/>
+    <path d="M12 28 Q20 22 28 28" fill="none" stroke="#2D5033" stroke-width="2.8" stroke-linecap="round"/>
+  </symbol>
+</svg>
+
 <header class="mo-header">
   <div class="mo-header-inner">
     <h1 class="mo-title">Mini Mo</h1>
@@ -481,6 +566,19 @@ a:hover { text-decoration: underline; }
 
 <main class="mo-app">
   <div id="conversation"></div>
+  <div id="greeting" class="mo-greeting">
+    <svg class="mo-greeting-face" viewBox="0 0 40 40"><use href="#icon-face-open"/></svg>
+    <div class="mo-greeting-text">
+      <div class="mo-greeting-hello">Hi, I'm Mo.</div>
+      <div class="mo-greeting-tagline">Ask about federal contracts, prime/sub flows, and public filings.</div>
+      <div class="mo-greeting-examples">
+        Try:&nbsp;
+        <button class="mo-example" data-q="show me AWS at DoD past year">AWS at DoD past year</button>
+        <button class="mo-example" data-q="who does GDIT subaward to">who does GDIT subaward to</button>
+        <button class="mo-example" data-q="DHS to GDIT to Carahsoft">DHS → GDIT → Carahsoft</button>
+      </div>
+    </div>
+  </div>
 </main>
 
 <form class="mo-composer" id="composer">
@@ -1669,13 +1767,27 @@ function renderUserTurn(text) {
 
 function renderMoTurn() {
   const proseEl = $$('div', { class: 'mo-prose' });
-  const turn = $$('div', { class: 'mo-turn mo-turn-mo' }, proseEl);
+  const bodyEl = $$('div', { class: 'mo-turn-body' }, proseEl);
+  // Face starts in "watch" mode (flat mouth) while we're fetching/streaming,
+  // then flips to "open" (smile) once the response is fully delivered.
+  const faceEl = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  faceEl.setAttribute('class', 'mo-face');
+  faceEl.setAttribute('viewBox', '0 0 40 40');
+  faceEl.innerHTML = '<use href="#icon-face-watch"/>';
+  const turn = $$('div', { class: 'mo-turn mo-turn-mo' });
+  turn.appendChild(faceEl);
+  turn.appendChild(bodyEl);
   $conv.appendChild(turn);
   scrollBottom();
+  const setFace = (state) => {
+    const useEl = faceEl.querySelector('use');
+    if (useEl) useEl.setAttribute('href', `#icon-face-${state}`);
+  };
   return {
     appendText: (t) => { proseEl.append(document.createTextNode(t)); scrollBottom(); },
-    insertEl: (el) => { turn.appendChild(el); scrollBottom(); },
-    setError: (msg) => { turn.appendChild($$('div', { class: 'mo-err', text: msg })); },
+    insertEl: (el) => { bodyEl.appendChild(el); scrollBottom(); },
+    setError: (msg) => { setFace('locked'); bodyEl.appendChild($$('div', { class: 'mo-err', text: msg })); },
+    done: () => setFace('open'),
     _shown: 0,
   };
 }
@@ -1787,6 +1899,7 @@ async function askMo(question) {
     // Stream done. If we suppressed prose because of a broken tag, leave it
     // suppressed — it's garbage.
     history.push({ role: 'model', parts: [{ text: fullText }] });
+    moTurn.done();
   } catch (err) {
     if (loadingEl && loadingEl.parentNode) loadingEl.remove();
     moTurn.setError(err.message);
@@ -1800,12 +1913,27 @@ async function askMo(question) {
 // =============================================================================
 // COMPOSER
 // =============================================================================
+const $greeting = document.getElementById('greeting');
+function hideGreeting() {
+  if ($greeting) $greeting.style.display = 'none';
+}
+
+document.querySelectorAll('.mo-example').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const q = btn.dataset.q;
+    if (!q || busy) return;
+    hideGreeting();
+    askMo(q);
+  });
+});
+
 document.getElementById('composer').addEventListener('submit', (e) => {
   e.preventDefault();
   const q = $input.value.trim();
   if (!q || busy) return;
   $input.value = '';
   $input.style.height = 'auto';
+  hideGreeting();
   askMo(q);
 });
 
