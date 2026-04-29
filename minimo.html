@@ -710,22 +710,18 @@ a:hover { text-decoration: underline; }
 .mo-composer-inner:focus-within {
   border-color: var(--primary-60);
 }
-.mo-composer textarea {
+.mo-composer input {
   flex: 1;
   min-width: 0;
   height: 44px;
-  max-height: 120px;
   border: none;
   background: transparent;
   font-size: 16px;
   font-family: var(--font);
   color: var(--text-title);
   outline: none;
-  resize: none;
-  padding: 11px 0;
-  line-height: 1.3;
 }
-.mo-composer textarea::placeholder {
+.mo-composer input::placeholder {
   color: var(--text-muted);
   opacity: 1;
 }
@@ -846,7 +842,7 @@ a:hover { text-decoration: underline; }
 
 <form class="mo-composer" id="composer">
   <div class="mo-composer-inner">
-    <textarea id="input" placeholder="Ask about a vendor, agency, or topic" autofocus></textarea>
+    <input type="text" id="input" placeholder="Ask about a vendor, agency, or topic" autocomplete="off" enterkeyhint="send" autofocus>
     <button type="submit" id="send" aria-label="Send">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
     </button>
@@ -993,55 +989,130 @@ async function resolveAgency(name) {
   } catch { return null; }
 }
 
+// Common vendor name aliases. USASpending's autocomplete doesn't know
+// "AWS" or "GDIT" or "SAIC" — and even when it knows a name like "Palantir",
+// the top result might be "LONELY MOUNTAIN PALANTIR ENTERPRISES" instead of
+// the real Palantir. This table normalizes user shorthand to legal names
+// that produce useful autocomplete hits. Lowercased keys; values are
+// uppercased substrings to send to autocomplete.
+const VENDOR_LEGAL_NAMES = {
+  'aws':                    'AMAZON WEB SERVICES',
+  'amazon web services':    'AMAZON WEB SERVICES',
+  'amazon':                 'AMAZON WEB SERVICES',
+  'microsoft':              'MICROSOFT CORPORATION',
+  'msft':                   'MICROSOFT CORPORATION',
+  'google':                 'GOOGLE',
+  'gcp':                    'GOOGLE',
+  'oracle':                 'ORACLE',
+  'salesforce':             'SALESFORCE',
+  'servicenow':             'SERVICENOW',
+  'snowflake':              'SNOWFLAKE',
+  'databricks':             'DATABRICKS',
+  'palantir':               'PALANTIR USG',  // federal entity, not the parent
+  'ibm':                    'INTERNATIONAL BUSINESS MACHINES',
+  'hp':                     'HEWLETT PACKARD',
+  'hpe':                    'HEWLETT PACKARD ENTERPRISE',
+  'dell':                   'DELL',
+  'cisco':                  'CISCO',
+  'sap':                    'SAP',
+  'dxc':                    'DXC TECHNOLOGY',
+  'splunk':                 'SPLUNK',
+  'elastic':                'ELASTICSEARCH',
+  'datadog':                'DATADOG',
+  'sonatype':               'SONATYPE',
+  'snyk':                   'SNYK',
+  'crowdstrike':            'CROWDSTRIKE',
+  'sentinelone':            'SENTINELONE',
+  'tenable':                'TENABLE',
+  'rapid7':                 'RAPID7',
+  'okta':                   'OKTA',
+  'sailpoint':              'SAILPOINT',
+  'cyberark':               'CYBERARK',
+  'zscaler':                'ZSCALER',
+  'palo alto':              'PALO ALTO NETWORKS',
+  'fortinet':               'FORTINET',
+  'cloudflare':             'CLOUDFLARE',
+  'akamai':                 'AKAMAI TECHNOLOGIES',
+  'f5':                     'F5 NETWORKS',
+  'fastly':                 'FASTLY',
+  'leidos':                 'LEIDOS',
+  'booz':                   'BOOZ ALLEN HAMILTON',
+  'booz allen':             'BOOZ ALLEN HAMILTON',
+  'bah':                    'BOOZ ALLEN HAMILTON',
+  'gdit':                   'GENERAL DYNAMICS INFORMATION TECHNOLOGY',
+  'general dynamics':       'GENERAL DYNAMICS',
+  'saic':                   'SCIENCE APPLICATIONS INTERNATIONAL',
+  'lockheed':               'LOCKHEED MARTIN',
+  'northrop':               'NORTHROP GRUMMAN',
+  'raytheon':               'RAYTHEON',
+  'rtx':                    'RAYTHEON',
+  'l3harris':               'L3HARRIS',
+  'mantech':                'MANTECH',
+  'peraton':                'PERATON',
+  'caci':                   'CACI',
+  'accenture':              'ACCENTURE FEDERAL SERVICES',
+  'accenture federal':      'ACCENTURE FEDERAL SERVICES',
+  'deloitte':               'DELOITTE CONSULTING',
+  'deloitte consulting':    'DELOITTE CONSULTING',
+  'maximus':                'MAXIMUS',
+  'kbr':                    'KBR',
+  'cgi':                    'CGI FEDERAL',
+  'cgi federal':            'CGI FEDERAL',
+  'jfrog':                  'JFROG',
+  'carahsoft':              'CARAHSOFT TECHNOLOGY',
+  'wwt':                    'WORLD WIDE TECHNOLOGY',
+  'world wide technology':  'WORLD WIDE TECHNOLOGY',
+  'govplace':               'GOVPLACE',
+  'fcn':                    'FCN',
+  'thundercat':             'THUNDERCAT TECHNOLOGY',
+  'four points':            'FOUR POINTS TECHNOLOGY',
+  'immixgroup':             'IMMIXGROUP',
+};
+
 async function resolveRecipient(name) {
-  // The bug we're fixing: searching "Palantir" returned LONELY MOUNTAIN PALANTIR
-  // ENTERPRISES (a small biz with the word in its name) instead of PALANTIR USG INC.
-  // USASpending's autocomplete doesn't rank by relevance the way users expect —
-  // a substring match on a smaller entity can outrank the obvious target.
-  //
-  // Ranking strategy (prefer in order):
-  //   1. Exact name match (case-insensitive)
-  //   2. Name starts with the search term (e.g. "PALANTIR USG INC" beats "LONELY MOUNTAIN PALANTIR")
-  //   3. Word-boundary match with shortest name (less embedded noise)
-  //   4. USASpending's default order
+  // Step 1: alias expansion. "AWS" → "AMAZON WEB SERVICES" before we hit
+  // autocomplete, because USASpending's autocomplete substring-matches and
+  // "AWS" hits "DAWSON" / "LAWSON" instead of Amazon. Same problem affects
+  // "GDIT", "SAIC", "BAH", and all the 3-4 letter acronyms users actually
+  // type. The alias table also handles cases where the autocomplete order
+  // is wrong — "Palantir" gets aliased to "PALANTIR USG" so we directly
+  // search the federal entity instead of getting LONELY MOUNTAIN at #1.
+  const lookupKey = String(name || '').toLowerCase().trim();
+  const searchTerm = VENDOR_LEGAL_NAMES[lookupKey] || name;
+
   try {
     const r = await fetch(`${USASPENDING}/autocomplete/recipient/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ search_text: name, limit: 10 }),
+      body: JSON.stringify({ search_text: searchTerm, limit: 10 }),
     });
     if (!r.ok) return null;
     const body = await r.json();
     const results = body.results || [];
     if (!results.length) return null;
 
-    const up = name.toUpperCase().trim();
+    const up = String(searchTerm).toUpperCase().trim();
     const wbRe = new RegExp(`\\b${up.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`);
 
     const named = results
       .map(x => ({ raw: x, n: String(x.recipient_name || '').toUpperCase() }))
       .filter(x => x.n);
 
-    // 1. Exact match
+    // 1. Exact match wins outright
     const exact = named.find(x => x.n === up);
     if (exact) return exact.raw.recipient_name;
 
-    // 2. Starts-with match — sort by length so "PALANTIR USG INC" beats
-    // "PALANTIR TECHNOLOGIES INC" only if shorter, but both beat embedded noise.
-    const startsWith = named.filter(x => x.n.startsWith(up + ' ') || x.n.startsWith(up + ',') || x.n.startsWith(up + '.'));
-    if (startsWith.length) {
-      startsWith.sort((a, b) => a.n.length - b.n.length);
-      return startsWith[0].raw.recipient_name;
-    }
+    // 2. Starts-with match — first one in autocomplete order
+    const startsWith = named.find(x =>
+      x.n.startsWith(up + ' ') || x.n.startsWith(up + ',') || x.n.startsWith(up + '.')
+    );
+    if (startsWith) return startsWith.raw.recipient_name;
 
-    // 3. Word-boundary match — sort by length (shorter = less likely to be small biz with embedded keyword)
-    const wordMatches = named.filter(x => wbRe.test(x.n));
-    if (wordMatches.length) {
-      wordMatches.sort((a, b) => a.n.length - b.n.length);
-      return wordMatches[0].raw.recipient_name;
-    }
+    // 3. Word-boundary contains match — first one in autocomplete order
+    const wordMatch = named.find(x => wbRe.test(x.n));
+    if (wordMatch) return wordMatch.raw.recipient_name;
 
-    // 4. Default order
+    // 4. Default
     return results[0].recipient_name || null;
   } catch { return null; }
 }
@@ -2386,21 +2457,8 @@ document.getElementById('composer').addEventListener('submit', (e) => {
   const q = $input.value.trim();
   if (!q || busy) return;
   $input.value = '';
-  $input.style.height = 'auto';
   hideGreeting();
   askMo(q);
-});
-
-$input.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    document.getElementById('composer').requestSubmit();
-  }
-});
-
-$input.addEventListener('input', () => {
-  $input.style.height = 'auto';
-  $input.style.height = Math.min(200, $input.scrollHeight) + 'px';
 });
 
 // Re-render treemaps and state maps when the container resizes. Without this,
