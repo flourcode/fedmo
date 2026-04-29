@@ -62,23 +62,134 @@ a { color: var(--primary-80); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
 /* ── Header ─────────────────────────────────────────────── */
+/* Header: production keeps it minimal — just refresh + about icon buttons.
+   No title; the greeting introduces "Hi, I'm Mo" instead. */
 .mo-header {
-  position: sticky; top: 0; z-index: 50;
+  position: sticky;
+  top: 0;
+  z-index: 50;
   background: var(--bg-screen);
-  padding: var(--s-3);
-  padding-top: calc(var(--s-3) + env(safe-area-inset-top));
-  border-bottom: 1px solid var(--border-soft);
+  padding: 12px;
+  padding-top: calc(12px + env(safe-area-inset-top));
 }
 .mo-header-inner {
-  max-width: 720px; margin: 0 auto;
-  display: flex; align-items: baseline; gap: var(--s-3);
+  max-width: 720px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
-.mo-title {
-  font-size: 17px; font-weight: 700; letter-spacing: var(--track-tight);
-  color: var(--text-title); margin: 0;
+.mo-header-spacer { flex: 1; }
+.mo-header-action {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--primary-60);
+  cursor: pointer;
 }
-.mo-subtitle {
-  font-size: 13px; color: var(--text-faint); font-weight: 500;
+.mo-header-action:active { background: var(--primary-20); }
+
+/* Modal: production has an About modal explaining what Mo does, opened from
+   the hamburger icon. */
+.mo-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 10, 20, 0.4);
+  z-index: 100;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms;
+}
+.mo-modal-backdrop.open { opacity: 1; pointer-events: auto; }
+.mo-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -48%) scale(0.98);
+  width: calc(100% - 32px);
+  max-width: 460px;
+  max-height: calc(100vh - 64px);
+  overflow-y: auto;
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 32px rgba(10,10,20,0.12);
+  z-index: 101;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms, transform 180ms;
+}
+.mo-modal.open {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(-50%, -50%) scale(1);
+}
+.mo-modal-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 20px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.mo-modal-face { width: 44px; height: 44px; flex-shrink: 0; }
+.mo-modal-title {
+  font-size: 22px; font-weight: 500;
+  color: var(--text-title);
+  line-height: 1.1;
+  letter-spacing: var(--track-tight);
+}
+.mo-modal-sub { font-size: 14px; color: var(--text-muted); margin-top: 2px; }
+.mo-modal-close {
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 8px;
+}
+.mo-modal-close:active { background: var(--primary-20); }
+.mo-modal-body { padding: 20px; }
+.mo-modal-body p {
+  margin: 0 0 12px;
+  color: var(--text-body);
+  font-size: 15px;
+  line-height: 1.55;
+}
+.mo-modal-actions {
+  margin: 20px 0 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mo-modal-btn {
+  width: 100%;
+  height: 44px;
+  padding: 0 20px;
+  background: var(--primary-100);
+  color: #FFFFFF;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-family: var(--font);
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  box-sizing: border-box;
+}
+.mo-modal-btn:active { background: #3A385A; transform: scale(0.99); }
+.mo-modal-foot {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: center;
+  margin-top: 12px;
 }
 
 /* ── Conversation ──────────────────────────────────────── */
@@ -263,16 +374,24 @@ a:hover { text-decoration: underline; }
 }
 
 /* ── Treemap ──────────────────────────────────────────── */
+/* Production treemap. Host has explicit width/height, NO side margins —
+   the SVG inside uses preserveAspectRatio="none" with viewBox set to the
+   measured pixel size, so any host margin/padding throws off the SVG unit
+   math and you get giant stretched text. */
 .mo-treemap-host {
-  margin: 0 var(--s-5) var(--s-4);
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-  background: var(--bg-tint);
+  width: 100%;
+  height: 220px;
+  display: block;
 }
 .mo-treemap {
-  display: block; width: 100%; height: 220px;
+  width: 100%;
+  height: 220px;
+  border-radius: 10px;
+  overflow: hidden;
+  display: block;
 }
 .mo-treemap rect { transition: opacity 120ms; }
+.mo-treemap rect:active { opacity: 0.85; }
 .mo-treemap text {
   pointer-events: none;
   font-family: var(--font);
@@ -618,14 +737,17 @@ a:hover { text-decoration: underline; }
   color: white;
   border: 0;
   border-radius: 50%;
-  font-size: 18px;
-  font-weight: 600;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 0;
+  transition: all 120ms;
 }
-.mo-composer button:hover { background: var(--primary-80); }
+.mo-composer button svg { width: 18px; height: 18px; }
+.mo-composer button:active {
+  background: var(--primary-80);
+  transform: scale(0.94);
+}
 .mo-composer button:disabled {
   background: var(--primary-40);
   cursor: not-allowed;
@@ -671,10 +793,39 @@ a:hover { text-decoration: underline; }
 
 <header class="mo-header">
   <div class="mo-header-inner">
-    <h1 class="mo-title">Mini Mo</h1>
-    <span class="mo-subtitle">federal sales · USASpending · EDGAR</span>
+    <div class="mo-header-spacer"></div>
+    <button class="mo-header-action" id="btnReset" aria-label="New conversation" title="New conversation">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+    </button>
+    <button class="mo-header-action" id="btnAbout" aria-label="About Mini Mo" title="About">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
   </div>
 </header>
+
+<!-- About modal, opens from the hamburger -->
+<div class="mo-modal-backdrop" id="aboutBackdrop"></div>
+<div class="mo-modal" id="aboutModal" role="dialog" aria-labelledby="aboutTitle" aria-hidden="true">
+  <div class="mo-modal-header">
+    <svg class="mo-modal-face" viewBox="0 0 40 40"><use href="#icon-face-open"/></svg>
+    <div>
+      <div class="mo-modal-title" id="aboutTitle">Meet Mo.</div>
+      <div class="mo-modal-sub">Your federal sales buddy. Plugged into USASpending.</div>
+    </div>
+    <button class="mo-modal-close" id="btnAboutClose" aria-label="Close">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="mo-modal-body">
+    <p>Tell Mo what you sell or which territory you cover. Mo pulls the data, explains the situation in a few sentences, and tells you what to do next.</p>
+    <p>Every number Mo cites comes from USASpending and you can verify each contract on usaspending.gov.</p>
+    <p>Ask about any vendor, agency, or topic at any time. Pivot freely.</p>
+    <div class="mo-modal-actions">
+      <a class="mo-modal-btn" href="https://calendly.com/markflournoy/chat-with-mark" target="_blank" rel="noopener" id="btnAboutCalendly">Chat with Mark</a>
+    </div>
+    <div class="mo-modal-foot">Feedback or just want to talk federal sales? Book time with Mark.</div>
+  </div>
+</div>
 
 <main class="mo-app">
   <div id="conversation"></div>
@@ -696,7 +847,9 @@ a:hover { text-decoration: underline; }
 <form class="mo-composer" id="composer">
   <div class="mo-composer-inner">
     <textarea id="input" placeholder="Ask about a vendor, agency, or topic" autofocus></textarea>
-    <button type="submit" id="send" aria-label="Send">↑</button>
+    <button type="submit" id="send" aria-label="Send">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+    </button>
   </div>
 </form>
 
@@ -1249,6 +1402,8 @@ function buildTreemapItems(rows, isSub) {
 
 function renderTreemapInto(host, items) {
   if (!items.length) return;
+  // Stash data for resize-driven re-render
+  try { host.setAttribute('data-tm-items', JSON.stringify(items)); } catch {}
   const W = host.clientWidth || 320;
   const H = 220;
   const sorted = items.slice().sort((a, b) => b.value - a.value);
@@ -1322,6 +1477,8 @@ function buildGeography(rows) {
 
 function renderStateMapInto(host, geography) {
   if (!geography || Object.keys(geography).length === 0) return;
+  // Stash for resize-driven re-render
+  try { host.setAttribute('data-sm-geo', JSON.stringify(geography)); } catch {}
   const W = host.clientWidth || 320;
   const COLS = 11, ROWS = 7, GAP = 3;
   const TILE = Math.floor((W - (COLS - 1) * GAP) / COLS);
@@ -1599,7 +1756,10 @@ async function loadSecFilings(rows) {
 // get a colored left-border stripe in primary purple. Names + amounts on the
 // top line, agency/date on the second, description italic on the third.
 
-const SHOW_INITIAL = 25;
+// 12 rows initially is enough to show the meaningful distribution top —
+// rank stripes on the top 3, ~9 more for context. The full 100 are still
+// available via "Show more" for users who want to dig deep.
+const SHOW_INITIAL = 12;
 const SHOW_MAX = 100;
 
 // Compute period-of-performance status for a row.
@@ -2179,6 +2339,9 @@ const $greeting = document.getElementById('greeting');
 function hideGreeting() {
   if ($greeting) $greeting.style.display = 'none';
 }
+function showGreeting() {
+  if ($greeting) $greeting.style.display = '';
+}
 
 document.querySelectorAll('.mo-example').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -2187,6 +2350,35 @@ document.querySelectorAll('.mo-example').forEach(btn => {
     hideGreeting();
     askMo(q);
   });
+});
+
+// Header: reset (new conversation) clears the thread and conversation history
+document.getElementById('btnReset').addEventListener('click', () => {
+  if (busy) return;
+  $conv.innerHTML = '';
+  history.length = 0;
+  showGreeting();
+  $input.focus();
+});
+
+// Header: about modal
+const $aboutModal = document.getElementById('aboutModal');
+const $aboutBackdrop = document.getElementById('aboutBackdrop');
+function openAbout() {
+  $aboutModal.classList.add('open');
+  $aboutBackdrop.classList.add('open');
+  $aboutModal.setAttribute('aria-hidden', 'false');
+}
+function closeAbout() {
+  $aboutModal.classList.remove('open');
+  $aboutBackdrop.classList.remove('open');
+  $aboutModal.setAttribute('aria-hidden', 'true');
+}
+document.getElementById('btnAbout').addEventListener('click', openAbout);
+document.getElementById('btnAboutClose').addEventListener('click', closeAbout);
+$aboutBackdrop.addEventListener('click', closeAbout);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && $aboutModal.classList.contains('open')) closeAbout();
 });
 
 document.getElementById('composer').addEventListener('submit', (e) => {
@@ -2209,6 +2401,30 @@ $input.addEventListener('keydown', (e) => {
 $input.addEventListener('input', () => {
   $input.style.height = 'auto';
   $input.style.height = Math.min(200, $input.scrollHeight) + 'px';
+});
+
+// Re-render treemaps and state maps when the container resizes. Without this,
+// the SVG viewBox is locked to the width measured at first render — a later
+// container-size change (devtools resize, orientation flip, sidebar toggle)
+// stretches text horizontally because preserveAspectRatio="none" scales the
+// viewBox to fill the actual rendered box. Debounced so desktop drag-resize
+// doesn't churn the DOM. Each card stashes its own re-render functions on
+// the host node so we can call them all on resize.
+let _resizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(_resizeTimer);
+  _resizeTimer = setTimeout(() => {
+    document.querySelectorAll('.mo-treemap-host[data-tm-items]').forEach(host => {
+      const itemsStr = host.getAttribute('data-tm-items');
+      if (!itemsStr) return;
+      try { renderTreemapInto(host, JSON.parse(itemsStr)); } catch {}
+    });
+    document.querySelectorAll('.mo-statemap-host[data-sm-geo]').forEach(host => {
+      const geoStr = host.getAttribute('data-sm-geo');
+      if (!geoStr) return;
+      try { renderStateMapInto(host, JSON.parse(geoStr)); } catch {}
+    });
+  }, 150);
 });
 </script>
 </body>
