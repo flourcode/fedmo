@@ -1035,21 +1035,9 @@ a:hover { text-decoration: underline; }
 const LAMBDA_URL = 'https://4gxuwrrugc4s6zqcxsos2exg5y0sjcrc.lambda-url.us-east-1.on.aws/';
 const USASPENDING = 'https://api.usaspending.gov/api/v2';
 
-// Suggested prompts shown on the welcome screen. Edit this list to change
-// the buttons — no other code changes needed.
-//
-// Each string is BOTH the visible button label AND the query sent to Mo.
-// Keep them short (≤ 32 chars) so they fit on mobile in 1-2 rows.
-//
-// Ideal mix for federal sales:
-//   1 pitch-style with a specific vendor    ("Show me FY26 HHS cloud awards under $1M")
-//   1 market intel / agency-wide question   ("Show me cyber opps at DoD")
-//   1 coaching / partner-finding            ("Who resells AWS")
-//   1 educational                           ("What is a NAICS")
-// Covers the three main modes plus an entry point for new users.
 const GREETING_PROMPTS = [
-  'Show me FY26 cloud awards at HHS',
-  'Show me cyber opps at DoD',
+  'FY26 cloud awards at HHS',
+  'Show me cyber contracts at DoD',
   'Who resells AWS',
   'What is a NAICS',
 ];
