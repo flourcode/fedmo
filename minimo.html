@@ -2681,15 +2681,19 @@ function renderMoTurn() {
 
   return {
     appendText: (t) => {
-      // Strip leading whitespace from the very first chunk. Without this,
-      // Mo's leading newlines (e.g. "\n\nYou're going to see...") become
-      // visible empty lines because the prose div uses white-space: pre-wrap.
-      // After the first non-whitespace character, all whitespace is preserved
-      // normally so paragraph breaks within the prose still work.
+      // For the very first chunk only: strip leading whitespace AND any
+      // stray '<' characters. Mo's leading newlines become visible empty
+      // lines under white-space: pre-wrap, and Mo sometimes starts writing
+      // a '<data...' tag, aborts, and restarts with prose — leaving an
+      // orphan '<' that the tag-parser doesn't recognize as a broken tag
+      // (since it requires the literal '<data').
+      //
+      // Mid-prose '<' characters are preserved (they're meaningful for
+      // expressions like "x < y" or rare quoted markup).
       let toAppend = t;
       if (proseEl.textContent.length === 0) {
-        toAppend = toAppend.replace(/^\s+/, '');
-        if (!toAppend) return;  // entire chunk was whitespace, drop it
+        toAppend = toAppend.replace(/^[\s<>]+/, '');
+        if (!toAppend) return;
       }
       proseEl.append(document.createTextNode(toAppend));
       scrollBottom();
