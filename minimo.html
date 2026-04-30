@@ -406,12 +406,36 @@ a:hover { text-decoration: underline; }
 .mo-card-head {
   padding: var(--s-4) var(--s-5) var(--s-4);
   border-bottom: 1px solid var(--border-soft);
+  position: relative;
+}
+.mo-card-share {
+  position: absolute;
+  top: var(--s-3);
+  right: var(--s-4);
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-faint);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 120ms, border-color 120ms, background 120ms;
+}
+.mo-card-share:hover {
+  color: var(--primary-100);
+  border-color: var(--primary-40);
+  background: var(--primary-20);
 }
 .mo-card-title {
   font-size: 17px; font-weight: 500;
   color: var(--text-title);
   letter-spacing: var(--track-tight);
   margin: 0 0 var(--s-1);
+  /* Right-pad so the title doesn't slide under the share button. */
+  padding-right: 90px;
 }
 /* Plain-English restatement of what the user asked. Sentence form,
    muted color, sits right below the title. */
@@ -1035,9 +1059,21 @@ a:hover { text-decoration: underline; }
 const LAMBDA_URL = 'https://4gxuwrrugc4s6zqcxsos2exg5y0sjcrc.lambda-url.us-east-1.on.aws/';
 const USASPENDING = 'https://api.usaspending.gov/api/v2';
 
+// Suggested prompts shown on the welcome screen. Edit this list to change
+// the buttons — no other code changes needed.
+//
+// Each string is BOTH the visible button label AND the query sent to Mo.
+// Keep them short (≤ 32 chars) so they fit on mobile in 1-2 rows.
+//
+// Ideal mix for federal sales:
+//   1 pitch-style with a specific vendor    ("Show me FY26 HHS cloud awards under $1M")
+//   1 market intel / agency-wide question   ("Show me cyber opps at DoD")
+//   1 coaching / partner-finding            ("Who resells AWS")
+//   1 educational                           ("What is a NAICS")
+// Covers the three main modes plus an entry point for new users.
 const GREETING_PROMPTS = [
-  'FY26 cloud awards at HHS',
-  'Show me cyber contracts at DoD',
+  'Show me FY26 cloud awards at HHS',
+  'Show me cyber opps at DoD',
   'Who resells AWS',
   'What is a NAICS',
 ];
@@ -2818,6 +2854,19 @@ function renderCard(rows, attrs, resolved) {
   const head = $$('div', { class: 'mo-card-head' });
   head.appendChild($$('div', { class: 'mo-card-title', text: titleBits.join(' · ') }));
 
+  // ── Copy link button ──
+  // Top-right corner, lets users share the exact query that produced this
+  // card. Click handler is delegated on $conv (reads data-q from the parent
+  // turn, builds a ?q= URL, copies, flashes "Copied!"). No per-card
+  // listener wiring needed.
+  head.appendChild($$('button', {
+    class: 'mo-card-share',
+    type: 'button',
+    title: 'Copy a link to this card',
+    'aria-label': 'Copy link to this card',
+    text: 'Copy link',
+  }));
+
   // ── Plain-English subtitle ──
   // Restates the question in human form so the result is self-explanatory.
   // "Amazon Web Services as a prime at the Department of Defense."
@@ -3248,13 +3297,16 @@ function renderUserTurn(text) {
   scrollBottom();
 }
 
-function renderMoTurn() {
+function renderMoTurn(question) {
   // Face sits in a HEADER row above the prose, not beside. This gives the
   // prose full width and a calm centered look. Face is static — always
   // smiling, no state transitions during stream
   // or on error. The loading card and progressive prose are enough to signal
   // activity; an animated face was redundant.
+  // The user's query is stamped on the turn via data-q so the per-card
+  // "Copy link" button can build a ?q= permalink without walking history.
   const turn = $$('div', { class: 'mo-turn mo-turn-mo' });
+  if (question) turn.setAttribute('data-q', question);
 
   const header = $$('div', { class: 'mo-turn-mo-header' });
   const faceEl = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -3330,7 +3382,7 @@ async function askMo(question) {
   renderUserTurn(question);
   history.push({ role: 'user', parts: [{ text: question }] });
 
-  const moTurn = renderMoTurn();
+  const moTurn = renderMoTurn(question);
   let fullText = '';
   let tagFired = false;
   let loadingEl = null;
@@ -3500,6 +3552,58 @@ $conv.addEventListener('click', (e) => {
   }
 }, true);
 
+// Per-card "Copy link" button. Builds /?q=<encoded> against the current
+// origin, copies to clipboard, flashes "Copied!" on the button itself.
+// Recipients of the link land on minimo and Mo auto-runs the query against
+// fresh USASpending data. Async clipboard with a legacy textarea fallback.
+$conv.addEventListener('click', (e) => {
+  const btn = e.target.closest('.mo-card-share');
+  if (!btn) return;
+  const turn = btn.closest('.mo-turn-mo');
+  const q = turn?.getAttribute('data-q') || '';
+  if (!q) return;
+  const url = `${window.location.origin}/?q=${encodeURIComponent(q)}`;
+  copyShareUrl(url, btn);
+  track('share_card', { query: q.slice(0, 60) });
+});
+
+// Copy helper. Brief inline flash on the button is cleaner than a floating
+// toast — confirmation appears where the user already looking. Guarded so
+// rapid taps don't mangle the button text mid-swap.
+function copyShareUrl(url, sourceBtn) {
+  const flashButton = (msg) => {
+    if (!sourceBtn || sourceBtn.dataset.copyFlashing === '1') return;
+    const originalText = sourceBtn.textContent;
+    sourceBtn.dataset.copyFlashing = '1';
+    sourceBtn.textContent = msg;
+    setTimeout(() => {
+      sourceBtn.textContent = originalText;
+      delete sourceBtn.dataset.copyFlashing;
+    }, 1600);
+  };
+  const onSuccess = () => flashButton('Copied!');
+  const onFailure = () => flashButton('Try again');
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(url).then(onSuccess, onFailure);
+    return;
+  }
+  // Legacy fallback for older Safari and non-HTTPS contexts.
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = url;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'absolute';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    ok ? onSuccess() : onFailure();
+  } catch {
+    onFailure();
+  }
+}
+
 // Header: about modal
 const $aboutModal = document.getElementById('aboutModal');
 const $aboutBackdrop = document.getElementById('aboutBackdrop');
@@ -3553,6 +3657,22 @@ window.addEventListener('resize', () => {
 
 // Bootstrap complete — fire app_init once for analytics.
 track('app_init');
+
+// Replay a shared query if the URL contains ?q=<encoded>. This is what
+// makes the per-card "Copy link" feature meaningful — recipients land here
+// and Mo runs their question against fresh USASpending data. Defer one
+// frame so the greeting has rendered before we hide it.
+try {
+  const params = new URLSearchParams(window.location.search);
+  const replayQuery = (params.get('q') || '').trim();
+  if (replayQuery) {
+    track('load_from_share', { query: replayQuery.slice(0, 60) });
+    requestAnimationFrame(() => {
+      hideGreeting();
+      askMo(replayQuery);
+    });
+  }
+} catch { /* never break init on URL parse */ }
 </script>
 </body>
 </html>
