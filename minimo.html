@@ -360,6 +360,11 @@ a:hover { text-decoration: underline; }
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
+.mo-card-chip-warn {
+  background: #FEF3C7;
+  color: #92400E;
+  white-space: normal;
+}
 
 /* Auto-generated insight — the headline of the card. Reads like a sales
    analyst summarizing the data. Production has this and it's load-bearing. */
@@ -1528,6 +1533,24 @@ async function pull(attrs) {
   // Vendor branch — dual-path union + word-boundary post-filter
   if (attrs.recipient) {
     const aliases = CSV(attrs.aliases);
+
+    // Auto-include the recipient name as a keyword needle UNLESS it's too
+    // short or generic to be safe. Platform vendors like Pure Storage,
+    // NetApp, Sonatype, Splunk etc. are sold through resellers — their
+    // name appears in the contract description but not the recipient.
+    // Without this, the user has to depend on Mo emitting an `aliases`
+    // attribute, which it forgets for most vendors not in its lookup table.
+    //
+    // Heuristic for "safe to use as keyword":
+    //   - Multi-word names ("Pure Storage", "Booz Allen") — distinctive
+    //   - Single words ≥6 chars ("Sonatype", "Snowflake") — distinctive
+    //   - Excluded: short acronyms (AWS, SAP, GCP, GDIT) which collide
+    //     with unrelated descriptions
+    const r = String(attrs.recipient).trim();
+    const isMultiWord = /\s/.test(r);
+    const isLongEnough = r.length >= 6;
+    const autoAlias = (isMultiWord || isLongEnough) ? [r] : [];
+
     const needles = [
       ...(recipientName ? [recipientName] : []),
       ...(attrs.recipient ? [attrs.recipient] : []),
@@ -1539,7 +1562,7 @@ async function pull(attrs) {
       ? { ...baseFilters, recipient_search_text: [recipientName] }
       : null;
 
-    const keywordNeedles = [...aliases, ...CSV(attrs.keywords)]
+    const keywordNeedles = [...aliases, ...autoAlias, ...CSV(attrs.keywords)]
       .filter(n => String(n).length >= 4);
     const keywordFilters = keywordNeedles.length > 0
       ? { ...baseFilters, keywords: keywordNeedles }
@@ -1573,6 +1596,44 @@ async function pull(attrs) {
       rows = rows.filter(row =>
         matchesAny([row['Description'], row['Recipient Name']], needles)
       );
+    }
+
+    // Cascading fallback: if vendor + agency narrowed everything to zero,
+    // retry without the agency filter so the user gets the vendor's broader
+    // federal footprint. Better to show "Pure Storage's whole pipeline" than
+    // an empty card that says "no contracts at NSA". Pure Storage doesn't
+    // prime at NSA — that's not zero contracts, that's the wrong question
+    // to ask the API.
+    if (rows.length === 0 && agencyFilter) {
+      const baseFiltersNoAgency = { ...baseFilters };
+      delete baseFiltersNoAgency.agencies;
+      const retryQueries = [];
+      if (recipientName) {
+        retryQueries.push(searchAwards({ ...baseFiltersNoAgency, recipient_search_text: [recipientName] }, false));
+      }
+      if (keywordNeedles.length > 0) {
+        retryQueries.push(searchAwards({ ...baseFiltersNoAgency, keywords: keywordNeedles }, false));
+      }
+      const retryResults = await Promise.all(retryQueries);
+      const retrySeen = new Map();
+      for (const r of retryResults) {
+        for (const row of r.rows) {
+          const id = row['Award ID'];
+          if (id && !retrySeen.has(id)) retrySeen.set(id, row);
+        }
+      }
+      rows = [...retrySeen.values()];
+      if (needles.length > 0) {
+        rows = rows.filter(row =>
+          matchesAny([row['Description'], row['Recipient Name']], needles)
+        );
+      }
+      // Mark the resolved object so the card knows the agency was dropped
+      if (rows.length > 0) {
+        resolved.agencyDropped = resolved.agencyResolved || resolved.agencyAsked;
+        resolved.agencyResolved = null;
+        resolved.agencyAsked = null;
+      }
     }
 
     rows.sort((a, b) => (Number(b['Award Amount']) || 0) - (Number(a['Award Amount']) || 0));
@@ -2424,8 +2485,12 @@ function renderCard(rows, attrs, resolved) {
   const titleBits = [];
   if (resolved.recipientResolved) titleBits.push(resolved.recipientResolved);
   else if (attrs.recipient) titleBits.push(attrs.recipient);
-  if (resolved.agencyResolved) titleBits.push(resolved.agencyResolved);
-  else if (attrs.agency) titleBits.push(attrs.agency);
+  // Skip agency in title if fallback broadened the search (resolved.agencyDropped
+  // means the original agency had 0 matches and we dropped it)
+  if (!resolved.agencyDropped) {
+    if (resolved.agencyResolved) titleBits.push(resolved.agencyResolved);
+    else if (attrs.agency) titleBits.push(attrs.agency);
+  }
   if (attrs.keywords && !attrs.recipient) titleBits.push(`"${attrs.keywords}"`);
   if (isSub) titleBits.push('outgoing subawards');
   if (titleBits.length === 0) titleBits.push('Federal contracts');
@@ -2445,7 +2510,7 @@ function renderCard(rows, attrs, resolved) {
   if (isSub) {
     const primeName = resolved.recipientResolved || attrs.recipient || 'a prime';
     subtitleBits.push(`Subawards flowing out from ${primeName}`);
-    if (resolved.agencyAsked || attrs.agency) {
+    if (!resolved.agencyDropped && (resolved.agencyAsked || attrs.agency)) {
       subtitleBits.push(`on prime contracts at ${resolved.agencyAsked || attrs.agency}`);
     }
   } else {
@@ -2456,21 +2521,28 @@ function renderCard(rows, attrs, resolved) {
     } else {
       subtitleBits.push('Federal contracts');
     }
-    if (resolved.agencyAsked || attrs.agency) {
+    if (!resolved.agencyDropped && (resolved.agencyAsked || attrs.agency)) {
       subtitleBits.push(`at ${resolved.agencyAsked || attrs.agency}`);
     }
   }
   head.appendChild($$('div', { class: 'mo-card-subtitle', text: subtitleBits.join(' ') + '.' }));
 
-  // ── Time-window chip ──
-  // If Mo emitted explicit dates (since/until), tell the user. Without this,
-  // they have no way to know whether minimo gave them lifetime or filtered.
-  // "Lifetime" is implicit when no chip is shown.
+  // ── Time + scope chips ──
+  // Time chip: if Mo emitted dates, show them (lifetime is implicit when absent).
+  // Dropped-agency chip: if the agency filter narrowed everything to zero and
+  // we fell back to a broader search, tell the user we expanded scope.
+  const chipParts = [];
   if (attrs.since || attrs.until) {
-    const chips = $$('div', { class: 'mo-card-chips' });
     const since = attrs.since || '...';
     const until = attrs.until || 'today';
-    chips.innerHTML = `<span class="mo-card-chip">${escapeHtml(since)} → ${escapeHtml(until)}</span>`;
+    chipParts.push(`<span class="mo-card-chip">${escapeHtml(since)} → ${escapeHtml(until)}</span>`);
+  }
+  if (resolved.agencyDropped) {
+    chipParts.push(`<span class="mo-card-chip mo-card-chip-warn">No matches at ${escapeHtml(resolved.agencyDropped)} — broadened to all agencies</span>`);
+  }
+  if (chipParts.length) {
+    const chips = $$('div', { class: 'mo-card-chips' });
+    chips.innerHTML = chipParts.join('');
     head.appendChild(chips);
   }
 
