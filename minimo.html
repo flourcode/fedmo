@@ -32,11 +32,10 @@
   --border-soft: #EFEEF7;
 
   --s-1: 4px;  --s-2: 8px;  --s-3: 12px;  --s-4: 16px;
-  --s-5: 20px; --s-6: 24px; --s-8: 32px;
+  --s-5: 20px; --s-6: 24px;
 
   --radius:    16px;
   --radius-sm: 12px;
-  --radius-pill: 999px;
   --shadow-lift: 0 4px 16px rgba(70,68,110,0.10);
   --track-tight: -0.01em;
 
@@ -311,6 +310,46 @@ a:hover { text-decoration: underline; }
   background: var(--primary-40);
 }
 
+/* ── Pills (follow-up suggestions) ── */
+/* Float below a card in the conversation flow, NOT inside the card.
+   Same pill shape as the greeting examples so they read as the same
+   thing: tappable seeds for the next query. No container chrome —
+   they sit naturally between the card and the next composer or card. */
+.mo-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: var(--s-3) 4px var(--s-4);
+}
+.mo-pills-label {
+  font-size: 11px;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 500;
+  margin-right: 4px;
+}
+.mo-pill {
+  font-family: var(--font);
+  font-size: 13px;
+  background: var(--primary-20);
+  border: none;
+  color: var(--primary-100);
+  padding: 6px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 120ms;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mo-pill:hover, .mo-pill:active {
+  background: var(--primary-40);
+}
+
 /* ── Card ──────────────────────────────────────────────── */
 .mo-card {
   background: var(--bg-card);
@@ -367,7 +406,10 @@ a:hover { text-decoration: underline; }
 }
 
 /* Auto-generated insight — the headline of the card. Reads like a sales
-   analyst summarizing the data. Production has this and it's load-bearing. */
+   analyst summarizing the data. Quieter typography (14px with purple
+   left-border bar) so it sits as supporting copy under the title rather
+   than competing with it. The bar provides structural emphasis without
+   making the insight echo the title's volume. */
 .mo-card-insight {
   font-size: 14px;
   color: var(--text-title);
@@ -376,10 +418,6 @@ a:hover { text-decoration: underline; }
   margin-bottom: var(--s-3);
   padding-left: 10px;
   border-left: 3px solid var(--primary-60);
-}
-.mo-card-meta {
-  font-size: 13px; color: var(--text-muted);
-  font-weight: 500;
 }
 
 /* Three-stat row — the headline numbers that frame the result:
@@ -502,10 +540,10 @@ a:hover { text-decoration: underline; }
 }
 
 /* ── Rows ─────────────────────────────────────────────── */
-/* Production fedmo uses vertical 2-line rows, not a spreadsheet table.
-   Each row is a self-contained card-like block: name + amount on top,
-   agency/date on second line, description on third line in italic.
-   Top 3 rows get a colored left-border stripe in primary purple. */
+/* Vertical 2-line rows, not a spreadsheet table. Each row is a self-contained
+   block: name + amount on top, agency/award ID on second, PoP + status chip
+   on third, single-line description on fourth. Top 3 rows get a colored
+   left-border stripe in primary purple. */
 .mo-list {
   margin: 0 var(--s-5) var(--s-4);
   border-radius: var(--radius-sm);
@@ -514,7 +552,7 @@ a:hover { text-decoration: underline; }
   overflow: hidden;
 }
 .mo-row-2line {
-  padding: var(--s-3) var(--s-4);
+  padding: 10px var(--s-4) 10px;
   border-bottom: 1px solid var(--border-soft);
   position: relative;
 }
@@ -527,8 +565,8 @@ a:hover { text-decoration: underline; }
   content: '';
   position: absolute;
   left: var(--s-2);
-  top: 14px;
-  bottom: 14px;
+  top: 12px;
+  bottom: 12px;
   width: 3px;
   border-radius: 2px;
 }
@@ -540,7 +578,7 @@ a:hover { text-decoration: underline; }
   display: flex;
   align-items: baseline;
   gap: var(--s-3);
-  min-height: 22px;
+  min-height: 20px;
 }
 .mo-row-name {
   flex: 1; min-width: 0;
@@ -549,6 +587,7 @@ a:hover { text-decoration: underline; }
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 14px;
 }
 .mo-row-amount {
   font-variant-numeric: tabular-nums;
@@ -560,21 +599,23 @@ a:hover { text-decoration: underline; }
 .mo-row-meta {
   font-size: 12px;
   color: var(--text-muted);
-  margin-top: 2px;
+  margin-top: 1px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Description always visible, single-line clamp. The contract scope is
+   the user's "what is this contract about?" at-a-glance answer; clamping
+   to 2 lines previously inflated row height too much. One line is enough
+   for the user to decide whether to drill in. */
 .mo-row-desc {
   font-size: 12px;
   color: var(--text-faint);
-  font-style: italic;
-  margin-top: 3px;
+  margin-top: 2px;
   line-height: 1.4;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Row actions — View link to usaspending.gov detail page. Right-aligned,
@@ -582,10 +623,10 @@ a:hover { text-decoration: underline; }
 .mo-row-actions {
   display: flex;
   justify-content: flex-end;
-  margin-top: 6px;
+  margin-top: 4px;
 }
 .mo-row-view {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--primary-80);
   font-weight: 500;
   padding: 2px 8px;
@@ -597,16 +638,12 @@ a:hover { text-decoration: underline; }
   color: var(--primary-100);
 }
 
-/* Subaward direction: prime → sub */
-.mo-sub-prime { color: var(--text-muted); font-weight: 400; }
-.mo-sub-arrow { color: var(--text-faint); margin: 0 4px; }
-
 /* Period-of-performance line — sits between agency/ID line and description.
    Hosts a status chip + the dates. */
 .mo-row-meta-pop {
   font-size: 12px;
   color: var(--text-muted);
-  margin-top: 3px;
+  margin-top: 2px;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -717,16 +754,6 @@ a:hover { text-decoration: underline; }
   color: var(--text-title);
   white-space: nowrap;
   font-size: 12px;
-}
-.mo-sub-detail-desc {
-  font-size: 11px;
-  color: var(--text-muted);
-  margin-top: 3px;
-  line-height: 1.4;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
 }
 .mo-sub-detail-meta {
   font-size: 11px;
@@ -1035,7 +1062,7 @@ const compHead = (title, meta) =>
 //   - tag content (between <data and />) is at most 600 chars
 //   - attribute values cannot contain newlines or > characters
 //   - attribute values are quote-balanced
-const TAG_RE = /<data\b([^>]{1,600}?)\/>/i;
+const TAG_RE = /<\s*data\b([^>]{1,600}?)\/>/i;
 
 function findDataTag(text) {
   const m = TAG_RE.exec(text);
@@ -1052,8 +1079,9 @@ function findDataTag(text) {
 // Detect a tag opening that NEVER closed — Mo started writing a tag but ran
 // off into prose without `/>`. We hide this fragment from displayed prose.
 function findBrokenTagStart(text) {
-  // <data appears, but no /> within 1000 chars and no clean close
-  const open = /<data\b/i.exec(text);
+  // <data appears, but no /> within 1000 chars and no clean close.
+  // Tolerate whitespace between '<' and 'data' since Mo sometimes emits '< data...'.
+  const open = /<\s*data\b/i.exec(text);
   if (!open) return -1;
   // Look for /> after it; if found, this is fine — the regular parser handles it
   if (text.indexOf('/>', open.index) !== -1) return -1;
@@ -1296,8 +1324,14 @@ function buildBaseFilters(attrs, agencyFilter) {
   const until = DATE_RE.test(String(attrs.until || '')) ? attrs.until : null;
   if (since || until) {
     const today = new Date().toISOString().slice(0, 10);
+    // action_date catches recent activity — mods, option exercises,
+    // deobligations — on contracts that may have been originally signed
+    // years ago. date_signed only catches first-signing events, which
+    // dramatically undercounts "past N days" queries (verified by probe:
+    // Navy returned 0 rows for date_signed since 2026-01-30, but $149M+
+    // for action_date in the same window).
     f.time_period = [{
-      date_type: 'date_signed',
+      date_type: 'action_date',
       start_date: since || '2020-01-01',
       end_date: until || today,
     }];
@@ -1480,12 +1514,14 @@ async function pull(attrs) {
   floor.setUTCDate(floor.getUTCDate() - 14);
   const flooredSince = floor.toISOString().slice(0, 10);
   const retried = await pullOnce({ ...attrs, since: flooredSince });
-  if (retried.rows.length > 0) {
-    retried.resolved.dateBroadened = {
-      original: attrs.since,
-      broadenedTo: flooredSince,
-    };
-  }
+  // Always mark that we tried broadening, even if the retry was also empty.
+  // Otherwise the user sees the same empty card and assumes the original
+  // narrow window was the truth, when really we attempted a broader search.
+  retried.resolved.dateBroadened = {
+    original: attrs.since,
+    broadenedTo: flooredSince,
+    foundResults: retried.rows.length > 0,
+  };
   return retried;
 }
 
@@ -1583,24 +1619,44 @@ async function pullOnce(attrs) {
 
     // Auto-include the recipient name as a keyword needle UNLESS it's too
     // short or generic to be safe. Platform vendors like Pure Storage,
-    // NetApp, Sonatype, Splunk etc. are sold through resellers — their
-    // name appears in the contract description but not the recipient.
+    // NetApp, Sonatype, Splunk, JFrog etc. are sold through resellers —
+    // their name appears in the contract description but not the recipient.
     // Without this, the user has to depend on Mo emitting an `aliases`
     // attribute, which it forgets for most vendors not in its lookup table.
     //
     // Heuristic for "safe to use as keyword":
     //   - Multi-word names ("Pure Storage", "Booz Allen") — distinctive
-    //   - Single words ≥6 chars ("Sonatype", "Snowflake") — distinctive
-    //   - Excluded: short acronyms (AWS, SAP, GCP, GDIT) which collide
-    //     with unrelated descriptions
-    const r = String(attrs.recipient).trim();
-    const isMultiWord = /\s/.test(r);
-    const isLongEnough = r.length >= 6;
-    const autoAlias = (isMultiWord || isLongEnough) ? [r] : [];
+    //   - Single words ≥5 chars ("JFrog", "Splunk", "Sonatype") — distinctive
+    //   - Excluded: short acronyms (AWS, SAP, IBM, GCP, GDIT, RTX) which
+    //     collide with unrelated descriptions, regardless of length
+    const NAME_DENYLIST = new Set([
+      'AWS', 'SAP', 'IBM', 'GCP', 'GDIT', 'SAIC', 'BAH', 'RTX', 'NSA',
+      'CACI', 'CGI', 'NCI', 'CDW', 'DXC', 'EY', 'KPMG',
+    ]);
+    const safeForAutoAlias = (raw) => {
+      const v = String(raw).trim();
+      if (!v) return false;
+      if (NAME_DENYLIST.has(v.toUpperCase())) return false;
+      const multi = /\s/.test(v);
+      const long = v.length >= 5;
+      return multi || long;
+    };
+
+    // Recipient might be a comma-list of competitors ("JFrog, Snyk, Sonatype")
+    // when the user asked a competitor-style question and Mo packed the
+    // peer set into the recipient attr. Autocomplete resolves the whole
+    // string to nothing; left alone, the keyword search hits USASpending
+    // with a literal comma string and finds nothing. Split on commas so
+    // each vendor name becomes its own needle.
+    const recipientRaw = String(attrs.recipient).trim();
+    const recipientCandidates = recipientRaw.includes(',')
+      ? recipientRaw.split(',').map(s => s.trim()).filter(Boolean)
+      : [recipientRaw];
+    const autoAlias = recipientCandidates.filter(safeForAutoAlias);
 
     const needles = [
       ...(recipientName ? [recipientName] : []),
-      ...(attrs.recipient ? [attrs.recipient] : []),
+      ...recipientCandidates,
       ...aliases,
     ].filter(n => String(n).length >= 4)
      .map(n => n.toUpperCase());
@@ -1615,18 +1671,21 @@ async function pullOnce(attrs) {
       ? { ...baseFilters, keywords: keywordNeedles }
       : null;
 
-    if (!directFilters && keywordFilters) {
-      const { rows, error } = await searchAwards(keywordFilters, false);
-      return { rows, resolved, error };
-    }
-
     const queries = [];
     if (directFilters) queries.push(searchAwards(directFilters, false));
     if (keywordFilters) queries.push(searchAwards(keywordFilters, false));
+    console.log('[mo:filt]', JSON.stringify({
+      recipient: attrs.recipient,
+      recipientName,
+      directFilters: directFilters ? { recipient_search_text: directFilters.recipient_search_text } : null,
+      keywordNeedles,
+      baseFilters: { ...baseFilters },
+    }));
     const results = await Promise.all(queries);
+    console.log('[mo:search]', results.map(r => ({ rows: r.rows.length, error: r.error })));
 
     const errors = results.filter(r => r.error).map(r => r.error);
-    if (errors.length === results.length) {
+    if (errors.length > 0 && errors.length === results.length) {
       return { rows: [], resolved, error: errors[0] };
     }
 
@@ -1639,11 +1698,13 @@ async function pullOnce(attrs) {
     }
 
     let rows = [...seen.values()];
+    const beforeFilter = rows.length;
     if (needles.length > 0) {
       rows = rows.filter(row =>
         matchesAny([row['Description'], row['Recipient Name']], needles)
       );
     }
+    console.log('[mo:postfilter]', { needles, before: beforeFilter, after: rows.length });
 
     // Cascading fallback: if vendor + agency narrowed everything to zero,
     // retry without the agency filter so the user gets the vendor's broader
@@ -1791,6 +1852,142 @@ function aggregateRowsBy(rows, isSub, dimension) {
   return [...map.entries()].sort((a, b) => b[1] - a[1]);
 }
 
+// Common agency name → short label. The full names ("Centers for Medicare
+// and Medicaid Services") get truncated to "Centers fo…" in narrow treemap
+// cells, which tells the user nothing. The abbreviations are how federal
+// staff actually refer to these agencies day-to-day.
+const AGENCY_SHORT_LABELS = {
+  'Centers for Medicare and Medicaid Services': 'CMS',
+  'National Institutes of Health': 'NIH',
+  'Centers for Disease Control and Prevention': 'CDC',
+  'Food and Drug Administration': 'FDA',
+  'Federal Aviation Administration': 'FAA',
+  'Federal Bureau of Investigation': 'FBI',
+  'Federal Acquisition Service': 'GSA-FAS',
+  'Public Buildings Service': 'GSA-PBS',
+  'Department of Veterans Affairs': 'VA',
+  'Department of Defense': 'DoD',
+  'Department of Homeland Security': 'DHS',
+  'Department of Health and Human Services': 'HHS',
+  'Department of Energy': 'DOE',
+  'Department of State': 'State',
+  'Department of the Army': 'Army',
+  'Department of the Navy': 'Navy',
+  'Department of the Air Force': 'Air Force',
+  'Department of Justice': 'DOJ',
+  'Department of Transportation': 'DOT',
+  'Department of the Treasury': 'Treasury',
+  'Department of the Interior': 'Interior',
+  'Department of Agriculture': 'USDA',
+  'Department of Commerce': 'Commerce',
+  'Department of Education': 'Education',
+  'Department of Labor': 'Labor',
+  'Department of Housing and Urban Development': 'HUD',
+  'Defense Information Systems Agency': 'DISA',
+  'Defense Logistics Agency': 'DLA',
+  'Defense Counterintelligence and Security Agency': 'DCSA',
+  'Defense Health Agency': 'DHA',
+  'Defense Threat Reduction Agency': 'DTRA',
+  'Defense Advanced Research Projects Agency': 'DARPA',
+  'Defense Contract Management Agency': 'DCMA',
+  'Defense Media Activity': 'DMA',
+  'Missile Defense Agency': 'MDA',
+  'United States Marine Corps': 'USMC',
+  'United States Space Force': 'Space Force',
+  'U.S. Customs and Border Protection': 'CBP',
+  'U.S. Immigration and Customs Enforcement': 'ICE',
+  'U.S. Citizenship and Immigration Services': 'USCIS',
+  'U.S. Coast Guard': 'USCG',
+  'U.S. Cyber Command': 'CYBERCOM',
+  'U.S. Special Operations Command': 'SOCOM',
+  'U.S. Patent and Trademark Office': 'USPTO',
+  'U.S. Census Bureau': 'Census',
+  'U.S. Geological Survey': 'USGS',
+  'U.S. Agency for Global Media': 'USAGM',
+  'Social Security Administration': 'SSA',
+  'Internal Revenue Service': 'IRS',
+  'Securities and Exchange Commission': 'SEC',
+  'Nuclear Regulatory Commission': 'NRC',
+  'Federal Communications Commission': 'FCC',
+  'Federal Emergency Management Agency': 'FEMA',
+  'Environmental Protection Agency': 'EPA',
+  'National Aeronautics and Space Administration': 'NASA',
+  'National Oceanic and Atmospheric Administration': 'NOAA',
+  'National Science Foundation': 'NSF',
+  'Office of Procurement Operations': 'DHS-OPO',
+  'Office of Assistant Secretary for Preparedness and Response': 'ASPR',
+  'Office of the Assistant Secretary for Administration': 'HHS-OAS',
+  'Office of the Assistant Secretary for Financial Resources': 'HHS-ASFR',
+  'Office of the Chief Financial Officer': 'OCFO',
+  'Office of Administrative Services': 'OAS',
+  'Bureau of Alcohol, Tobacco, Firearms and Explosives Acquisition and Property Management Division': 'ATF',
+  'Departmental Offices': 'Dept. Offices',
+  'Offices, Boards and Divisions': 'OBD',
+};
+
+// Vendor names that have universally-recognized short forms. Less critical
+// than agencies because vendor names are usually shorter, but a few are
+// notably bloated by their corporate suffixes.
+const VENDOR_SHORT_LABELS = {
+  'AMAZON WEB SERVICES, INC': 'Amazon Web Services',
+  'AMAZON WEB SERVICES, INC.': 'Amazon Web Services',
+  'GENERAL DYNAMICS INFORMATION TECHNOLOGY, INC.': 'GDIT',
+  'INTERNATIONAL BUSINESS MACHINES CORPORATION': 'IBM',
+  'NORTHROP GRUMMAN SYSTEMS CORPORATION': 'Northrop Grumman',
+  'GENERAL ELECTRIC COMPANY': 'GE',
+  'LEIDOS, INC.': 'Leidos',
+  'RAYTHEON COMPANY': 'Raytheon',
+  'CARAHSOFT TECHNOLOGY CORP': 'Carahsoft',
+  'CARAHSOFT TECHNOLOGY CORP.': 'Carahsoft',
+  'WORLD WIDE TECHNOLOGY LLC': 'WWT',
+  'BOOZ ALLEN HAMILTON INC': 'Booz Allen',
+  'SCIENCE APPLICATIONS INTERNATIONAL CORPORATION': 'SAIC',
+  'CACI, INC. - FEDERAL': 'CACI Federal',
+  'PALANTIR USG INC': 'Palantir USG',
+  'PALANTIR TECHNOLOGIES INC.': 'Palantir',
+  'LOCKHEED MARTIN CORPORATION': 'Lockheed Martin',
+  'BAE SYSTEMS TECHNOLOGY SOLUTIONS & SERVICES INC.': 'BAE Tech Sol.',
+  'BAE SYSTEMS LAND & ARMAMENTS L.P.': 'BAE Land & Arm.',
+  'THE BOEING COMPANY': 'Boeing',
+  'GENERAL DYNAMICS LAND SYSTEMS INC.': 'GD Land Systems',
+  'FOUR POINTS TECHNOLOGY, L.L.C.': 'Four Points',
+  'GREENBRIER GOVERNMENT SOLUTIONS INC': 'Greenbrier Gov',
+  'WESTWIND COMPUTER PRODUCTS, INC.': 'Westwind',
+  'CDW GOVERNMENT LLC': 'CDW-G',
+  'IRON BOW TECHNOLOGIES, LLC': 'Iron Bow',
+  'CTG FEDERAL, LLC': 'CTG Federal',
+  'THUNDERCAT TECHNOLOGY, LLC': 'ThunderCat',
+  'THUNDERCAT TECHNOLOGY': 'ThunderCat',
+  'MICROSOFT CORPORATION': 'Microsoft',
+  'PURE STORAGE, INC.': 'Pure Storage',
+  'SAP NATIONAL SECURITY SERVICES INC': 'SAP NS2',
+  'DELL FEDERAL SYSTEMS L.P': 'Dell Federal',
+  'DELL MARKETING L.P.': 'Dell Marketing',
+};
+
+// Smart-truncate a label to fit a treemap cell. Strategy:
+//   1. If we have a hard-coded short label, use it.
+//   2. Otherwise truncate at word boundaries so the user sees the
+//      meaningful start of the name, not a half-word fragment like
+//      "Departm…" which is identical for many DHS/HHS sub-agencies.
+function shortenLabel(name, charsFit, isOther) {
+  if (isOther) return name;          // "Other (62)" stays as-is
+  // Hard-coded short forms first
+  const lookup = AGENCY_SHORT_LABELS[name] || VENDOR_SHORT_LABELS[name];
+  if (lookup && lookup.length <= charsFit) return lookup;
+  // If the lookup itself is too long, it's still better than the full name
+  const candidate = lookup || name;
+  if (candidate.length <= charsFit) return candidate;
+  // Truncate at word boundary if possible — drop trailing words rather
+  // than cutting mid-word
+  const truncated = candidate.slice(0, charsFit - 1);
+  const lastSpace = truncated.lastIndexOf(' ');
+  if (lastSpace >= Math.floor(charsFit * 0.5)) {
+    return candidate.slice(0, lastSpace) + '…';
+  }
+  return truncated + '…';
+}
+
 // Aggregate rows for the treemap and pack into cells.
 //
 // Cell selection strategy: include every entity whose share is ≥3% of the
@@ -1870,22 +2067,34 @@ function renderTreemapInto(host, items) {
   };
 
   let svg = `<svg class="mo-treemap" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">`;
+  // Diagonal-hatch pattern for "Other" cells so they read as buckets,
+  // not as player cells the user might click into. The pattern is the
+  // muted purple from the palette over the Other base color.
+  svg += `<defs>
+    <pattern id="other-hatch" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)">
+      <rect width="6" height="6" fill="${TREEMAP_OTHER_COLOR}"/>
+      <line x1="0" y1="0" x2="0" y2="6" stroke="rgba(70,68,110,0.10)" stroke-width="3"/>
+    </pattern>
+  </defs>`;
   laid.forEach(cell => {
     const rx = cell.x + PADDING / 2;
     const ry = cell.y + PADDING / 2;
     const rw = Math.max(0, cell.w - PADDING);
     const rh = Math.max(0, cell.h - PADDING);
-    svg += `<rect x="${rx.toFixed(1)}" y="${ry.toFixed(1)}" width="${rw.toFixed(1)}" height="${rh.toFixed(1)}" fill="${cell.color}" rx="3"/>`;
+    const isOther = /^Other \(/.test(cell.name);
+    const fill = isOther ? 'url(#other-hatch)' : cell.color;
+    svg += `<rect x="${rx.toFixed(1)}" y="${ry.toFixed(1)}" width="${rw.toFixed(1)}" height="${rh.toFixed(1)}" fill="${fill}" rx="3"><title>${escapeHtml(cell.name)} — ${fmtMoney(cell.value)}</title></rect>`;
     if (rw > 55 && rh > 30) {
       const area = rw * rh;
       const nameFont = area > 12000 ? 16 : area > 5000 ? 13 : 11;
       const valueFont = Math.max(nameFont - 2, 10);
       const charsFit = Math.max(4, Math.floor((rw - 12) / (nameFont * 0.55)));
-      const name = cell.name.length > charsFit ? cell.name.slice(0, charsFit - 1) + '…' : cell.name;
+      const name = shortenLabel(cell.name, charsFit, isOther);
       const tc = textColorFor(cell.color);
-      svg += `<text x="${(rx + 6).toFixed(1)}" y="${(ry + nameFont + 4).toFixed(1)}" fill="${tc.name}" font-size="${nameFont}" font-weight="600">${escapeHtml(name)}</text>`;
+      const fontStyle = isOther ? ' font-style="italic"' : '';
+      svg += `<text x="${(rx + 6).toFixed(1)}" y="${(ry + nameFont + 4).toFixed(1)}" fill="${tc.name}" font-size="${nameFont}" font-weight="600"${fontStyle}>${escapeHtml(name)}</text>`;
       if (rh > nameFont + valueFont + 12) {
-        svg += `<text x="${(rx + 6).toFixed(1)}" y="${(ry + nameFont + valueFont + 10).toFixed(1)}" fill="${tc.value}" font-size="${valueFont}" font-weight="500">${fmtMoney(cell.value)}</text>`;
+        svg += `<text x="${(rx + 6).toFixed(1)}" y="${(ry + nameFont + valueFont + 10).toFixed(1)}" fill="${tc.value}" font-size="${valueFont}" font-weight="500"${fontStyle}>${fmtMoney(cell.value)}</text>`;
       }
     }
   });
@@ -2199,9 +2408,10 @@ async function loadSecFilings(rows) {
 // ROW RENDERERS
 // =============================================================================
 //
-// Production fedmo uses 2-line vertical rows, not a spreadsheet table. Top 3
-// get a colored left-border stripe in primary purple. Names + amounts on the
-// top line, agency/date on the second, description italic on the third.
+// 2-line vertical rows, not a spreadsheet table. Top 3 get a colored
+// left-border stripe in primary purple. Names + amounts on the top line,
+// agency/award ID on the second, PoP + status chip on the third, single-line
+// description on the fourth (full text on hover).
 
 // 12 rows initially is enough to show the meaningful distribution top —
 // rank stripes on the top 3, ~9 more for context. The full 100 are still
@@ -2353,7 +2563,7 @@ function renderContractRows(card, rows) {
       </div>
       ${metaLine1Parts.length ? `<div class="mo-row-meta">${escapeHtml(metaLine1Parts.join(' · '))}</div>` : ''}
       ${popLine ? `<div class="mo-row-meta-pop">${chip}${escapeHtml(popLine)}</div>` : (chip ? `<div class="mo-row-meta-pop">${chip}</div>` : '')}
-      ${desc ? `<div class="mo-row-desc">${escapeHtml(desc)}</div>` : ''}
+      <div class="mo-row-desc" title="${escapeHtml(desc || '')}">${escapeHtml(desc || '—')}</div>
       ${viewLink ? `<div class="mo-row-actions">${viewLink}</div>` : ''}
     </div>`;
   };
@@ -2597,7 +2807,11 @@ function renderCard(rows, attrs, resolved) {
     chipParts.push(`<span class="mo-card-chip mo-card-chip-warn">No matches at ${escapeHtml(resolved.agencyDropped)} — broadened to all agencies</span>`);
   }
   if (resolved.dateBroadened) {
-    chipParts.push(`<span class="mo-card-chip mo-card-chip-warn">No matches since ${escapeHtml(resolved.dateBroadened.original)} (USASpending data lags ~2 weeks) — broadened to ${escapeHtml(resolved.dateBroadened.broadenedTo)}</span>`);
+    if (resolved.dateBroadened.foundResults) {
+      chipParts.push(`<span class="mo-card-chip mo-card-chip-warn">No matches since ${escapeHtml(resolved.dateBroadened.original)} (USASpending data lags ~2 weeks) — broadened to ${escapeHtml(resolved.dateBroadened.broadenedTo)}</span>`);
+    } else {
+      chipParts.push(`<span class="mo-card-chip mo-card-chip-warn">No matches since ${escapeHtml(resolved.dateBroadened.original)} or even back to ${escapeHtml(resolved.dateBroadened.broadenedTo)} — USASpending data lag (~2 weeks) hasn't caught up yet</span>`);
+    }
   }
   if (chipParts.length) {
     const chips = $$('div', { class: 'mo-card-chips' });
@@ -2626,8 +2840,7 @@ function renderCard(rows, attrs, resolved) {
   // ── Auto-generated insight line ──
   // Two-sentence summary derived from the rows. First sentence: who dominates.
   // Second sentence: where to focus (expiring contracts).
-  // Production has this line and it's load-bearing — it's the headline of the
-  // card. The user's eye lands here, not on the prose above.
+  // Quieter typography (purple bar) carries the emphasis — no bolding inside.
   const insightBits = [];
   if (vendorEntries.length > 0 && total > 0) {
     const [topName, topAmount] = vendorEntries[0];
@@ -2783,10 +2996,18 @@ function renderCard(rows, attrs, resolved) {
     }
   }
 
+  // ── Follow-up pills ──
+  // Always land at the very BOTTOM of the card, after the SEC filings block.
+  // SEC fetch is async, so we have to chain pills onto its resolution. If
+  // there's no SEC fetch (sub flow, or no rows), inject immediately.
+  const agencyEntries = isSub ? [] : aggregateRowsBy(rows, isSub, 'agency');
+  const injectAtEnd = () =>
+    injectPills(card, rows, attrs, vendorEntries, agencyEntries, total, expiringCount);
+
   // ── SEC filings (async — appended below after fetch) ──
   if (!isSub && rows.length > 0) {
     loadSecFilings(rows).then(populated => {
-      if (!populated.length) return;
+      if (!populated.length) { injectAtEnd(); return; }
       const totalFilings = populated.reduce((s, v) => s + v.filings.length, 0);
       card.appendChild(compHead(
         'SEC filings',
@@ -2811,10 +3032,152 @@ function renderCard(rows, attrs, resolved) {
       }
       list.innerHTML = listHtml;
       card.appendChild(list);
-    }).catch(e => console.warn('[sec] failed', e));
+      injectAtEnd();
+    }).catch(e => {
+      console.warn('[sec] failed', e);
+      injectAtEnd();
+    });
+  } else {
+    // No SEC fetch path (subaward flow, or empty rows) — inject pills now
+    injectAtEnd();
   }
 
   return card;
+}
+
+// =============================================================================
+// FOLLOW-UP PILLS — generate suggested next queries from the rendered data
+// =============================================================================
+// Pure data-driven, no Gemini call. Looks at the card's shape and the user's
+// query (attrs) to suggest 3-4 angles they might want to explore next.
+// Click populates the composer rather than auto-submitting so the user can
+// tweak before sending — preserves agency.
+
+function buildPillsForCard(rows, attrs, vendorEntries, agencyEntries, total, expiringCount) {
+  if (!rows || rows.length === 0) return [];
+  const pills = [];
+  const seen = new Set();
+  const add = (q) => {
+    const norm = q.toLowerCase().trim();
+    if (!seen.has(norm)) { seen.add(norm); pills.push(q); }
+  };
+  // Short labels so pills don't blow out the row visually.
+  const shortV = (v) => v ? (VENDOR_SHORT_LABELS[v] || v.split(',')[0].trim().split(/\s+/).slice(0, 3).join(' ')) : '';
+  const shortA = (a) => a ? (AGENCY_SHORT_LABELS[a] || a.split(/\s+/).slice(0, 3).join(' ')) : '';
+
+  const isVendorQuery = !!attrs.recipient;
+  const isAgencyQuery = !!attrs.agency;
+  const topVendor = vendorEntries[0]?.[0];
+  const topAgency = agencyEntries[0]?.[0];
+  const topVendorPct = vendorEntries[0] && total > 0
+    ? vendorEntries[0][1] / total : 0;
+
+  // Comma-list recipient handling: when Mo packed multiple competitors into
+  // attrs.recipient ("JFrog, Snyk, Sonatype"), pills that embed the whole
+  // string break — subaward and recipient resolution can't parse it. Use
+  // the first listed vendor as the pill's recipient noun. The user's first
+  // name is usually their primary interest.
+  const recipientForPill = isVendorQuery
+    ? attrs.recipient.split(',')[0].trim()
+    : '';
+
+  // Pattern 1: vendor query → drill into top customer agency
+  // "AWS at DOD" with most volume at Army → "AWS at Army"
+  if (isVendorQuery && topAgency && agencyEntries.length >= 2 && shortA(topAgency) !== attrs.agency) {
+    add(`${recipientForPill} at ${shortA(topAgency)}`);
+  }
+
+  // Pattern 2: agency query with concentration → who else competes there
+  if (isAgencyQuery && !isVendorQuery && topVendor && topVendorPct >= 0.30) {
+    add(`competitors to ${shortV(topVendor)} at ${shortA(attrs.agency)}`);
+  }
+
+  // Pattern 3: subaward drill — only useful for prime queries
+  // (skip when user already asked the subaward question)
+  if (isVendorQuery && attrs.subawards !== 'true') {
+    add(`who does ${recipientForPill} sub to`);
+  }
+
+  // Pattern 4: expirations → recompete signal
+  if (expiringCount >= 3) {
+    if (isAgencyQuery) {
+      add(`what's expiring at ${shortA(attrs.agency)} in 90 days`);
+    } else if (isVendorQuery) {
+      add(`${recipientForPill} contracts expiring soon`);
+    }
+  }
+
+  // Subject for time-pivot pills. For vendor and agency queries, use the
+  // resolved short label. For keyword-only queries, use the first keyword
+  // from Mo's comma-list so the pill reads naturally ("jfrog lifetime"
+  // rather than "this market lifetime").
+  const keywordForPill = !isVendorQuery && !isAgencyQuery && attrs.keywords
+    ? `"${String(attrs.keywords).split(',')[0].trim()}"`
+    : null;
+  const pillSubject = isVendorQuery
+    ? recipientForPill
+    : isAgencyQuery
+    ? shortA(attrs.agency)
+    : keywordForPill;
+
+  // Pattern 5: time-window pivot. Skip entirely if we have no subject —
+  // a "this market lifetime" pill with no actual subject is gibberish.
+  if (pillSubject) {
+    if (attrs.since && attrs.until) {
+      // user explicitly narrowed → suggest widening
+      add(`${pillSubject} in fy26`);
+    } else if (attrs.since && !attrs.until) {
+      add(`${pillSubject} lifetime`);
+    } else if (!attrs.since && (isVendorQuery || isAgencyQuery || keywordForPill)) {
+      add(`${pillSubject} in past 90 days`);
+    }
+  }
+
+  // Pattern 6: fragmented market → name the long tail
+  if (vendorEntries.length >= 10 && total > 0) {
+    const top3Sum = vendorEntries.slice(0, 3).reduce((s, [, v]) => s + v, 0);
+    if (top3Sum / total < 0.30) {
+      add(`smallest vendors with >$10M${isAgencyQuery ? ' at ' + shortA(attrs.agency) : ''}`);
+    }
+  }
+
+  // Pattern 7: agency-only query → suggest a vendor angle
+  if (isAgencyQuery && !isVendorQuery && topVendor) {
+    add(`${shortV(topVendor)} contracts`);
+  }
+
+  return pills.slice(0, 4);
+}
+
+function injectPills(card, rows, attrs, vendorEntries, agencyEntries, total, expiringCount) {
+  const pills = buildPillsForCard(rows, attrs, vendorEntries, agencyEntries, total, expiringCount);
+  if (pills.length === 0) return;
+  const wrap = $$('div', { class: 'mo-pills' });
+  let html = '<span class="mo-pills-label">Try</span>';
+  for (const p of pills) {
+    html += `<button class="mo-pill" type="button" data-q="${escapeHtml(p)}">${escapeHtml(p)}</button>`;
+  }
+  wrap.innerHTML = html;
+  wrap.addEventListener('click', (e) => {
+    const btn = e.target.closest('.mo-pill');
+    if (!btn) return;
+    if (busy) return;  // don't fire while a query is in flight
+    const q = btn.dataset.q;
+    const $input = document.getElementById('input');
+    if ($input) $input.value = '';
+    hideGreeting();
+    askMo(q);
+  });
+  // Insert as a SIBLING after the card, not a child. Pills float in the
+  // conversation flow between this turn's card and whatever comes next,
+  // matching the greeting examples' floating-in-page treatment.
+  if (card.parentNode) {
+    card.parentNode.insertBefore(wrap, card.nextSibling);
+  } else {
+    // Card hasn't been mounted yet (shouldn't happen given current call
+    // sites, but be defensive). Stash for later mount.
+    card._pendingPills = wrap;
+  }
 }
 
 // =============================================================================
@@ -2829,11 +3192,9 @@ function renderUserTurn(text) {
 }
 
 function renderMoTurn() {
-  // Production layout: face sits in a HEADER row above the prose, not beside.
-  // This gives the prose full width and the calm centered look that minimo
-  // was missing when the face was a left sidebar.
-  //
-  // Mo's face is static — always smiling, no state transitions during stream
+  // Face sits in a HEADER row above the prose, not beside. This gives the
+  // prose full width and a calm centered look. Face is static — always
+  // smiling, no state transitions during stream
   // or on error. The loading card and progressive prose are enough to signal
   // activity; an animated face was redundant.
   const turn = $$('div', { class: 'mo-turn mo-turn-mo' });
@@ -2949,16 +3310,32 @@ async function askMo(question) {
           // Collapse the tag out of fullText so post-tag prose continues seamlessly
           fullText = upToTag + fullText.slice(tag.end);
 
+          // Diagnostic: log what Mo emitted and what came back. F12 console
+          // can compare these across turns to spot Gemini carrying filters
+          // forward from earlier turns or emitting unexpected attrs.
+          console.log('[mo:tag]', JSON.stringify(tag.attrs));
+
           loadingEl = renderLoadingCard();
           moTurn.insertEl(loadingEl);
 
           pull(tag.attrs)
             .then(({ rows, resolved, error }) => {
+              console.log('[mo:result]', {
+                rows: rows.length,
+                total: rows.reduce((s, r) => s + (Number(r['Award Amount']) || 0), 0),
+                resolved,
+                error,
+              });
               const cardEl = renderCard(rows, tag.attrs, resolved);
               if (loadingEl && loadingEl.parentNode) {
                 loadingEl.parentNode.replaceChild(cardEl, loadingEl);
               } else {
                 moTurn.insertEl(cardEl);
+              }
+              // Drain pending pills (stashed when card wasn't mounted yet)
+              if (cardEl._pendingPills && cardEl.parentNode) {
+                cardEl.parentNode.insertBefore(cardEl._pendingPills, cardEl.nextSibling);
+                delete cardEl._pendingPills;
               }
               if (error) moTurn.setError(error);
             })
@@ -2972,6 +3349,17 @@ async function askMo(question) {
             const broken = findBrokenTagStart(fullText);
             if (broken >= 0) suppressFrom = broken;
           }
+        }
+      } else {
+        // First tag already fired. Mo sometimes emits MORE tags after the
+        // first one (e.g. "compare X to Y" elicits two <data> tags). We can
+        // only render one card per turn, so strip any subsequent tags from
+        // fullText before they bleed into prose. The user already has their
+        // card; the second tag's body would just appear as raw "data ... />"
+        // text otherwise.
+        const extraTag = findDataTag(fullText);
+        if (extraTag) {
+          fullText = fullText.slice(0, extraTag.start) + fullText.slice(extraTag.end);
         }
       }
 
