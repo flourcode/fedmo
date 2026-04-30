@@ -1311,14 +1311,18 @@ function buildBaseFilters(attrs, agencyFilter) {
 // early when threshold is met or when a page returns fewer rows than
 // requested (signal that we've exhausted available data).
 //
-// Cost: most vendors (AWS, Pure Storage, etc.) take 1 call. Long-tail
-// historical vendors take 2-3 calls. Capped at 3 to avoid runaway.
+// Tradeoff: latency vs completeness. Earlier we tried 60-active threshold
+// + 3 pages — gave 49-86 active rows but cost 2.4s on the worst vendors,
+// which was unacceptable. Now: 30-active threshold + 2-page cap means
+//   - Most vendors (AWS, RTX, named queries with date filters): 1 call, ~800ms
+//   - Long-tail vendors (GDIT, Leidos): 2 calls, ~1.6s, ~40 active rows
+//   - Never more than 2 calls, ever.
 //
 // Sub flow doesn't go through this path — subaward rows have action dates
 // not PoP ends, so the "expired" concept doesn't apply.
 const PAGE_SIZE = 100;
-const MAX_PAGES = 3;
-const MIN_ACTIVE = 60;
+const MAX_PAGES = 2;
+const MIN_ACTIVE = 30;
 
 async function searchAwards(filters, isSub) {
   if (isSub) {
