@@ -2312,6 +2312,19 @@ function renderSubawardRows(card, rows, attrs, resolved) {
 function renderCard(rows, attrs, resolved) {
   const card = $$('div', { class: 'mo-card' });
   const isSub = attrs.subawards === 'true';
+
+  // Drop expired contracts up-front for prime queries. They're done — no
+  // sales motion to be had. Their inclusion was inflating totals, "Top 3
+  // share" denominators, vendor counts, treemap cells, and every other
+  // computed signal. Sub flow doesn't get this filter because subaward
+  // rows only have an action date (not a PoP end), so "expired" has no
+  // meaning there.
+  const rawRowCount = rows.length;
+  if (!isSub) {
+    rows = rows.filter(r => computeStatus(r) !== 'expired');
+  }
+  const expiredFiltered = rawRowCount - rows.length;
+
   // Sub flow uses _amount; prime flow uses Award Amount
   const total = rows.reduce((s, r) => {
     if (isSub) return s + (Number(r._amount) || 0);
@@ -2439,7 +2452,10 @@ function renderCard(rows, attrs, resolved) {
   card.appendChild(head);
 
   if (rows.length === 0) {
-    card.appendChild($$('div', { class: 'mo-card-empty', text: 'No rows. Try widening the date or dollar window, or rephrasing.' }));
+    const msg = expiredFiltered > 0
+      ? `All ${expiredFiltered} ${pluralize(expiredFiltered, 'contract')} the API returned have already expired — nothing active or upcoming. Try a different vendor or widen the time window.`
+      : 'No rows. Try widening the date or dollar window, or rephrasing.';
+    card.appendChild($$('div', { class: 'mo-card-empty', text: msg }));
     return card;
   }
 
@@ -2525,9 +2541,15 @@ function renderCard(rows, attrs, resolved) {
     renderContractRows(card, rows);
 
     // Cumulative-amount caveat (only for prime-award rows; subawards are
-    // per-action so the caveat doesn't apply)
-    card.appendChild($$('div', { class: 'mo-amount-note',
-      text: 'Amounts are USASpending Award Amount — cumulative obligated value over a contract\'s lifetime, not a single new obligation.' }));
+    // per-action so the caveat doesn't apply). Append a transparency note
+    // about the expired filter so the user knows what was dropped.
+    const noteParts = [
+      "Amounts are USASpending Award Amount — cumulative obligated value over a contract's lifetime, not a single new obligation.",
+    ];
+    if (expiredFiltered > 0) {
+      noteParts.push(`Hiding ${expiredFiltered} expired ${pluralize(expiredFiltered, 'contract')}.`);
+    }
+    card.appendChild($$('div', { class: 'mo-amount-note', text: noteParts.join(' ') }));
   }
 
   // ── State map ──
