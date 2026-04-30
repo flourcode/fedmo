@@ -882,29 +882,13 @@ a:hover { text-decoration: underline; }
 </head>
 <body>
 
-<!-- Mo's face sprite. Three expressions: open (smile), watch (working), locked (error).
-     Same green head, only the mouth changes. -->
+<!-- Mo's face sprite. One expression — Mo always smiles. -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <symbol id="icon-face-open" viewBox="0 0 40 40">
     <circle cx="20" cy="20" r="20" fill="#7CB583"/>
     <circle cx="14" cy="16" r="2.4" fill="#2D5033"/>
     <circle cx="26" cy="16" r="2.4" fill="#2D5033"/>
     <path d="M12 24 Q20 31 28 24" fill="none" stroke="#2D5033" stroke-width="2.8" stroke-linecap="round"/>
-  </symbol>
-  <symbol id="icon-face-watch" viewBox="0 0 40 40">
-    <!-- "Considering" face: eyes glance up-and-out (away from straight-on),
-         small upturned mouth. Reads as "thinking about it" rather than the
-         deadpan flat-line mouth that previously meant "watch". -->
-    <circle cx="20" cy="20" r="20" fill="#7CB583"/>
-    <circle cx="15" cy="14" r="2.4" fill="#2D5033"/>
-    <circle cx="27" cy="14" r="2.4" fill="#2D5033"/>
-    <path d="M14 25 Q20 27 26 25" fill="none" stroke="#2D5033" stroke-width="2.4" stroke-linecap="round"/>
-  </symbol>
-  <symbol id="icon-face-locked" viewBox="0 0 40 40">
-    <circle cx="20" cy="20" r="20" fill="#7CB583"/>
-    <circle cx="14" cy="16" r="2.4" fill="#2D5033"/>
-    <circle cx="26" cy="16" r="2.4" fill="#2D5033"/>
-    <path d="M12 28 Q20 22 28 28" fill="none" stroke="#2D5033" stroke-width="2.8" stroke-linecap="round"/>
   </symbol>
 </svg>
 
@@ -1017,6 +1001,21 @@ const fmtMoney = (n) => {
   if (x >= 1e3) return '$' + (x / 1e3).toFixed(0) + 'K';
   return '$' + x.toFixed(0);
 };
+
+// Pluralize: pluralize(1, 'row') === 'row', pluralize(3, 'row') === 'rows'.
+// Optional irregular plural: pluralize(2, 'sub', 'subs') — keeps usage sites
+// shorter than `${n} ${n === 1 ? 'sub' : 'subs'}`.
+const pluralize = (n, singular, plural = singular + 's') =>
+  n === 1 ? singular : plural;
+
+// Standard "component header" — title on the left, meta (count/window) on the
+// right. Used above each card section: contracts list, treemap, statemap,
+// SEC filings, etc. Returns the wrapper div ready to append.
+const compHead = (title, meta) =>
+  $$('div', { class: 'mo-comp-head' },
+    $$('div', { class: 'mo-comp-title', text: title }),
+    $$('div', { class: 'mo-comp-meta', text: meta }),
+  );
 
 // =============================================================================
 // TAG PARSER (hardened)
@@ -1578,23 +1577,12 @@ const TREEMAP_COLORS = [
 ];
 const TREEMAP_OTHER_COLOR = '#E3E3F1';
 
-// Aggregate rows for the treemap by a chosen dimension.
-//
-// Cell selection strategy: include every entity whose share is ≥3% of the
-// total (cells smaller than ~3% are too narrow to label readably anyway), up
-// to a maximum of 12 cells. Bucket the rest into "Other" only if there are
-// 2+ tiny entities to bucket — a single sub-3% leftover gets its own cell
-// instead of an opaque "Other (1)".
-//
-// For Pure Storage with 36 vendors where #1 is 19% and #10 is ~3%, this
-// surfaces 10 named vendors instead of the previous arbitrary top-6.
-// For AWS at DoD with only 4 vendors total, all 4 show — no Other.
-//
-// Dimensions:
-//   'vendor' — recipient name (default for keyword/reseller queries)
-//   'agency' — awarding (sub-)agency (default for single-vendor queries)
-function buildTreemapItems(rows, isSub, dimension) {
-  const map = {};
+// Aggregate rows into [name, amount] entries sorted descending by amount.
+// Single source of truth for both the treemap (buildTreemapItems) and the
+// card's vendor/concentration stats. Picks the right field set based on
+// flow (sub vs prime) and dimension (vendor vs agency).
+function aggregateRowsBy(rows, isSub, dimension) {
+  const map = new Map();
   for (const r of rows) {
     let name, amt;
     if (isSub) {
@@ -1607,9 +1595,24 @@ function buildTreemapItems(rows, isSub, dimension) {
       name = r['Recipient Name'] || '(unknown)';
       amt = Number(r['Award Amount']) || 0;
     }
-    map[name] = (map[name] || 0) + amt;
+    map.set(name, (map.get(name) || 0) + amt);
   }
-  const sorted = Object.entries(map).sort((a, b) => b[1] - a[1]);
+  return [...map.entries()].sort((a, b) => b[1] - a[1]);
+}
+
+// Aggregate rows for the treemap and pack into cells.
+//
+// Cell selection strategy: include every entity whose share is ≥3% of the
+// total (cells smaller than ~3% are too narrow to label readably anyway), up
+// to a maximum of 12 cells. Bucket the rest into "Other" only if there are
+// 2+ tiny entities to bucket — a single sub-3% leftover gets its own cell
+// instead of an opaque "Other (1)".
+//
+// For Pure Storage with 36 vendors where #1 is 19% and #10 is ~3%, this
+// surfaces 10 named vendors instead of the previous arbitrary top-6.
+// For AWS at DoD with only 4 vendors total, all 4 show — no Other.
+function buildTreemapItems(rows, isSub, dimension) {
+  const sorted = aggregateRowsBy(rows, isSub, dimension);
   const total = sorted.reduce((s, [, v]) => s + v, 0);
   if (total <= 0) return [];
 
@@ -2078,10 +2081,7 @@ function sortRows(rows, sortKey) {
 }
 
 function renderContractRows(card, rows) {
-  card.appendChild($$('div', { class: 'mo-comp-head' },
-    $$('div', { class: 'mo-comp-title', text: 'Contracts' }),
-    $$('div', { class: 'mo-comp-meta', text: `${rows.length} rows` }),
-  ));
+  card.appendChild(compHead('Contracts', `${rows.length} rows`));
 
   // Sort selector — client-side re-sort, no re-fetch
   const sortBar = $$('div', { class: 'mo-sort-bar' });
@@ -2229,9 +2229,9 @@ function renderSubawardRows(card, rows, attrs, resolved) {
 
   const primeLabel = resolved.recipientResolved || attrs.recipient || 'prime';
 
-  card.appendChild($$('div', { class: 'mo-comp-head' },
-    $$('div', { class: 'mo-comp-title', text: `Who ${primeLabel} subs to` }),
-    $$('div', { class: 'mo-comp-meta', text: `${aggregated.length} unique subs · ${rows.length} subaward actions` }),
+  card.appendChild(compHead(
+    `Who ${primeLabel} subs to`,
+    `${aggregated.length} unique ${pluralize(aggregated.length, 'sub')} · ${rows.length} subaward ${pluralize(rows.length, 'action')}`,
   ));
 
   const list = $$('div', { class: 'mo-list' });
@@ -2252,7 +2252,7 @@ function renderSubawardRows(card, rows, attrs, resolved) {
         </div>`
       ).join('');
       const moreActions = award.actions.length > 5
-        ? `<div class="mo-sub-detail-meta">+ ${award.actions.length - 5} more action${award.actions.length - 5 === 1 ? '' : 's'}</div>`
+        ? `<div class="mo-sub-detail-meta">+ ${award.actions.length - 5} more ${pluralize(award.actions.length - 5, 'action')}</div>`
         : '';
       const agencyLine = award.agency
         ? `<div class="mo-sub-detail-meta">Funded by: ${escapeHtml(award.agency)}</div>`
@@ -2272,7 +2272,7 @@ function renderSubawardRows(card, rows, attrs, resolved) {
         <span class="mo-row-name" title="${escapeHtml(sub.name)}">${escapeHtml(sub.name)}</span>
         <span class="mo-row-amount">${fmtMoney(sub.total)}</span>
       </div>
-      <div class="mo-row-meta">${sub.count} subaward action${sub.count === 1 ? '' : 's'} on ${awards.length} prime award${awards.length === 1 ? '' : 's'}</div>
+      <div class="mo-row-meta">${sub.count} subaward ${pluralize(sub.count, 'action')} on ${awards.length} prime ${pluralize(awards.length, 'award')}</div>
       <div class="mo-sub-detail">${detailHtml}</div>
     </div>`;
   };
@@ -2372,15 +2372,10 @@ function renderCard(rows, attrs, resolved) {
   }
 
   // ── Pre-compute aggregates used by both the insight line and the stats ──
-  const amountField = isSub ? '_amount' : 'Award Amount';
-  const nameField = isSub ? '_subName' : 'Recipient Name';
-  const byVendor = new Map();
-  for (const r of rows) {
-    const n = r[nameField] || '(unknown)';
-    byVendor.set(n, (byVendor.get(n) || 0) + (Number(r[amountField]) || 0));
-  }
-  const vendorEntries = [...byVendor.entries()].sort((a, b) => b[1] - a[1]);
-  const vendorCount = byVendor.size;
+  // Always vendor-dimension here, regardless of which view the treemap shows
+  // by default — concentration ("top 3 share") is meaningful per-vendor.
+  const vendorEntries = aggregateRowsBy(rows, isSub, 'vendor');
+  const vendorCount = vendorEntries.length;
   // Top-3 share is a stronger oligopoly signal than top-1 — federal market
   // analysis cares about the top of the distribution, not just the leader.
   const top3Sum = vendorEntries.slice(0, 3).reduce((s, [, v]) => s + v, 0);
@@ -2414,7 +2409,7 @@ function renderCard(rows, attrs, resolved) {
     }
   }
   if (expiringCount > 0) {
-    insightBits.push(`${expiringCount} contract${expiringCount === 1 ? '' : 's'} expiring in the next 90 days.`);
+    insightBits.push(`${expiringCount} ${pluralize(expiringCount, 'contract')} expiring in the next 90 days.`);
   }
   if (insightBits.length > 0) {
     head.appendChild($$('div', { class: 'mo-card-insight', text: insightBits.join(' ') }));
@@ -2540,10 +2535,7 @@ function renderCard(rows, attrs, resolved) {
     const geo = buildGeography(rows);
     if (Object.keys(geo).length > 0) {
       const stateCount = Object.keys(geo).length;
-      card.appendChild($$('div', { class: 'mo-comp-head' },
-        $$('div', { class: 'mo-comp-title', text: 'Place of performance' }),
-        $$('div', { class: 'mo-comp-meta', text: `${stateCount} state${stateCount === 1 ? '' : 's'}` }),
-      ));
+      card.appendChild(compHead('Place of performance', `${stateCount} ${pluralize(stateCount, 'state')}`));
       const smHost = $$('div', { class: 'mo-statemap-host' });
       card.appendChild(smHost);
       requestAnimationFrame(() => renderStateMapInto(smHost, geo));
@@ -2555,10 +2547,9 @@ function renderCard(rows, attrs, resolved) {
     loadSecFilings(rows).then(populated => {
       if (!populated.length) return;
       const totalFilings = populated.reduce((s, v) => s + v.filings.length, 0);
-      card.appendChild($$('div', { class: 'mo-comp-head' },
-        $$('div', { class: 'mo-comp-title', text: 'SEC filings' }),
-        $$('div', { class: 'mo-comp-meta',
-          text: `${populated.length} public prime${populated.length === 1 ? '' : 's'} · ${totalFilings} recent filing${totalFilings === 1 ? '' : 's'}` }),
+      card.appendChild(compHead(
+        'SEC filings',
+        `${populated.length} public ${pluralize(populated.length, 'prime')} · ${totalFilings} recent ${pluralize(totalFilings, 'filing')}`,
       ));
       const list = $$('div', { class: 'mo-sec-list' });
       let listHtml = '';
@@ -2600,13 +2591,17 @@ function renderMoTurn() {
   // Production layout: face sits in a HEADER row above the prose, not beside.
   // This gives the prose full width and the calm centered look that minimo
   // was missing when the face was a left sidebar.
+  //
+  // Mo's face is static — always smiling, no state transitions during stream
+  // or on error. The loading card and progressive prose are enough to signal
+  // activity; an animated face was redundant.
   const turn = $$('div', { class: 'mo-turn mo-turn-mo' });
 
   const header = $$('div', { class: 'mo-turn-mo-header' });
   const faceEl = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   faceEl.setAttribute('class', 'mo-face');
   faceEl.setAttribute('viewBox', '0 0 40 40');
-  faceEl.innerHTML = '<use href="#icon-face-watch"/>';
+  faceEl.innerHTML = '<use href="#icon-face-open"/>';
   header.appendChild(faceEl);
   header.appendChild($$('span', { class: 'mo-turn-mo-meta', text: 'Mo · just now' }));
   turn.appendChild(header);
@@ -2617,10 +2612,6 @@ function renderMoTurn() {
   $conv.appendChild(turn);
   scrollBottom();
 
-  const setFace = (state) => {
-    const useEl = faceEl.querySelector('use');
-    if (useEl) useEl.setAttribute('href', `#icon-face-${state}`);
-  };
   return {
     appendText: (t) => {
       // Strip leading whitespace from the very first chunk. Without this,
@@ -2637,8 +2628,8 @@ function renderMoTurn() {
       scrollBottom();
     },
     insertEl: (el) => { turn.appendChild(el); scrollBottom(); },
-    setError: (msg) => { setFace('locked'); turn.appendChild($$('div', { class: 'mo-err', text: msg })); },
-    done: () => setFace('open'),
+    setError: (msg) => { turn.appendChild($$('div', { class: 'mo-err', text: msg })); },
+    done: () => {},
     _shown: 0,
   };
 }
@@ -2819,27 +2810,24 @@ document.getElementById('composer').addEventListener('submit', (e) => {
   askMo(q);
 });
 
-// Re-render treemaps and state maps when the container resizes. Without this,
-// the SVG viewBox is locked to the width measured at first render — a later
-// container-size change (devtools resize, orientation flip, sidebar toggle)
-// stretches text horizontally because preserveAspectRatio="none" scales the
-// viewBox to fill the actual rendered box. Debounced so desktop drag-resize
-// doesn't churn the DOM. Each card stashes its own re-render functions on
-// the host node so we can call them all on resize.
+// Resize-driven re-render. Treemaps and state maps lock their layout to the
+// container width measured at first render — without this listener, a viewport
+// change (orientation flip, sidebar toggle) stretches text horizontally
+// because preserveAspectRatio="none" scales the SVG non-uniformly. Stash the
+// render input on the host node, re-call render on resize.
+const reRenderHostsBy = (selector, attr, render) => {
+  document.querySelectorAll(`${selector}[${attr}]`).forEach(host => {
+    const data = host.getAttribute(attr);
+    if (!data) return;
+    try { render(host, JSON.parse(data)); } catch {}
+  });
+};
 let _resizeTimer = null;
 window.addEventListener('resize', () => {
   clearTimeout(_resizeTimer);
   _resizeTimer = setTimeout(() => {
-    document.querySelectorAll('.mo-treemap-host[data-tm-items]').forEach(host => {
-      const itemsStr = host.getAttribute('data-tm-items');
-      if (!itemsStr) return;
-      try { renderTreemapInto(host, JSON.parse(itemsStr)); } catch {}
-    });
-    document.querySelectorAll('.mo-statemap-host[data-sm-geo]').forEach(host => {
-      const geoStr = host.getAttribute('data-sm-geo');
-      if (!geoStr) return;
-      try { renderStateMapInto(host, JSON.parse(geoStr)); } catch {}
-    });
+    reRenderHostsBy('.mo-treemap-host', 'data-tm-items', renderTreemapInto);
+    reRenderHostsBy('.mo-statemap-host', 'data-sm-geo', renderStateMapInto);
   }, 150);
 });
 </script>
