@@ -2567,6 +2567,58 @@ function detectVehicle(award) {
   return null;
 }
 
+// Detect interagency transfers (IGTs) — rows where the "recipient" is
+// actually another government agency, not a private vendor. Examples seen
+// in the wild: a Navy contract whose recipient is "ENERGY, DEPARTMENT OF"
+// (Naval Reactors program), NASA contracts to "RUSSIA SPACE AGENCY" (ISS
+// partnership), or "SMITHSONIAN INSTITUTION". These are real money but
+// not opportunities a private seller can compete for. We don't filter
+// them — we just label them inline so the user immediately understands
+// why the recipient name looks like an agency.
+//
+// Conservative: only fires on patterns that unambiguously match government
+// entities, never on real companies (a few real vendors like "UNITED STATES
+// STEEL CORPORATION" trip naive "United States" matches, so we tighten).
+const IGT_KNOWN = new Set([
+  'GENERAL SERVICES ADMINISTRATION',
+  'NATIONAL AERONAUTICS AND SPACE ADMINISTRATION',
+  'CENTRAL INTELLIGENCE AGENCY',
+  'NATIONAL SECURITY AGENCY',
+  'FEDERAL BUREAU OF INVESTIGATION',
+  'UNITED STATES POSTAL SERVICE',
+  'TENNESSEE VALLEY AUTHORITY',
+  'SMITHSONIAN INSTITUTION',
+  'GOVERNMENT PUBLISHING OFFICE',
+  'SOCIAL SECURITY ADMINISTRATION',
+  'ENVIRONMENTAL PROTECTION AGENCY',
+  'FEDERAL RESERVE SYSTEM',
+]);
+
+function detectIGT(award) {
+  const n = String(award['Recipient Name'] || '').toUpperCase().trim();
+  if (!n) return null;
+  // "ENERGY, DEPARTMENT OF" / "DEPARTMENT OF VETERANS AFFAIRS"
+  if (/^DEPARTMENT OF /.test(n)) return 'Interagency transfer';
+  if (/, DEPARTMENT OF$/.test(n)) return 'Interagency transfer';
+  // Short names ending in agency-shaped words ("RUSSIA SPACE AGENCY",
+  // "DEFENSE LOGISTICS AGENCY"). Length-bounded so we don't catch real
+  // vendors with "Services" / "Solutions" / "Group" in their name.
+  if (n.split(' ').length <= 8 && /\b(AGENCY|ADMINISTRATION|COMMAND|BUREAU|DIRECTORATE)$/.test(n)) {
+    return 'Interagency transfer';
+  }
+  if (IGT_KNOWN.has(n)) return 'Interagency transfer';
+  // Military service formal names ("ARMY, DEPT OF", short form)
+  if (/^(ARMY|NAVY|AIR FORCE|MARINE CORPS|COAST GUARD|SPACE FORCE)\b/.test(n) && n.length < 40) {
+    return 'Interagency transfer';
+  }
+  // "UNITED STATES <governmental noun>" — tightened to avoid catching
+  // real companies like "UNITED STATES STEEL CORPORATION"
+  if (/^UNITED STATES (DEPARTMENT|AGENCY|ADMINISTRATION|COMMAND|BUREAU|GOVERNMENT|TREASURY|MINT|POSTAL)/.test(n)) {
+    return 'Interagency transfer';
+  }
+  return null;
+}
+
 // =============================================================================
 // ROW RENDERERS
 // =============================================================================
@@ -2713,9 +2765,10 @@ function renderContractRows(card, rows) {
     const internalId = r.generated_internal_id || '';
     const viewUrl = internalId ? `https://www.usaspending.gov/award/${internalId}` : '';
     const vehicle = detectVehicle(r);
+    const igt = detectIGT(r);
 
-    // First meta line: agency · Award ID · vehicle (if detected)
-    const metaLine1Parts = [agency, awardId ? `ID: ${awardId}` : '', vehicle].filter(Boolean);
+    // First meta line: agency · Award ID · vehicle · IGT (when each present)
+    const metaLine1Parts = [agency, awardId ? `ID: ${awardId}` : '', vehicle, igt].filter(Boolean);
     // Second meta line: PoP dates · term length (so the user can spot 10-year
     // ceiling vehicles vs transactional buys)
     const popLine = [pop ? `PoP: ${pop}` : '', term].filter(Boolean).join(' · ');
