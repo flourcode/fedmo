@@ -1020,7 +1020,7 @@ a:hover { text-decoration: underline; }
   <div class="mo-modal-body">
     <p>Tell Mo what you sell or which territory you cover. Mo pulls the data, explains the situation in a few sentences, and tells you what to do next.</p>
     <p>Every number Mo cites comes from USASpending and you can verify each contract on usaspending.gov.</p>
-    <p>Ask about any vendor, agency, or topic at any time. Pivot freely.</p>
+    <p>Ask about any vendor, agency, or topic at any time. Pivot freely. Talking about AWS at DoD and want to jump to textile suppliers at NASA? Just ask. Mo treats each question on its own terms and only carries context when you explicitly refer back to something ("what about VA", "just Navy").</p>
     <div class="mo-modal-actions">
       <a class="mo-modal-btn" href="https://calendly.com/markflournoy/chat-with-mark" target="_blank" rel="noopener" id="btnAboutCalendly">Chat with Mark</a>
     </div>
@@ -1194,10 +1194,15 @@ const AWARD_TYPE_GROUPS = {
 // `Place of Performance State Code` is what powers the state map. Without
 // it in FIELDS, USASpending returns rows but no state info, and the map
 // silently shows nothing.
+// `Awarding Office` is requested so we can substitute it for Sub Agency on
+// subtier-filtered queries. When the user asks "AWS at Navy", USASpending
+// returns rows where Agency == Sub Agency (both "Department of the Navy")
+// because the filter pinned the subtier. Office gives us NAVSEA, NAVAIR,
+// BUMED, etc. — meaningful subdivision when Sub Agency has flattened.
 const FIELDS = [
   'Award ID', 'Recipient Name', 'Award Amount', 'Description',
   'Start Date', 'End Date',
-  'Awarding Agency', 'Awarding Sub Agency',
+  'Awarding Agency', 'Awarding Sub Agency', 'Awarding Office',
   'Place of Performance State Code',
   // generated_internal_id powers the per-row View link to usaspending.gov
   'generated_internal_id',
@@ -1933,7 +1938,15 @@ function aggregateRowsBy(rows, isSub, dimension) {
       name = r._subName || '(unknown sub)';
       amt = Number(r._amount) || 0;
     } else if (dimension === 'agency') {
-      name = r['Awarding Sub Agency'] || r['Awarding Agency'] || '(unknown)';
+      // When subagency has bottomed out (rows filtered to a subtier so
+      // USASpending returns Agency == Sub Agency), substitute Office so the
+      // treemap can show NAVSEA/NAVAIR/AFLCMC-level cells instead of one
+      // giant "Department of the Navy" cell.
+      const agency = r['Awarding Agency'] || '';
+      const sub = r['Awarding Sub Agency'] || agency;
+      const office = r['Awarding Office'] || '';
+      const flattened = agency.trim().toUpperCase() === sub.trim().toUpperCase();
+      name = (flattened && office) ? office : (sub || '(unknown)');
       amt = Number(r['Award Amount']) || 0;
     } else {
       name = r['Recipient Name'] || '(unknown)';
@@ -2515,6 +2528,46 @@ async function loadSecFilings(rows) {
 }
 
 // =============================================================================
+// VEHICLE DETECTION
+// =============================================================================
+//
+// Map of contract ID prefixes to their parent IDIQ/GWAC vehicles. When a
+// contract's Award ID starts with "HC1047" we know it's a JWCC task order;
+// "GS00Q" is CIO-SP4, etc. This is genuinely useful for sellers — knowing
+// a row lives on a specific vehicle tells them the procurement path,
+// what other primes have a seat, and how to get on for next time.
+//
+// Prefix matching tries longest-first (7 chars down to 4) so a 7-char
+// match wins over a 4-char match if both are in the table.
+const VEHICLE_MAP = {
+  'NNG':       'SEWP V',
+  'GS00Q':     'CIO-SP4',
+  'HHSN':      'CIO-SP3',
+  'GS35F':     'GSA MAS',
+  'GS00F':     'GSA MAS',
+  '47QT':      'GSA MAS',
+  '47QR':      'OASIS+',
+  '47QF':      'OASIS+',
+  'W91RUS':    'ITES-3S',
+  'W52P1J':    'ITES',
+  'N0017':     'SeaPort-NxG',
+  'FA8771':    'NETCENTS-2',
+  'HC1028':    'ENCORE III',
+  'HC1047':    'JWCC',
+  'HSHQDC':    'EAGLE II',
+};
+
+function detectVehicle(award) {
+  const id = String(award['Award ID'] || '').toUpperCase();
+  if (!id) return null;
+  for (let len = 7; len >= 4; len--) {
+    const prefix = id.substring(0, len);
+    if (VEHICLE_MAP[prefix]) return VEHICLE_MAP[prefix];
+  }
+  return null;
+}
+
+// =============================================================================
 // ROW RENDERERS
 // =============================================================================
 //
@@ -2631,7 +2684,15 @@ function renderContractRows(card, rows) {
     const recipient = r['Recipient Name'] || '—';
     const amount = r['Award Amount'];
     const desc = r['Description'] || '';
-    const agency = r['Awarding Sub Agency'] || r['Awarding Agency'] || '';
+    // Same Office-fallback logic as aggregateRowsBy. Subtier queries flatten
+    // Agency==Sub Agency; substitute Office so the row meta reads "NAVSEA"
+    // instead of "Department of the Navy" for a Navy-pinned query.
+    const agencyTop = r['Awarding Agency'] || '';
+    const subAgency = r['Awarding Sub Agency'] || agencyTop;
+    const office = r['Awarding Office'] || '';
+    const agency = (agencyTop.trim().toUpperCase() === subAgency.trim().toUpperCase() && office)
+      ? office
+      : (subAgency || agencyTop);
     const awardId = r['Award ID'] || '';
     const status = computeStatus(r);
     const pop = formatPoP(r);
@@ -2651,9 +2712,10 @@ function renderContractRows(card, rows) {
 
     const internalId = r.generated_internal_id || '';
     const viewUrl = internalId ? `https://www.usaspending.gov/award/${internalId}` : '';
+    const vehicle = detectVehicle(r);
 
-    // First meta line: agency · Award ID
-    const metaLine1Parts = [agency, awardId ? `ID: ${awardId}` : ''].filter(Boolean);
+    // First meta line: agency · Award ID · vehicle (if detected)
+    const metaLine1Parts = [agency, awardId ? `ID: ${awardId}` : '', vehicle].filter(Boolean);
     // Second meta line: PoP dates · term length (so the user can spot 10-year
     // ceiling vehicles vs transactional buys)
     const popLine = [pop ? `PoP: ${pop}` : '', term].filter(Boolean).join(' · ');
@@ -3010,8 +3072,8 @@ function renderCard(rows, attrs, resolved) {
 
   if (rows.length === 0) {
     const msg = isSub
-      ? 'No subaward actions returned. Try a different prime or widen the time window.'
-      : 'No active contracts. The vendor may be winding down or your filters may be too narrow.';
+      ? "No subaward actions came back for this one. Try a different prime, widen the time window, or check whether the prime files subawards at all (some don't)."
+      : "Nothing matched these filters. Could be the data lag (USASpending runs about 2 weeks behind), or the filters might be a touch narrow. Try a wider date window or drop one constraint.";
     card.appendChild($$('div', { class: 'mo-card-empty', text: msg }));
     return card;
   }
@@ -3054,7 +3116,16 @@ function renderCard(rows, attrs, resolved) {
         label = 'Top subawardees';
         meta = `top ${namedCellCount} of ${uniqueCount} subs`;
       } else if (dimension === 'agency') {
-        uniqueCount = new Set(rows.map(r => r['Awarding Sub Agency'] || r['Awarding Agency']).filter(Boolean)).size;
+        // Use the same Office-fallback logic as aggregateRowsBy so the
+        // count matches the cells the treemap actually shows.
+        uniqueCount = new Set(rows.map(r => {
+          const agencyTop = r['Awarding Agency'] || '';
+          const subAgency = r['Awarding Sub Agency'] || agencyTop;
+          const office = r['Awarding Office'] || '';
+          return (agencyTop.trim().toUpperCase() === subAgency.trim().toUpperCase() && office)
+            ? office
+            : subAgency;
+        }).filter(Boolean)).size;
         label = 'Where the money is';
         meta = `top ${namedCellCount} of ${uniqueCount} agencies`;
       } else {
@@ -3501,6 +3572,12 @@ async function askMo(question) {
     // Stream done. If we suppressed prose because of a broken tag, leave it
     // suppressed — it's garbage.
     history.push({ role: 'model', parts: [{ text: fullText }] });
+    // Cap history at last 4 turns (2 user + 2 model pairs). Long histories
+    // anchor Mo to old topics when the user pivots — "AWS at DoD" then
+    // "textile suppliers at NASA" should not still carry AWS context.
+    // Genuine refinements ("what about VA", "just Navy") still work because
+    // the previous turn is preserved.
+    if (history.length > 4) history.splice(0, history.length - 4);
     moTurn.done();
   } catch (err) {
     if (loadingEl && loadingEl.parentNode) loadingEl.remove();
