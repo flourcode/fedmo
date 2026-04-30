@@ -1082,8 +1082,6 @@ const SUB_FIELDS = [
   'Sub-Award Date', 'Prime Recipient Name', 'Awarding Agency', 'Awarding Sub Agency',
 ];
 
-const PSC_TIERS = { D: 'Service', R: 'Service', '7': 'Product', A: 'Research and Development', Y: 'Construction' };
-
 async function resolveAgency(name) {
   try {
     const r = await fetch(`${USASPENDING}/autocomplete/awarding_agency/`, {
@@ -1239,16 +1237,31 @@ async function resolveRecipient(name) {
   } catch { return null; }
 }
 
+// USASpending's PSC filter only accepts these Tier1 values. Anything else
+// triggers a 422. We accept Mo's psc attribute loosely and sanitize here.
+const VALID_PSC_TIERS = new Set(['Research and Development', 'Service', 'Product']);
+
+const PSC_TIERS = {
+  // Single-letter PSC codes mapped to the Tier1 value USASpending expects.
+  // Only entries that map to valid Tier1 values are kept — invalid ones
+  // (e.g. 'Y' for construction) are intentionally absent so they get
+  // dropped silently instead of producing a 422.
+  D: 'Service',                       // IT/Telecom services
+  R: 'Service',                       // Professional services
+  A: 'Research and Development',
+  '7': 'Product',                     // IT/communications equipment
+};
+
 function buildPscFilter(pscArr) {
   const hier = [];
   for (const code of pscArr) {
     const c = code.toUpperCase();
     if (c.length === 1) {
       const t = PSC_TIERS[c];
-      if (t) hier.push([t, c]);
+      if (t && VALID_PSC_TIERS.has(t)) hier.push([t, c]);
     } else {
       const t = PSC_TIERS[c.charAt(0)] || 'Service';
-      hier.push([t, c]);
+      if (VALID_PSC_TIERS.has(t)) hier.push([t, c]);
     }
   }
   return hier.length ? { require: hier } : null;
@@ -1373,13 +1386,20 @@ async function searchAwardsPage(filters, isSub, page) {
       body: JSON.stringify(payload),
     });
     if (!r.ok) {
+      // Don't expose raw API errors. Log the detail for debugging,
+      // surface a user-friendly message based on status class.
       const text = await r.text().catch(() => '');
-      return { rows: [], error: `USASpending ${r.status}: ${text.slice(0, 200)}` };
+      console.warn(`[USASpending ${r.status}]`, text.slice(0, 500));
+      const userMsg = r.status >= 400 && r.status < 500
+        ? "Couldn't pull that data — try rephrasing the question."
+        : 'USASpending is having a moment. Try again in a few seconds.';
+      return { rows: [], error: userMsg };
     }
     const body = await r.json();
     return { rows: body.results || [], error: null };
   } catch (e) {
-    return { rows: [], error: e.message };
+    console.warn('[USASpending fetch threw]', e);
+    return { rows: [], error: 'Connection error. Check your network and try again.' };
   }
 }
 
@@ -1403,13 +1423,18 @@ async function searchPrimeAwardsForSubaward(filters) {
     });
     if (!r.ok) {
       const text = await r.text().catch(() => '');
-      return { rows: [], error: `USASpending ${r.status}: ${text.slice(0, 200)}` };
+      console.warn(`[USASpending ${r.status}]`, text.slice(0, 500));
+      const userMsg = r.status >= 400 && r.status < 500
+        ? "Couldn't pull that data — try rephrasing the question."
+        : 'USASpending is having a moment. Try again in a few seconds.';
+      return { rows: [], error: userMsg };
     }
     const body = await r.json();
     const rows = (body.results || []).filter(x => x.generated_internal_id);
     return { rows, error: null };
   } catch (e) {
-    return { rows: [], error: e.message };
+    console.warn('[USASpending fetch threw]', e);
+    return { rows: [], error: 'Connection error. Check your network and try again.' };
   }
 }
 
@@ -1628,9 +1653,10 @@ function worst(row, sideLength) {
 // are visually distinguishable when many are present. Last color is reserved
 // for the "Other" bucket and is the lightest.
 const TREEMAP_COLORS = [
-  '#46446E', '#534F82', '#5F5C95', '#6B6AA8', '#7572B7',
-  '#8682C2', '#9290C5', '#A09ECF', '#ACAAD4', '#BBB8DD',
-  '#C8C7E2', '#D6D5EA',
+  '#46446E', '#4F4D7A', '#585686', '#615F92', '#6A689E',
+  '#7372AA', '#7C7BB6', '#8584BF', '#8E8DC4', '#9796C9',
+  '#A09FCE', '#A9A8D3', '#B2B1D8', '#BBBADD', '#C4C3E2',
+  '#CDCCE7',
 ];
 const TREEMAP_OTHER_COLOR = '#E3E3F1';
 
@@ -1673,16 +1699,30 @@ function buildTreemapItems(rows, isSub, dimension) {
   const total = sorted.reduce((s, [, v]) => s + v, 0);
   if (total <= 0) return [];
 
-  const MIN_SHARE = 0.03;   // cells smaller than this are unlabel-readable
-  const MAX_CELLS = 12;
+  // Adaptive cutoff: keep adding cells until the would-be "Other" bucket
+  // becomes smaller than the last cell we'd include. This prevents the
+  // common failure mode where "Other (28)" is the biggest cell and the
+  // user can't see who's actually winning the long tail.
+  //
+  // Hard ceiling at 16 cells (more than that gets cramped at 220px height),
+  // and a tiny floor at 1% of total (cells smaller than that are unlabelable
+  // anyway, so they belong in Other no matter what).
+  const MAX_CELLS = 16;
+  const MIN_SHARE = 0.01;
 
-  // Take every entity above the threshold, up to MAX_CELLS
-  let cutoff = sorted.findIndex(([, v]) => (v / total) < MIN_SHARE);
-  if (cutoff < 0) cutoff = sorted.length;        // none below threshold
-  cutoff = Math.min(cutoff, MAX_CELLS);
+  let cutoff = 0;
+  for (let i = 0; i < sorted.length && i < MAX_CELLS; i++) {
+    const cellValue = sorted[i][1];
+    if (cellValue / total < MIN_SHARE) break;        // too small to label
+    const remainderSum = sorted.slice(i + 1).reduce((s, [, v]) => s + v, 0);
+    cutoff = i + 1;
+    // Stop including cells once "Other" is smaller than the cell we're
+    // about to add — the remaining tail won't dominate the viz.
+    if (remainderSum < cellValue) break;
+  }
 
-  // If there's only one tiny leftover, give it its own cell rather than
-  // an opaque "Other (1)" bucket
+  // If only one entity is left over, give it its own cell rather than
+  // an opaque "Other (1)"
   const leftoverCount = sorted.length - cutoff;
   if (leftoverCount === 1 && cutoff < MAX_CELLS) cutoff += 1;
 
