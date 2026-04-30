@@ -1453,8 +1453,18 @@ const matchesAny = (haystacks, needles) =>
 // PULL — orchestrate the right shape based on tag attrs
 // =============================================================================
 async function pull(attrs) {
+  // Sanitize: Mo sometimes emits comma-separated agency lists like
+  // "DOD,DHS,HHS" thinking it's narrowing the search to "the big 3."
+  // USASpending's autocomplete can't parse that — it returns 0 results
+  // and the agency filter silently drops, leaving the user with a card
+  // titled "X at DOD, DHS, HHS" while the data shows the full federal
+  // footprint. Treat any agency string with a comma as "no agency."
+  const cleanAgency = attrs.agency && !attrs.agency.includes(',')
+    ? attrs.agency
+    : null;
+
   const [agencyResolution, recipientName] = await Promise.all([
-    attrs.agency ? resolveAgency(attrs.agency) : Promise.resolve(null),
+    cleanAgency ? resolveAgency(cleanAgency) : Promise.resolve(null),
     attrs.recipient ? resolveRecipient(attrs.recipient) : Promise.resolve(null),
   ]);
 
@@ -1463,7 +1473,7 @@ async function pull(attrs) {
   const isSub = attrs.subawards === 'true';
 
   const resolved = {
-    agencyAsked: attrs.agency || null,
+    agencyAsked: cleanAgency || null,
     agencyResolved: agencyResolution?.label || null,
     recipientAsked: attrs.recipient || null,
     recipientResolved: recipientName || null,
@@ -1761,15 +1771,17 @@ function buildTreemapItems(rows, isSub, dimension) {
   if (total <= 0) return [];
 
   // Adaptive cutoff: keep adding cells until the would-be "Other" bucket
-  // becomes smaller than the last cell we'd include. This prevents the
-  // common failure mode where "Other (28)" is the biggest cell and the
-  // user can't see who's actually winning the long tail.
+  // is decisively smaller than the cell we just added. "Decisively" =
+  // remainder is at most half the cell we're including. Without this rule,
+  // the case where #1 = $3.1M and remainder = $3.0M produces 1 cell + a
+  // similarly-sized "Other (10)" — the user can't see concentration at all.
   //
   // Hard ceiling at 16 cells (more than that gets cramped at 220px height),
-  // and a tiny floor at 1% of total (cells smaller than that are unlabelable
+  // and a tiny floor at 1% of total (cells below that are unlabelable
   // anyway, so they belong in Other no matter what).
   const MAX_CELLS = 16;
   const MIN_SHARE = 0.01;
+  const OTHER_MAX_RATIO = 0.5;  // Other should be ≤ half of last cell
 
   let cutoff = 0;
   for (let i = 0; i < sorted.length && i < MAX_CELLS; i++) {
@@ -1777,9 +1789,9 @@ function buildTreemapItems(rows, isSub, dimension) {
     if (cellValue / total < MIN_SHARE) break;        // too small to label
     const remainderSum = sorted.slice(i + 1).reduce((s, [, v]) => s + v, 0);
     cutoff = i + 1;
-    // Stop including cells once "Other" is smaller than the cell we're
-    // about to add — the remaining tail won't dominate the viz.
-    if (remainderSum < cellValue) break;
+    // Stop when Other won't dominate — its sum is decisively smaller than
+    // the smallest visible cell.
+    if (remainderSum <= cellValue * OTHER_MAX_RATIO) break;
   }
 
   // If only one entity is left over, give it its own cell rather than
@@ -2486,10 +2498,12 @@ function renderCard(rows, attrs, resolved) {
   if (resolved.recipientResolved) titleBits.push(resolved.recipientResolved);
   else if (attrs.recipient) titleBits.push(attrs.recipient);
   // Skip agency in title if fallback broadened the search (resolved.agencyDropped
-  // means the original agency had 0 matches and we dropped it)
+  // means the original agency had 0 matches and we dropped it). Use
+  // resolved.agencyAsked rather than attrs.agency so we honor the boundary
+  // sanitization that strips comma-lists.
   if (!resolved.agencyDropped) {
     if (resolved.agencyResolved) titleBits.push(resolved.agencyResolved);
-    else if (attrs.agency) titleBits.push(attrs.agency);
+    else if (resolved.agencyAsked) titleBits.push(resolved.agencyAsked);
   }
   if (attrs.keywords && !attrs.recipient) titleBits.push(`"${attrs.keywords}"`);
   if (isSub) titleBits.push('outgoing subawards');
@@ -2510,8 +2524,8 @@ function renderCard(rows, attrs, resolved) {
   if (isSub) {
     const primeName = resolved.recipientResolved || attrs.recipient || 'a prime';
     subtitleBits.push(`Subawards flowing out from ${primeName}`);
-    if (!resolved.agencyDropped && (resolved.agencyAsked || attrs.agency)) {
-      subtitleBits.push(`on prime contracts at ${resolved.agencyAsked || attrs.agency}`);
+    if (!resolved.agencyDropped && resolved.agencyAsked) {
+      subtitleBits.push(`on prime contracts at ${resolved.agencyAsked}`);
     }
   } else {
     if (resolved.recipientResolved || attrs.recipient) {
@@ -2521,8 +2535,8 @@ function renderCard(rows, attrs, resolved) {
     } else {
       subtitleBits.push('Federal contracts');
     }
-    if (!resolved.agencyDropped && (resolved.agencyAsked || attrs.agency)) {
-      subtitleBits.push(`at ${resolved.agencyAsked || attrs.agency}`);
+    if (!resolved.agencyDropped && resolved.agencyAsked) {
+      subtitleBits.push(`at ${resolved.agencyAsked}`);
     }
   }
   head.appendChild($$('div', { class: 'mo-card-subtitle', text: subtitleBits.join(' ') + '.' }));
@@ -2650,19 +2664,22 @@ function renderCard(rows, attrs, resolved) {
     // Helper: re-render treemap + update header for a given dimension
     const renderForDimension = (dimension) => {
       const items = buildTreemapItems(rows, isSub, dimension);
+      // Count only named cells (exclude the "Other (N)" bucket if present)
+      // so the displayed count matches what the user sees as labeled cells.
+      const namedCellCount = items.filter(it => !/^Other \(/.test(it.name)).length;
       let uniqueCount, label, meta;
       if (isSub) {
         uniqueCount = new Set(rows.map(r => r._subName).filter(Boolean)).size;
         label = 'Top subawardees';
-        meta = `top ${items.length} of ${uniqueCount} subs`;
+        meta = `top ${namedCellCount} of ${uniqueCount} subs`;
       } else if (dimension === 'agency') {
         uniqueCount = new Set(rows.map(r => r['Awarding Sub Agency'] || r['Awarding Agency']).filter(Boolean)).size;
         label = 'Where the money is';
-        meta = `top ${items.length} of ${uniqueCount} agencies`;
+        meta = `top ${namedCellCount} of ${uniqueCount} agencies`;
       } else {
         uniqueCount = new Set(rows.map(r => r['Recipient Name']).filter(Boolean)).size;
         label = 'Where the money is';
-        meta = `top ${items.length} of ${uniqueCount} primes`;
+        meta = `top ${namedCellCount} of ${uniqueCount} primes`;
       }
       titleEl.textContent = label;
       metaEl.textContent = meta;
