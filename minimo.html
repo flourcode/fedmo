@@ -1,14 +1,52 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Mini Mo — Federal Sales</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#FDFCFF" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0F0E13" media="(prefers-color-scheme: dark)">
+<title>Fedmo - Federal Market Intelligence</title>
+<meta name="description" content="Talk to Mo. Know any federal market before the meeting starts.">
 
+<!-- Open Graph (LinkedIn, Slack, iMessage, Facebook, Discord) -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Fedmo">
+<meta property="og:title" content="Fedmo. Federal Market Intelligence.">
+<meta property="og:description" content="Talk to Mo. Know any federal market before the meeting starts.">
+<meta property="og:url" content="https://fedmo.com/">
+<meta property="og:image" content="https://fedmo.com/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Fedmo. Talk to Mo, built on USASpending.">
+
+<!-- Twitter / X -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Fedmo. Federal Market Intelligence.">
+<meta name="twitter:description" content="Talk to Mo. Know any federal market before the meeting starts.">
+<meta name="twitter:image" content="https://fedmo.com/og-image.png">
+
+<!-- Mo's face as inline SVG favicon. Same icon as the header avatar. -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Ccircle cx='20' cy='20' r='20' fill='%237CB583'/%3E%3Ccircle cx='14' cy='16' r='2.4' fill='%232D5033'/%3E%3Ccircle cx='26' cy='16' r='2.4' fill='%232D5033'/%3E%3Cpath d='M12 24 Q20 31 28 24' stroke='%232D5033' stroke-width='2.8' stroke-linecap='round' fill='none'/%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+
+<!-- Warm Lambda TLS during HTML parse — saves ~1 RTT on first Mo call -->
+<link rel="preconnect" href="https://4gxuwrrugc4s6zqcxsos2exg5y0sjcrc.lambda-url.us-east-1.on.aws" crossorigin>
+
+<!-- Font loads non-blocking via media=print + onload swap -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;500;600;700&display=swap">
-<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,200..800;1,200..800&display=swap">
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,200..800;1,200..800&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<noscript><link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,200..800;1,200..800&display=swap" rel="stylesheet"></noscript>
+
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-R0CRXSQJL5"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-R0CRXSQJL5');
+</script>
 
 <style>
 :root {
@@ -293,6 +331,12 @@ a:hover { text-decoration: underline; }
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+}
+.mo-greeting-hint {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 14px;
+  line-height: 1.5;
 }
 .mo-example {
   font-family: var(--font);
@@ -966,20 +1010,16 @@ a:hover { text-decoration: underline; }
     <svg class="mo-greeting-face" viewBox="0 0 40 40"><use href="#icon-face-open"/></svg>
     <div class="mo-greeting-text">
       <div class="mo-greeting-hello">Hi, I'm Mo.</div>
-      <div class="mo-greeting-tagline">Ask about federal contracts, prime/sub flows, and public filings.</div>
-      <div class="mo-greeting-examples">
-        Try:&nbsp;
-        <button class="mo-example" data-q="show me AWS at DoD past year">AWS at DoD past year</button>
-        <button class="mo-example" data-q="who does GDIT subaward to">who does GDIT subaward to</button>
-        <button class="mo-example" data-q="DHS to GDIT to Carahsoft">DHS → GDIT → Carahsoft</button>
-      </div>
+      <div class="mo-greeting-tagline">Ask me anything about federal contracts. I'll pull live data from USASpending so you can follow the money.</div>
+      <div class="mo-greeting-examples" id="greeting-examples"></div>
+      <div class="mo-greeting-hint">Ask me anything about a vendor, agency, or keyword.</div>
     </div>
   </div>
 </main>
 
 <form class="mo-composer" id="composer">
   <div class="mo-composer-inner">
-    <input type="text" id="input" placeholder="Ask about a vendor, agency, or topic" autocomplete="off" enterkeyhint="send" autofocus>
+    <input type="text" id="input" placeholder="What do you sell or cover?" autocomplete="off" enterkeyhint="send" autofocus>
     <button type="submit" id="send" aria-label="Send">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
     </button>
@@ -995,6 +1035,25 @@ a:hover { text-decoration: underline; }
 const LAMBDA_URL = 'https://4gxuwrrugc4s6zqcxsos2exg5y0sjcrc.lambda-url.us-east-1.on.aws/';
 const USASPENDING = 'https://api.usaspending.gov/api/v2';
 
+// Suggested prompts shown on the welcome screen. Edit this list to change
+// the buttons — no other code changes needed.
+//
+// Each string is BOTH the visible button label AND the query sent to Mo.
+// Keep them short (≤ 32 chars) so they fit on mobile in 1-2 rows.
+//
+// Ideal mix for federal sales:
+//   1 pitch-style with a specific vendor    ("Show me FY26 HHS cloud awards under $1M")
+//   1 market intel / agency-wide question   ("Show me cyber opps at DoD")
+//   1 coaching / partner-finding            ("Who resells AWS")
+//   1 educational                           ("What is a NAICS")
+// Covers the three main modes plus an entry point for new users.
+const GREETING_PROMPTS = [
+  'Show me FY26 HHS cloud awards under $1M',
+  'Show me cyber opps at DoD',
+  'Who resells AWS',
+  'What is a NAICS',
+];
+
 // =============================================================================
 // STATE
 // =============================================================================
@@ -1003,6 +1062,15 @@ let busy = false;
 const $conv = document.getElementById('conversation');
 const $input = document.getElementById('input');
 const $send = document.getElementById('send');
+
+// Analytics tracking. Wraps Google Analytics gtag, safe to call even if
+// gtag isn't loaded (dev environments, ad blockers). Never let analytics
+// break the app — wrap every call in try/catch.
+const track = (event, props = {}) => {
+  try {
+    if (typeof gtag === 'function') gtag('event', event, props);
+  } catch { /* analytics never breaks the app */ }
+};
 
 // =============================================================================
 // TINY DOM HELPERS
@@ -3165,6 +3233,7 @@ function injectPills(card, rows, attrs, vendorEntries, agencyEntries, total, exp
     const q = btn.dataset.q;
     const $input = document.getElementById('input');
     if ($input) $input.value = '';
+    track('ask', { source: 'pill', text: q.slice(0, 60) });
     hideGreeting();
     askMo(q);
   });
@@ -3396,23 +3465,52 @@ function showGreeting() {
   if ($greeting) $greeting.style.display = '';
 }
 
-document.querySelectorAll('.mo-example').forEach(btn => {
-  btn.addEventListener('click', () => {
+// Build greeting prompt buttons from the GREETING_PROMPTS config. Single
+// delegated click handler on the parent — adding/removing entries to the
+// config doesn't require any handler rewiring.
+const $greetingExamples = document.getElementById('greeting-examples');
+if ($greetingExamples) {
+  for (const text of GREETING_PROMPTS) {
+    const btn = document.createElement('button');
+    btn.className = 'mo-example';
+    btn.dataset.q = text;
+    btn.textContent = text;
+    $greetingExamples.appendChild(btn);
+  }
+  $greetingExamples.addEventListener('click', (e) => {
+    const btn = e.target.closest('.mo-example');
+    if (!btn) return;
     const q = btn.dataset.q;
     if (!q || busy) return;
+    track('ask', { source: 'greeting', text: q.slice(0, 60) });
     hideGreeting();
     askMo(q);
   });
-});
+}
 
 // Header: reset (new conversation) clears the thread and conversation history
 document.getElementById('btnReset').addEventListener('click', () => {
   if (busy) return;
+  track('reset_conversation');
   $conv.innerHTML = '';
   history.length = 0;
   showGreeting();
   $input.focus();
 });
+
+// Delegated click tracker for outbound links inside cards. View links go to
+// USASpending.gov; SEC filing links go to EDGAR. Handler runs in capture
+// phase so the event registers before the browser navigates the new tab.
+$conv.addEventListener('click', (e) => {
+  const link = e.target.closest('a');
+  if (!link) return;
+  const href = link.getAttribute('href') || '';
+  if (link.classList.contains('mo-row-view')) {
+    track('view_usaspending', { url: href });
+  } else if (link.classList.contains('mo-sec-filing') || link.classList.contains('mo-sec-all')) {
+    track('view_edgar', { url: href });
+  }
+}, true);
 
 // Header: about modal
 const $aboutModal = document.getElementById('aboutModal');
@@ -3439,6 +3537,7 @@ document.getElementById('composer').addEventListener('submit', (e) => {
   const q = $input.value.trim();
   if (!q || busy) return;
   $input.value = '';
+  track('ask', { source: 'composer', text: q.slice(0, 60) });
   hideGreeting();
   askMo(q);
 });
@@ -3463,6 +3562,9 @@ window.addEventListener('resize', () => {
     reRenderHostsBy('.mo-statemap-host', 'data-sm-geo', renderStateMapInto);
   }, 150);
 });
+
+// Bootstrap complete — fire app_init once for analytics.
+track('app_init');
 </script>
 </body>
 </html>
