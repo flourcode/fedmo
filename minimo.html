@@ -1452,7 +1452,44 @@ const matchesAny = (haystacks, needles) =>
 // =============================================================================
 // PULL — orchestrate the right shape based on tag attrs
 // =============================================================================
+
+// Wrapper that handles the data-lag empty-card case. USASpending's data has
+// roughly a 7-14 day lag from contract signing to ingestion. If Mo emits
+// since="2026-04-23" (last week) for a "what just happened" query, the API
+// returns nothing and the user sees an empty card thinking nothing was awarded
+// — when really nothing has been ingested yet.
+//
+// Cascade: if the first call returns 0 rows AND `since` is within the last 14
+// days, retry with since floored to 14 days ago. Surface a warn chip telling
+// the user we broadened the date range. Same pattern as the agency cascade.
 async function pull(attrs) {
+  const first = await pullOnce(attrs);
+  if (first.rows.length > 0 || first.error) return first;
+
+  // No rows. Was Mo's `since` aggressively recent? If so, retry broader.
+  const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+  if (!DATE_RE.test(String(attrs.since || ''))) return first;
+
+  const today = new Date();
+  const sinceDate = new Date(attrs.since + 'T00:00:00Z');
+  const daysAgo = Math.round((today - sinceDate) / (1000 * 60 * 60 * 24));
+  if (!Number.isFinite(daysAgo) || daysAgo < 0 || daysAgo > 14) return first;
+
+  // Floor to 14 days ago and retry
+  const floor = new Date(today);
+  floor.setUTCDate(floor.getUTCDate() - 14);
+  const flooredSince = floor.toISOString().slice(0, 10);
+  const retried = await pullOnce({ ...attrs, since: flooredSince });
+  if (retried.rows.length > 0) {
+    retried.resolved.dateBroadened = {
+      original: attrs.since,
+      broadenedTo: flooredSince,
+    };
+  }
+  return retried;
+}
+
+async function pullOnce(attrs) {
   // Sanitize: Mo sometimes emits comma-separated agency lists like
   // "DOD,DHS,HHS" thinking it's narrowing the search to "the big 3."
   // USASpending's autocomplete can't parse that — it returns 0 results
@@ -2543,16 +2580,24 @@ function renderCard(rows, attrs, resolved) {
 
   // ── Time + scope chips ──
   // Time chip: if Mo emitted dates, show them (lifetime is implicit when absent).
+  // If the date-lag cascade fired, the chip reflects the BROADENED range (what
+  // we actually queried), not Mo's original since.
   // Dropped-agency chip: if the agency filter narrowed everything to zero and
   // we fell back to a broader search, tell the user we expanded scope.
+  // Date-broadened chip: if the since date was too recent (USASpending lag)
+  // and we broadened it, tell the user the original window was empty.
   const chipParts = [];
-  if (attrs.since || attrs.until) {
-    const since = attrs.since || '...';
+  const effectiveSince = resolved.dateBroadened?.broadenedTo || attrs.since;
+  if (effectiveSince || attrs.until) {
+    const since = effectiveSince || '...';
     const until = attrs.until || 'today';
     chipParts.push(`<span class="mo-card-chip">${escapeHtml(since)} → ${escapeHtml(until)}</span>`);
   }
   if (resolved.agencyDropped) {
     chipParts.push(`<span class="mo-card-chip mo-card-chip-warn">No matches at ${escapeHtml(resolved.agencyDropped)} — broadened to all agencies</span>`);
+  }
+  if (resolved.dateBroadened) {
+    chipParts.push(`<span class="mo-card-chip mo-card-chip-warn">No matches since ${escapeHtml(resolved.dateBroadened.original)} (USASpending data lags ~2 weeks) — broadened to ${escapeHtml(resolved.dateBroadened.broadenedTo)}</span>`);
   }
   if (chipParts.length) {
     const chips = $$('div', { class: 'mo-card-chips' });
