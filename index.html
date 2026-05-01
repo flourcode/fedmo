@@ -1987,13 +1987,15 @@ async function pullOnce(attrs) {
       ? { ...baseFilters, keywords: keywordNeedles }
       : null;
 
-    // COMBINED query: recipient AND keywords in one request.
-    // Confirmed via probe: USASpending ANDs recipient_search_text + keywords correctly.
-    // A3 probe returned only SAIC contracts mentioning "Amazon Web Services" (~$8M, 6 rows)
-    // vs A1 (SAIC full footprint, $8B+). The AND is real and works.
-    // Use only the longest keyword forms to avoid false positives (e.g. "Amazon" alone
-    // matches "AMAZON FINDER" in unrelated relay socket contracts).
-    const combinedKeywords = keywordNeedles.filter(k => k.length >= 6);
+    // COMBINED query: recipient AND keywords — USASpending ANDs them correctly.
+    // Probe confirmed: "AWS" as a keyword substring-matches "AWARD" and returns
+    // SAIC's entire footprint. Only use keywords that won't false-positive on
+    // common contract boilerplate words. "Amazon Web Services" and "Amazon" are safe.
+    // "AWS" is NOT safe as a standalone keyword — exclude it from combined queries.
+    const UNSAFE_COMBINED_KEYWORDS = new Set(['aws', 'sap', 'ibm', 'gcm', 'api']);
+    const combinedKeywords = keywordNeedles.filter(k =>
+      !UNSAFE_COMBINED_KEYWORDS.has(k.toLowerCase())
+    );
     const combinedFilters = recipientName && combinedKeywords.length > 0
       ? { ...baseFilters, recipient_search_text: [recipientName], keywords: combinedKeywords }
       : null;
@@ -3992,7 +3994,7 @@ const KNOWN_INTEGRATORS = new Set([
 ]);
 
 const ISV_KEYWORDS = {
-  'aws':                   'Amazon Web Services, Amazon',
+  'aws':                   'Amazon Web Services, Amazon',  // note: "AWS" stripped from combined queries (matches "AWARD")
   'amazon web services':   'Amazon Web Services, Amazon',
   'amazon':                'Amazon Web Services, Amazon',
   'azure':                 'Azure, Microsoft Azure',
