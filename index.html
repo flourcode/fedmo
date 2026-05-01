@@ -4041,14 +4041,14 @@ async function askMo(question, opts = {}) {
   if (busy) return;
   busy = true;
   $send.disabled = true;
-  const { autoSort, forcedAttrs } = opts;
-
   // Intercept two-vendor queries before they reach Gemini
   const twoVendor = detectTwoVendorQuery(question);
   if (twoVendor) {
-    question = twoVendor.question;  // Mo writes prose about this canonical form
-    opts = { ...opts, forcedAttrs: twoVendor.attrs };  // data pull bypasses Gemini tag
+    question = twoVendor.question;
+    opts = { ...opts, forcedAttrs: twoVendor.attrs };
   }
+
+  const { autoSort, forcedAttrs } = opts;
 
   renderUserTurn(question);
   history.push({ role: 'user', parts: [{ text: question }] });
@@ -4062,7 +4062,6 @@ async function askMo(question, opts = {}) {
   // If the interceptor detected a two-vendor query, fire the data pull immediately
   // with the correct attrs — don't wait for Gemini to emit a tag (it will get it wrong).
   // Mo's streamed prose still renders; we just skip its tag entirely.
-  const forcedAttrs = opts.forcedAttrs || null;
   if (forcedAttrs && !tagFired) {
     tagFired = true;
     loadingEl = renderLoadingCard();
