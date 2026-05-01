@@ -1,0 +1,519 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Mo Test Harness — fedmo.com</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  /* Mirror minimo's design system so this feels native. */
+  :root {
+    --primary-100: #46446E;
+    --primary-80:  #6A6890;
+    --primary-60:  #8E8DB1;
+    --primary-40:  #B7B6CE;
+    --primary-20:  #E3E3F1;
+    --primary-10:  #F4F4FA;
+    --bg:          #FAFAFD;
+    --fg:          #1A1A2E;
+    --fg-muted:    #5C5C7A;
+    --border:      #E8E8F2;
+    --pass:        #047857;
+    --pass-bg:     #D1FAE5;
+    --warn:        #92400E;
+    --warn-bg:     #FEF3C7;
+    --fail:        #991B1B;
+    --fail-bg:     #FEE2E2;
+    --code-bg:     #F4F4FA;
+    --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 20px; --s-6: 24px;
+    --r-1: 4px; --r-2: 8px; --r-3: 12px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14141F; --fg: #E8E8F2; --fg-muted: #9999B5;
+      --border: #2A2A3F; --code-bg: #1F1F2E; --primary-10: #1F1F2E;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); }
+  body {
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    padding: var(--s-5);
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+  h1 { font-size: 24px; margin: 0 0 var(--s-2); color: var(--primary-100); }
+  .subtitle { color: var(--fg-muted); margin-bottom: var(--s-5); }
+
+  .controls {
+    display: flex;
+    gap: var(--s-3);
+    align-items: center;
+    margin-bottom: var(--s-4);
+    flex-wrap: wrap;
+    padding: var(--s-3);
+    background: var(--primary-10);
+    border-radius: var(--r-2);
+  }
+  button {
+    background: var(--primary-100);
+    color: white;
+    border: none;
+    padding: var(--s-2) var(--s-4);
+    border-radius: var(--r-1);
+    font: inherit;
+    cursor: pointer;
+  }
+  button:hover { background: var(--primary-80); }
+  button:disabled { opacity: 0.5; cursor: wait; }
+  button.secondary {
+    background: transparent;
+    color: var(--primary-100);
+    border: 1px solid var(--primary-40);
+  }
+  button.secondary:hover { background: var(--primary-20); }
+  select, input[type="text"] {
+    padding: var(--s-2) var(--s-3);
+    border: 1px solid var(--border);
+    border-radius: var(--r-1);
+    font: inherit;
+    background: var(--bg);
+    color: var(--fg);
+  }
+  label { color: var(--fg-muted); font-size: 13px; }
+
+  .summary {
+    display: flex;
+    gap: var(--s-4);
+    margin-bottom: var(--s-4);
+    font-size: 13px;
+  }
+  .summary > div {
+    padding: var(--s-2) var(--s-3);
+    border-radius: var(--r-1);
+    background: var(--primary-10);
+  }
+  .summary .count { font-weight: 600; }
+  .summary .pass-count   { color: var(--pass); }
+  .summary .warn-count   { color: var(--warn); }
+  .summary .fail-count   { color: var(--fail); }
+  .summary .pending-count { color: var(--fg-muted); }
+
+  .scenario {
+    border: 1px solid var(--border);
+    border-radius: var(--r-2);
+    margin-bottom: var(--s-3);
+    overflow: hidden;
+    background: var(--primary-10);
+  }
+  .scenario-head {
+    padding: var(--s-3) var(--s-4);
+    display: flex;
+    align-items: center;
+    gap: var(--s-3);
+    cursor: pointer;
+    user-select: none;
+  }
+  .scenario-head:hover { background: var(--primary-20); }
+  .status-pill {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    min-width: 64px;
+    text-align: center;
+  }
+  .status-pill.pass    { background: var(--pass-bg); color: var(--pass); }
+  .status-pill.warn    { background: var(--warn-bg); color: var(--warn); }
+  .status-pill.fail    { background: var(--fail-bg); color: var(--fail); }
+  .status-pill.pending { background: var(--border); color: var(--fg-muted); }
+  .status-pill.running { background: var(--primary-20); color: var(--primary-100); }
+
+  .scenario-name { flex: 1; font-weight: 500; }
+  .scenario-tags { display: flex; gap: var(--s-1); }
+  .scenario-tag {
+    font-size: 11px;
+    padding: 1px 6px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--r-1);
+    color: var(--fg-muted);
+  }
+  .scenario-timing {
+    font-size: 12px;
+    color: var(--fg-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .scenario-body {
+    border-top: 1px solid var(--border);
+    padding: var(--s-4);
+    background: var(--bg);
+    display: none;
+  }
+  .scenario-body.open { display: block; }
+
+  .field {
+    display: flex;
+    gap: var(--s-3);
+    margin-bottom: var(--s-2);
+    font-size: 13px;
+  }
+  .field-label {
+    color: var(--fg-muted);
+    min-width: 110px;
+    flex-shrink: 0;
+  }
+  .field-value {
+    flex: 1;
+    word-break: break-word;
+  }
+  pre, code {
+    font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+    background: var(--code-bg);
+    padding: var(--s-2) var(--s-3);
+    border-radius: var(--r-1);
+    overflow-x: auto;
+    margin: 0;
+    color: var(--fg);
+  }
+  .assertion-list {
+    margin-top: var(--s-3);
+    padding-top: var(--s-3);
+    border-top: 1px dashed var(--border);
+  }
+  .assertion {
+    display: flex;
+    gap: var(--s-2);
+    align-items: flex-start;
+    padding: var(--s-1) 0;
+    font-size: 13px;
+  }
+  .assertion-icon {
+    flex-shrink: 0;
+    width: 18px;
+    text-align: center;
+    font-weight: 600;
+  }
+  .assertion.pass .assertion-icon { color: var(--pass); }
+  .assertion.fail .assertion-icon { color: var(--fail); }
+  .assertion-msg { flex: 1; }
+  .assertion-kind {
+    font-size: 10px;
+    text-transform: uppercase;
+    color: var(--fg-muted);
+    padding: 1px 6px;
+    border-radius: var(--r-1);
+    background: var(--primary-10);
+    flex-shrink: 0;
+    align-self: flex-start;
+  }
+
+  details > summary {
+    cursor: pointer;
+    color: var(--primary-100);
+    font-size: 12px;
+    margin-top: var(--s-2);
+    user-select: none;
+  }
+  details[open] > summary { margin-bottom: var(--s-2); }
+</style>
+</head>
+<body>
+
+<h1>Mo Test Harness</h1>
+<p class="subtitle">
+  Drives <code>minimo.html</code>'s Lambda + USASpending pipeline through scripted scenarios.
+  Each row shows what Mo emitted, what came back, and which assertions passed.
+  Use <strong>Export JSON</strong> to dump the full snapshot for analysis.
+</p>
+
+<div class="controls">
+  <button id="run">▶ Run all</button>
+  <label>Filter by tag:
+    <select id="tag-filter">
+      <option value="">All scenarios</option>
+    </select>
+  </label>
+  <button id="cancel" class="secondary" disabled>Cancel</button>
+  <button id="export" class="secondary" disabled>Export JSON</button>
+  <button id="copy" class="secondary" disabled>Copy summary</button>
+</div>
+
+<div class="summary" id="summary">
+  <div><span class="count pass-count" id="pass-count">0</span> pass</div>
+  <div><span class="count warn-count" id="warn-count">0</span> warn</div>
+  <div><span class="count fail-count" id="fail-count">0</span> fail</div>
+  <div><span class="count pending-count" id="pending-count">—</span> pending</div>
+  <div id="elapsed">—</div>
+</div>
+
+<div id="scenarios"></div>
+
+<script type="module">
+import { SCENARIOS } from './test-scenarios.js';
+import { runAll } from './test-runner.js';
+
+const $scenarios   = document.getElementById('scenarios');
+const $run         = document.getElementById('run');
+const $cancel      = document.getElementById('cancel');
+const $export      = document.getElementById('export');
+const $copy        = document.getElementById('copy');
+const $tagFilter   = document.getElementById('tag-filter');
+const $passCount   = document.getElementById('pass-count');
+const $warnCount   = document.getElementById('warn-count');
+const $failCount   = document.getElementById('fail-count');
+const $pendingCount = document.getElementById('pending-count');
+const $elapsed     = document.getElementById('elapsed');
+
+// Populate tag filter
+const allTags = new Set();
+SCENARIOS.forEach(s => (s.tags || []).forEach(t => allTags.add(t)));
+[...allTags].sort().forEach(t => {
+  const opt = document.createElement('option');
+  opt.value = t;
+  opt.textContent = t;
+  $tagFilter.appendChild(opt);
+});
+
+let abortController = null;
+let allResults = [];
+
+const fmtMoney = (n) => {
+  if (!n) return '$0';
+  if (n >= 1e9) return `$${(n / 1e9).toFixed(2)}B`;
+  if (n >= 1e6) return `$${(n / 1e6).toFixed(1)}M`;
+  if (n >= 1e3) return `$${(n / 1e3).toFixed(0)}K`;
+  return `$${n.toFixed(0)}`;
+};
+
+const escapeHtml = (s) => String(s == null ? '' : s)
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;');
+
+function renderScenarioPlaceholder(scenario, idx) {
+  const tags = (scenario.tags || []).map(t => `<span class="scenario-tag">${escapeHtml(t)}</span>`).join('');
+  const card = document.createElement('div');
+  card.className = 'scenario';
+  card.dataset.idx = idx;
+  card.innerHTML = `
+    <div class="scenario-head">
+      <span class="status-pill pending" data-role="status">pending</span>
+      <span class="scenario-name">${escapeHtml(scenario.name)}</span>
+      <span class="scenario-tags">${tags}</span>
+      <span class="scenario-timing" data-role="timing"></span>
+    </div>
+    <div class="scenario-body" data-role="body"></div>
+  `;
+  card.querySelector('.scenario-head').addEventListener('click', () => {
+    card.querySelector('[data-role="body"]').classList.toggle('open');
+  });
+  return card;
+}
+
+function renderScenarioBody(result) {
+  const s = result.snapshot;
+  const tagJson = s.tagAttrs ? JSON.stringify(s.tagAttrs, null, 2) : '(no tag emitted)';
+
+  // Build assertion list
+  const assertionsHtml = result.results.map(a => {
+    const cls = a.passed ? 'pass' : 'fail';
+    const icon = a.passed ? '✓' : '✗';
+    const errSuffix = a.err ? ` <span style="color: var(--fail)">[${escapeHtml(a.err)}]</span>` : '';
+    return `<div class="assertion ${cls}">
+      <span class="assertion-icon">${icon}</span>
+      <span class="assertion-msg">${escapeHtml(a.msg)}${errSuffix}</span>
+      <span class="assertion-kind">${a.kind}</span>
+    </div>`;
+  }).join('');
+
+  // Sample rows
+  const sampleRows = (s.rows || []).slice(0, 3).map(r => {
+    return `${escapeHtml(r['Recipient Name'] || '?')} — ${fmtMoney(Number(r['Award Amount']))} — ${escapeHtml(String(r['Award ID'] || ''))}`;
+  }).join('\n');
+
+  const proseExcerpt = (s.proseBefore || '').slice(0, 300) + (s.proseBefore?.length > 300 ? '…' : '');
+
+  const reproSnapshot = result.snapshot2 ? `
+<details>
+  <summary>Run 2 snapshot (reproducibility)</summary>
+  <pre>${escapeHtml(JSON.stringify({ tagAttrs: result.snapshot2.tagAttrs, rowCount: result.snapshot2.rowCount, total: result.snapshot2.total }, null, 2))}</pre>
+</details>
+` : '';
+
+  return `
+    <div class="field"><span class="field-label">Question</span><span class="field-value"><code>${escapeHtml(s.question)}</code></span></div>
+    <div class="field"><span class="field-label">Mo emitted</span><span class="field-value"><pre>${escapeHtml(tagJson)}</pre></span></div>
+    <div class="field"><span class="field-label">Returned</span><span class="field-value">${s.rowCount} rows · ${fmtMoney(s.total)} total · ${s.timings.lambdaMs}ms Lambda · ${s.timings.usaspendingMs}ms USAspending</span></div>
+    ${sampleRows ? `<div class="field"><span class="field-label">Top rows</span><span class="field-value"><pre>${escapeHtml(sampleRows)}</pre></span></div>` : ''}
+    ${s.error ? `<div class="field"><span class="field-label">Error</span><span class="field-value" style="color: var(--fail)">${escapeHtml(s.error)}</span></div>` : ''}
+    ${proseExcerpt ? `<details><summary>Mo's prose (${(s.proseBefore || '').length} chars)</summary><pre>${escapeHtml(proseExcerpt)}</pre></details>` : ''}
+    ${reproSnapshot}
+    <div class="assertion-list">${assertionsHtml}</div>
+  `;
+}
+
+function updateSummary() {
+  const passes = allResults.filter(r => r.status === 'pass').length;
+  const warns  = allResults.filter(r => r.status === 'warn').length;
+  const fails  = allResults.filter(r => r.status === 'fail').length;
+  const pending = allResults.filter(r => !r.status).length;
+  $passCount.textContent = passes;
+  $warnCount.textContent = warns;
+  $failCount.textContent = fails;
+  $pendingCount.textContent = pending || '—';
+}
+
+async function runTests() {
+  const selectedTag = $tagFilter.value || null;
+  const filtered = selectedTag
+    ? SCENARIOS.filter(s => (s.tags || []).includes(selectedTag))
+    : SCENARIOS;
+
+  // Initial render — placeholders for every scenario
+  $scenarios.innerHTML = '';
+  allResults = filtered.map((s, i) => ({ scenario: s, status: null, results: [] }));
+  filtered.forEach((s, i) => $scenarios.appendChild(renderScenarioPlaceholder(s, i)));
+  $pendingCount.textContent = filtered.length;
+  $passCount.textContent = '0';
+  $warnCount.textContent = '0';
+  $failCount.textContent = '0';
+  $elapsed.textContent = '⏱ running…';
+
+  $run.disabled = true;
+  $cancel.disabled = false;
+  $export.disabled = true;
+  $copy.disabled = true;
+
+  abortController = new AbortController();
+  const t0 = performance.now();
+
+  try {
+    let idx = 0;
+    // Mark the first scenario as running before the runner yields anything
+    const firstCard = $scenarios.children[0];
+    if (firstCard) firstCard.querySelector('[data-role="status"]').className = 'status-pill running';
+    if (firstCard) firstCard.querySelector('[data-role="status"]').textContent = 'running';
+
+    for await (const result of runAll(filtered, { abortSignal: abortController.signal })) {
+      const card = $scenarios.children[idx];
+      if (!card) break;
+
+      allResults[idx] = result;
+
+      const $status = card.querySelector('[data-role="status"]');
+      const $timing = card.querySelector('[data-role="timing"]');
+      const $body   = card.querySelector('[data-role="body"]');
+      $status.className = `status-pill ${result.status}`;
+      $status.textContent = result.status;
+      $timing.textContent = result.snapshot ? `${result.snapshot.timings.totalMs}ms` : '';
+      $body.innerHTML = renderScenarioBody(result);
+
+      // Auto-open failed scenarios for visibility
+      if (result.status === 'fail') $body.classList.add('open');
+
+      updateSummary();
+      $elapsed.textContent = `⏱ ${((performance.now() - t0) / 1000).toFixed(1)}s`;
+
+      // Mark the next scenario as running
+      idx++;
+      const nextCard = $scenarios.children[idx];
+      if (nextCard) {
+        const $nextStatus = nextCard.querySelector('[data-role="status"]');
+        $nextStatus.className = 'status-pill running';
+        $nextStatus.textContent = 'running';
+      }
+    }
+    $elapsed.textContent = `⏱ done in ${((performance.now() - t0) / 1000).toFixed(1)}s`;
+  } catch (e) {
+    $elapsed.textContent = `⏱ aborted (${((performance.now() - t0) / 1000).toFixed(1)}s)`;
+    console.error('Test run failed:', e);
+  } finally {
+    $run.disabled = false;
+    $cancel.disabled = true;
+    $export.disabled = false;
+    $copy.disabled = false;
+    abortController = null;
+  }
+}
+
+$run.addEventListener('click', runTests);
+$cancel.addEventListener('click', () => abortController?.abort());
+
+$export.addEventListener('click', () => {
+  // Trim huge fields out of rows so the JSON stays manageable
+  const exportable = allResults.map(r => ({
+    name: r.name || r.scenario?.name,
+    tags: r.tags || r.scenario?.tags || [],
+    status: r.status,
+    hardFails: r.hardFails ?? 0,
+    softFails: r.softFails ?? 0,
+    snapshot: r.snapshot ? {
+      question: r.snapshot.question,
+      tagAttrs: r.snapshot.tagAttrs,
+      rowCount: r.snapshot.rowCount,
+      total: r.snapshot.total,
+      proseExcerpt: (r.snapshot.proseBefore || '').slice(0, 500),
+      timings: r.snapshot.timings,
+      error: r.snapshot.error,
+      sampleRows: (r.snapshot.rows || []).slice(0, 5).map(row => ({
+        name: row['Recipient Name'],
+        amount: row['Award Amount'],
+        awardId: row['Award ID'],
+        agency: row['Awarding Agency'],
+      })),
+    } : null,
+    snapshot2: r.snapshot2 ? {
+      tagAttrs: r.snapshot2.tagAttrs,
+      rowCount: r.snapshot2.rowCount,
+      total: r.snapshot2.total,
+    } : undefined,
+    assertions: r.results,
+  }));
+
+  const blob = new Blob([JSON.stringify(exportable, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `mo-test-results-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+$copy.addEventListener('click', () => {
+  const lines = [
+    `Mo test results — ${new Date().toISOString()}`,
+    `${allResults.filter(r => r.status === 'pass').length} pass · ${allResults.filter(r => r.status === 'warn').length} warn · ${allResults.filter(r => r.status === 'fail').length} fail`,
+    '',
+  ];
+  for (const r of allResults) {
+    const status = (r.status || '?').toUpperCase().padEnd(5);
+    lines.push(`[${status}] ${r.name || r.scenario?.name}`);
+    if (r.results) {
+      for (const a of r.results.filter(a => !a.passed)) {
+        lines.push(`         ✗ ${a.msg}`);
+      }
+    }
+    if (r.snapshot?.tagAttrs) {
+      lines.push(`         tag: ${JSON.stringify(r.snapshot.tagAttrs)}`);
+      lines.push(`         result: ${r.snapshot.rowCount} rows, $${(r.snapshot.total / 1e6).toFixed(2)}M`);
+    }
+    lines.push('');
+  }
+  navigator.clipboard.writeText(lines.join('\n')).then(() => {
+    const orig = $copy.textContent;
+    $copy.textContent = '✓ Copied';
+    setTimeout(() => { $copy.textContent = orig; }, 1500);
+  });
+});
+
+// Stash for console poking
+window.testHarness = { SCENARIOS, allResults: () => allResults };
+</script>
+
+</body>
+</html>
