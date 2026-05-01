@@ -2782,7 +2782,7 @@ const formatFilingDate = (iso) => {
 };
 
 // Identify public primes in the rows, fetch filings, return [{display, cik, ticker, filings}]
-async function loadSecFilings(rows) {
+async function loadSecFilings(rows, attrs) {
   if (!rows || !rows.length) return [];
   // Take top 5 unique recipients by amount
   const byPrime = {};
@@ -2793,9 +2793,32 @@ async function loadSecFilings(rows) {
   }
   const topPrimes = Object.entries(byPrime).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([n]) => n);
 
+  // For ISV/keyword queries (no recipient=, keywords only), the ISV itself
+  // may not rank in the top 5 recipients because resellers dominate by volume.
+  // But when a user asks "who resells AWS", they always want to see Amazon's
+  // filings alongside the resellers. Inject any keyword-matched public vendor
+  // that doesn't already appear in topPrimes.
+  const injected = [];
+  if (attrs && !attrs.recipient && attrs.keywords) {
+    const kwVendors = String(attrs.keywords).split(',').map(k => k.trim()).filter(Boolean);
+    for (const kw of kwVendors) {
+      const match = matchPublicVendor(kw);
+      if (match) injected.push(match.display || kw);
+    }
+  }
+
   const seenCiks = new Set();
   const publics = [];
+  // Check top recipients first
   for (const name of topPrimes) {
+    const match = matchPublicVendor(name);
+    if (match && !seenCiks.has(match.cik)) {
+      seenCiks.add(match.cik);
+      publics.push({ display: match.display, cik: match.cik, ticker: match.ticker });
+    }
+  }
+  // Then inject keyword-matched ISVs that didn't make the top-recipients cut
+  for (const name of injected) {
     const match = matchPublicVendor(name);
     if (match && !seenCiks.has(match.cik)) {
       seenCiks.add(match.cik);
@@ -3601,7 +3624,7 @@ function renderCard(rows, attrs, resolved) {
 
   // ── SEC filings (async — appended below after fetch) ──
   if (!isSub && rows.length > 0) {
-    loadSecFilings(rows).then(populated => {
+    loadSecFilings(rows, attrs).then(populated => {
       if (!populated.length) { injectAtEnd(); return; }
       const totalFilings = populated.reduce((s, v) => s + v.filings.length, 0);
       card.appendChild(compHead(
