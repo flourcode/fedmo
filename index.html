@@ -1877,14 +1877,28 @@ async function pullOnce(attrs) {
     return { rows, resolved, error: null };
   }
 
-  // Default branch
+  // Default branch (agency-only, keyword, naics, or combinations thereof)
   const filters = { ...baseFilters };
-  if (attrs.keywords) {
-    const kws = CSV(attrs.keywords);
-    if (kws.length) filters.keywords = kws;
+  const kws = attrs.keywords ? CSV(attrs.keywords) : [];
+  if (kws.length) filters.keywords = kws;
+  const { rows: firstRows, error } = await searchAwards(filters, false);
+  if (error) return { rows: [], resolved, error };
+
+  // Keyword-drop fallback: if agency + keywords returned 0, retry without keywords.
+  // Happens with program-office terms like "NAVSEA, Naval Sea Systems" that appear
+  // in awarding_office but not in contract description text. Better to show the
+  // agency's full picture with a chip than a silent empty card.
+  if (firstRows.length === 0 && kws.length > 0 && agencyFilter) {
+    const filtersNoKw = { ...baseFilters };
+    delete filtersNoKw.keywords;
+    const { rows: retryRows, error: retryErr } = await searchAwards(filtersNoKw, false);
+    if (!retryErr && retryRows.length > 0) {
+      resolved.keywordsDropped = kws.join(', ');
+    }
+    return { rows: retryRows, resolved, error: retryErr };
   }
-  const { rows, error } = await searchAwards(filters, false);
-  return { rows, resolved, error };
+
+  return { rows: firstRows, resolved, error: null };
 }
 
 // =============================================================================
@@ -3073,6 +3087,9 @@ function renderCard(rows, attrs, resolved) {
   }
   if (resolved.agencyDropped) {
     chipParts.push(`<span class="mo-card-chip mo-card-chip-warn">No matches at ${escapeHtml(resolved.agencyDropped)} — broadened to all agencies</span>`);
+  }
+  if (resolved.keywordsDropped) {
+    chipParts.push(`<span class="mo-card-chip mo-card-chip-warn">No keyword matches for "${escapeHtml(resolved.keywordsDropped)}" — showing all contracts at this agency</span>`);
   }
   if (resolved.dateBroadened) {
     if (resolved.dateBroadened.foundResults) {
