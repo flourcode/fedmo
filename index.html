@@ -3807,11 +3807,14 @@ function buildPillsForCard(rows, attrs, vendorEntries, agencyEntries, total, exp
 
 function injectPills(card, rows, attrs, vendorEntries, agencyEntries, total, expiringCount) {
   const pills = buildPillsForCard(rows, attrs, vendorEntries, agencyEntries, total, expiringCount);
-  if (pills.length === 0) return;
+  if (pills.length === 0) return [];
   const wrap = $$('div', { class: 'mo-pills' });
   let html = '<span class="mo-pills-label">Try</span>';
   for (const p of pills) {
-    html += `<button class="mo-pill" type="button" data-q="${escapeHtml(p)}">${escapeHtml(p)}</button>`;
+    // Expiry pills auto-sort the resulting card to "Expiring soon"
+    const isExpiryPill = /expir/i.test(p);
+    const sortAttr = isExpiryPill ? ' data-sort="end-asc"' : '';
+    html += `<button class="mo-pill" type="button" data-q="${escapeHtml(p)}"${sortAttr}>${escapeHtml(p)}</button>`;
   }
   wrap.innerHTML = html;
   wrap.addEventListener('click', (e) => {
@@ -3819,11 +3822,12 @@ function injectPills(card, rows, attrs, vendorEntries, agencyEntries, total, exp
     if (!btn) return;
     if (busy) return;  // don't fire while a query is in flight
     const q = btn.dataset.q;
+    const autoSort = btn.dataset.sort || null;
     const $input = document.getElementById('input');
     if ($input) $input.value = '';
     track('ask', { source: 'pill', text: q.slice(0, 60) });
     hideGreeting();
-    askMo(q);
+    askMo(q, { autoSort });
   });
   // Insert as a SIBLING after the card, not a child. Pills float in the
   // conversation flow between this turn's card and whatever comes next,
@@ -3940,10 +3944,11 @@ function scrollBottom() {
 // so the broken fragment doesn't render as visible garbage. We track whether
 // Mo started a tag (`<data`) and suppress all subsequent text until either
 // `/>` arrives or the stream ends.
-async function askMo(question) {
+async function askMo(question, opts = {}) {
   if (busy) return;
   busy = true;
   $send.disabled = true;
+  const { autoSort } = opts;
 
   renderUserTurn(question);
   history.push({ role: 'user', parts: [{ text: question }] });
@@ -4002,6 +4007,14 @@ async function askMo(question) {
                 error,
               });
               const cardEl = renderCard(rows, tag.attrs, resolved);
+              if (autoSort) {
+                // After card mounts, click the matching sort button so expiry
+                // pills auto-sort without the user having to do it manually.
+                requestAnimationFrame(() => {
+                  const btn = cardEl.querySelector(`.mo-sort-btn[data-sort="${autoSort}"]`);
+                  if (btn) btn.click();
+                });
+              }
               if (loadingEl && loadingEl.parentNode) {
                 loadingEl.parentNode.replaceChild(cardEl, loadingEl);
               } else {
