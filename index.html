@@ -2079,16 +2079,17 @@ function aggregateRowsBy(rows, isSub, dimension) {
       amt = Number(r._amount) || 0;
     } else if (dimension === 'agency') {
       // When subagency has bottomed out (rows filtered to a subtier so
-      // USASpending returns Agency == Sub Agency), substitute the office name
-      // so the treemap shows NAVSEA/NAVAIR/AFLCMC-level cells instead of one
-      // giant "Department of the Navy" cell.
-      // Rec B: Awarding Office field is always empty (confirmed 0/100 rows across
-      // 3 probes). Use Award ID prefix lookup via offices.json instead.
+      // Always attempt Award ID prefix lookup for a more specific office label.
+      // Previously only fired when Agency == Sub Agency (the subtier-pinned case
+      // e.g. Navy queries where both fields say "Department of the Navy").
+      // But vendor+subtier queries (SAIC at Air Force) return Agency=DoD,
+      // Sub=Air Force — different strings, so the old flattened check missed them,
+      // leaving the treemap as one giant "Department of the Air Force" cell.
+      // Award ID prefix resolves to AFLCMC, AFMC, AFRL, etc. regardless.
       const agency = r['Awarding Agency'] || '';
       const sub = r['Awarding Sub Agency'] || agency;
-      const flattened = agency.trim().toUpperCase() === sub.trim().toUpperCase();
-      const officeName = flattened ? (lookupOffice(r['Award ID']) || r['Awarding Office'] || '') : '';
-      name = (flattened && officeName) ? officeName : (sub || '(unknown)');
+      const prefixOffice = lookupOffice(r['Award ID']);
+      name = prefixOffice || sub || '(unknown)';
       amt = Number(r['Award Amount']) || 0;
     } else {
       name = r['Recipient Name'] || '(unknown)';
@@ -2944,9 +2945,8 @@ function renderContractRows(card, rows) {
     const agencyTop = r['Awarding Agency'] || '';
     const subAgency = r['Awarding Sub Agency'] || agencyTop;
     const awardId = r['Award ID'] || '';
-    const flattened = agencyTop.trim().toUpperCase() === subAgency.trim().toUpperCase();
-    const officeName = flattened ? (lookupOffice(awardId) || r['Awarding Office'] || '') : '';
-    const agency = (flattened && officeName) ? officeName : (subAgency || agencyTop);
+    const prefixOffice = lookupOffice(awardId);
+    const agency = prefixOffice || subAgency || agencyTop;
     const status = computeStatus(r);
     const pop = formatPoP(r);
     const term = formatTerm(r);
@@ -3379,11 +3379,8 @@ function renderCard(rows, attrs, resolved) {
         // Use the same Office-fallback logic as aggregateRowsBy so the
         // count matches the cells the treemap actually shows.
         uniqueCount = new Set(rows.map(r => {
-          const agencyTop = r['Awarding Agency'] || '';
-          const subAgency = r['Awarding Sub Agency'] || agencyTop;
-          const flat = agencyTop.trim().toUpperCase() === subAgency.trim().toUpperCase();
-          const off = flat ? (lookupOffice(r['Award ID']) || r['Awarding Office'] || '') : '';
-          return (flat && off) ? off : subAgency;
+          const sub = r['Awarding Sub Agency'] || r['Awarding Agency'] || '';
+          return lookupOffice(r['Award ID']) || sub;
         }).filter(Boolean)).size;
         label = 'Where the money is';
         meta = `top ${namedCellCount} of ${uniqueCount} agencies`;
