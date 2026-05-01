@@ -4009,14 +4009,12 @@ const FILLER = /\b(resells?|reselling|integrates?|integrating|uses?|with|and|at|
 
 function detectTwoVendorQuery(q) {
   const lower = q.toLowerCase();
-  const stripped = lower.replace(FILLER, ' ').replace(/\s+/g, ' ').trim();
-  const tokens = stripped.split(' ').filter(Boolean);
+  const words = lower.replace(/[^\w\s]/g, ' ').split(/\s+/).filter(Boolean);
 
   let integrator = null;
   let isvKey = null;
 
-  // Try all 1, 2, and 3-word combinations from the original lowercased query
-  const words = lower.replace(/[^\w\s]/g, ' ').split(/\s+/).filter(Boolean);
+  // Try all 1, 2, and 3-word combinations longest-first
   for (let len = 3; len >= 1; len--) {
     for (let i = 0; i <= words.length - len; i++) {
       const phrase = words.slice(i, i + len).join(' ');
@@ -4027,12 +4025,13 @@ function detectTwoVendorQuery(q) {
 
   if (!integrator || !isvKey) return null;
 
-  // Resolve integrator display name
-  const integratorDisplay = VENDOR_LEGAL_NAMES[integrator] || integrator.toUpperCase();
+  // Build USASpending attrs directly — bypasses Gemini tag construction entirely
+  const recipientName = VENDOR_LEGAL_NAMES[integrator] || integrator.toUpperCase();
   const keywords = ISV_KEYWORDS[isvKey];
-
-  // Return canonical rewrite that matches the verbatim prompt examples
-  return `${integratorDisplay} resells ${keywords.split(',')[0].trim()}`;
+  return {
+    attrs: { recipient: recipientName, keywords, since: '2020-01-01' },
+    question: `${recipientName} resells ${keywords.split(',')[0].trim()}`,
+  };
 }
 
 // so the broken fragment doesn't render as visible garbage. We track whether
@@ -4042,12 +4041,13 @@ async function askMo(question, opts = {}) {
   if (busy) return;
   busy = true;
   $send.disabled = true;
-  const { autoSort } = opts;
+  const { autoSort, forcedAttrs } = opts;
 
   // Intercept two-vendor queries before they reach Gemini
-  const rewritten = detectTwoVendorQuery(question);
-  if (rewritten && rewritten !== question.toLowerCase()) {
-    question = rewritten;
+  const twoVendor = detectTwoVendorQuery(question);
+  if (twoVendor) {
+    question = twoVendor.question;  // Mo writes prose about this canonical form
+    opts = { ...opts, forcedAttrs: twoVendor.attrs };  // data pull bypasses Gemini tag
   }
 
   renderUserTurn(question);
@@ -4058,6 +4058,40 @@ async function askMo(question, opts = {}) {
   let tagFired = false;
   let loadingEl = null;
   let suppressFrom = -1;  // index in fullText to start hiding from (broken tag opener)
+
+  // If the interceptor detected a two-vendor query, fire the data pull immediately
+  // with the correct attrs — don't wait for Gemini to emit a tag (it will get it wrong).
+  // Mo's streamed prose still renders; we just skip its tag entirely.
+  const forcedAttrs = opts.forcedAttrs || null;
+  if (forcedAttrs && !tagFired) {
+    tagFired = true;
+    loadingEl = renderLoadingCard();
+    moTurn.insertEl(loadingEl);
+    pull(forcedAttrs)
+      .then(({ rows, resolved, error }) => {
+        const cardEl = renderCard(rows, forcedAttrs, resolved);
+        if (autoSort) {
+          requestAnimationFrame(() => {
+            const btn = cardEl.querySelector(`.mo-sort-btn[data-sort="${autoSort}"]`);
+            if (btn) btn.click();
+          });
+        }
+        if (loadingEl && loadingEl.parentNode) {
+          loadingEl.parentNode.replaceChild(cardEl, loadingEl);
+        } else {
+          moTurn.insertEl(cardEl);
+        }
+        if (cardEl._pendingPills && cardEl.parentNode) {
+          cardEl.parentNode.insertBefore(cardEl._pendingPills, cardEl.nextSibling);
+          delete cardEl._pendingPills;
+        }
+        if (error) moTurn.setError(error);
+      })
+      .catch(err => {
+        console.warn('[mo:forced-pull]', err);
+        if (loadingEl && loadingEl.parentNode) loadingEl.parentNode.removeChild(loadingEl);
+      });
+  }
 
   try {
     const res = await fetch(LAMBDA_URL, {
@@ -4076,7 +4110,8 @@ async function askMo(question, opts = {}) {
       fullText += decoder.decode(value, { stream: true });
 
       // Check for a valid self-closing tag first
-      if (!tagFired) {
+      // When forcedAttrs is set, the pull already fired — suppress any tag Gemini emits
+      if (!tagFired && !forcedAttrs) {
         const tag = findDataTag(fullText);
         if (tag) {
           tagFired = true;
@@ -4139,12 +4174,8 @@ async function askMo(question, opts = {}) {
           }
         }
       } else {
-        // First tag already fired. Mo sometimes emits MORE tags after the
-        // first one (e.g. "compare X to Y" elicits two <data> tags). We can
-        // only render one card per turn, so strip any subsequent tags from
-        // fullText before they bleed into prose. The user already has their
-        // card; the second tag's body would just appear as raw "data ... />"
-        // text otherwise.
+        // First tag already fired (or forcedAttrs took over). Strip any tag
+        // Gemini emits so it doesn't bleed into prose as raw text.
         const extraTag = findDataTag(fullText);
         if (extraTag) {
           fullText = fullText.slice(0, extraTag.start) + fullText.slice(extraTag.end);
