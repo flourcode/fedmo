@@ -136,15 +136,16 @@ async function pullUSASpending(attrs) {
   }
 
   if (attrs.recipient) {
-    // Resolve shorthand names (SAIC, AWS, etc.) to full legal names before
-    // using as keyword needles — matches production resolveRecipient behavior.
-    // Without this, "SAIC" as a keyword hits description text and finds nothing;
-    // "SCIENCE APPLICATIONS INTERNATIONAL CORPORATION" finds the actual contracts.
+    // Resolve shorthand names to full legal names and use recipient_search_text —
+    // the same mechanism production uses. Keyword search hits description text,
+    // which doesn't contain legal entity names like "SCIENCE APPLICATIONS INTERNATIONAL
+    // CORPORATION". recipient_search_text does entity-level matching.
     const lookupKey = String(attrs.recipient).toLowerCase().trim();
     const resolvedName = VENDOR_LEGAL_NAMES[lookupKey] || attrs.recipient;
-    filters.keywords = filters.keywords || [];
-    filters.keywords.push(resolvedName);
+    filters.recipient_search_text = [resolvedName];
+    // aliases go into keywords (reseller description-text matching)
     if (attrs.aliases) {
+      filters.keywords = filters.keywords || [];
       String(attrs.aliases).split(',').map(s => s.trim()).filter(Boolean).forEach(a => filters.keywords.push(a));
     }
   }
@@ -189,7 +190,8 @@ async function pullUSASpending(attrs) {
     // Keyword-drop fallback: mirrors production pullOnce default branch.
     // If agency + keywords = 0 rows, retry without keywords. Needed for
     // program-office terms (NAVSEA) that live in awarding_office, not descriptions.
-    if (rows.length === 0 && filters.keywords?.length && filters.agencies?.length) {
+    // Only fires for non-recipient queries — recipient queries have their own path.
+    if (rows.length === 0 && filters.keywords?.length && filters.agencies?.length && !filters.recipient_search_text) {
       const filtersNoKw = { ...filters };
       delete filtersNoKw.keywords;
       const retryPayload = { ...payload, filters: filtersNoKw };
