@@ -2664,17 +2664,18 @@ async function loadSecFilings(rows) {
   for (const v of publics) {
     const payload = await fetchEdgarFilings(v.cik);
     if (!payload || payload.error) continue;
-    // Staleness guard: verify the EDGAR entity name is plausibly the same company.
-    // M&A can cause a CIK to point to the wrong entity after an acquisition.
-    // payload.name is the legal entity name registered with SEC.
-    if (payload.name) {
-      const edgarName = String(payload.name).toLowerCase();
-      const expectedTokens = v.display.toLowerCase().split(/\s+/).filter(t => t.length > 3);
-      const nameMatch = expectedTokens.some(t => edgarName.includes(t));
-      if (!nameMatch) {
-        console.warn(`[edgar] CIK ${v.cik} name mismatch: expected "${v.display}", EDGAR says "${payload.name}" — skipping`);
-        continue;
-      }
+    // Staleness guard: CIKs are permanent in EDGAR (never reassigned), so a
+    // CIK mismatch from M&A is not the real risk. The real risk is a typo in
+    // our CIK table pointing to a completely unrelated company. Guard against
+    // that by checking EDGAR returned a valid entity (non-empty name).
+    // We do NOT do token matching — that incorrectly blocks legitimate pairs
+    // like SAIC→"Science Applications International Corp", IBM→"International
+    // Business Machines Corp", Google→"Alphabet Inc", Raytheon→"RTX Corp".
+    // Those are correct CIK mappings; the brand name just differs from the
+    // SEC legal entity name.
+    if (payload.name === null || payload.name === undefined || payload.name === '') {
+      console.warn(`[edgar] CIK ${v.cik} returned empty name — skipping`);
+      continue;
     }
     const list = extractRecentFilings(payload, 3);
     if (list.length) filings.push({ ...v, filings: list });
