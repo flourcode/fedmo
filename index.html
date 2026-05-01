@@ -3643,8 +3643,9 @@ function renderCard(rows, attrs, resolved) {
 // =============================================================================
 // FOLLOW-UP PILLS — generate suggested next queries from the rendered data
 // =============================================================================
-// Pure data-driven, no Gemini call. Looks at the card's shape and the user's
-// query (attrs) to suggest 3-4 angles they might want to explore next.
+// Pure data-driven, no Gemini call. Reads the card's actual shape — top vendor,
+// expiry count, dominant office, vehicle, market concentration — and generates
+// the next logical seller thought, not a generic follow-up menu.
 // Click populates the composer rather than auto-submitting so the user can
 // tweak before sending — preserves agency.
 
@@ -3656,89 +3657,105 @@ function buildPillsForCard(rows, attrs, vendorEntries, agencyEntries, total, exp
     const norm = q.toLowerCase().trim();
     if (!seen.has(norm)) { seen.add(norm); pills.push(q); }
   };
-  // Short labels so pills don't blow out the row visually.
+
   const shortV = (v) => v ? (VENDOR_SHORT_LABELS[v] || v.split(',')[0].trim().split(/\s+/).slice(0, 3).join(' ')) : '';
   const shortA = (a) => a ? (AGENCY_SHORT_LABELS[a] || a.split(/\s+/).slice(0, 3).join(' ')) : '';
 
   const isVendorQuery = !!attrs.recipient;
   const isAgencyQuery = !!attrs.agency;
-  const topVendor = vendorEntries[0]?.[0];
-  const topAgency = agencyEntries[0]?.[0];
-  const topVendorPct = vendorEntries[0] && total > 0
-    ? vendorEntries[0][1] / total : 0;
+  const topVendor     = vendorEntries[0]?.[0];
+  const topAgency     = agencyEntries[0]?.[0];
+  const topVendorPct  = vendorEntries[0] && total > 0 ? vendorEntries[0][1] / total : 0;
+  const top3Sum       = vendorEntries.slice(0, 3).reduce((s, [, v]) => s + v, 0);
+  const top3Pct       = total > 0 ? top3Sum / total : 0;
+  const isConcentrated = topVendorPct >= 0.50;
+  const isFragmented   = vendorEntries.length >= 8 && top3Pct < 0.35;
 
-  // Comma-list recipient handling: when Mo packed multiple competitors into
-  // attrs.recipient ("JFrog, Snyk, Sonatype"), pills that embed the whole
-  // string break — subaward and recipient resolution can't parse it. Use
-  // the first listed vendor as the pill's recipient noun. The user's first
-  // name is usually their primary interest.
-  const recipientForPill = isVendorQuery
-    ? attrs.recipient.split(',')[0].trim()
-    : '';
+  // Detect dominant awarding office from rows — the most common non-empty office label
+  const officeCounts = {};
+  for (const r of rows) {
+    const office = lookupOffice ? lookupOffice(r['Award ID']) : null;
+    if (office) officeCounts[office] = (officeCounts[office] || 0) + 1;
+  }
+  const dominantOffice = Object.entries(officeCounts).sort((a, b) => b[1] - a[1])[0]?.[0];
+  const dominantOfficePct = dominantOffice && rows.length > 0 ? officeCounts[dominantOffice] / rows.length : 0;
 
-  // Pattern 1: vendor query → drill into top customer agency
-  // "AWS at DOD" with most volume at Army → "AWS at Army"
+  // Detect dominant vehicle
+  const vehicleCounts = {};
+  for (const r of rows) {
+    const v = detectVehicle ? detectVehicle(r) : null;
+    if (v) vehicleCounts[v] = (vehicleCounts[v] || 0) + 1;
+  }
+  const dominantVehicle = Object.entries(vehicleCounts).sort((a, b) => b[1] - a[1])[0]?.[0];
+
+  const recipientForPill = isVendorQuery ? attrs.recipient.split(',')[0].trim() : '';
+  const keywordForPill = !isVendorQuery && !isAgencyQuery && attrs.keywords
+    ? `"${String(attrs.keywords).split(',')[0].trim()}"` : null;
+  const pillSubject = isVendorQuery ? recipientForPill
+    : isAgencyQuery ? shortA(attrs.agency)
+    : keywordForPill;
+
+  // ── PROGRESSION LOGIC ──────────────────────────────────────────────────────
+  // Pill 1: EXPIRY — always most actionable when present
+  if (expiringCount >= 2) {
+    if (isVendorQuery && isAgencyQuery) {
+      add(`${recipientForPill} expiring at ${shortA(attrs.agency)}`);
+    } else if (isAgencyQuery) {
+      add(`what's expiring at ${shortA(attrs.agency)} in 90 days`);
+    } else if (isVendorQuery) {
+      add(`${recipientForPill} expiring contracts`);
+    }
+  }
+
+  // Pill 2: MARKET STRUCTURE — based on concentration shape
+  if (isAgencyQuery && !isVendorQuery) {
+    if (isConcentrated && topVendor) {
+      // Concentrated market → drill into the incumbent
+      add(`who subs to ${shortV(topVendor)} at ${shortA(attrs.agency)}`);
+    } else if (isFragmented) {
+      // Fragmented → find the entry wedge
+      add(`smallest contracts at ${shortA(attrs.agency)} past 12 months`);
+    } else if (topVendor) {
+      // Normal → competitor angle
+      add(`competitors to ${shortV(topVendor)} at ${shortA(attrs.agency)}`);
+    }
+  }
+
+  // Pill 3: OFFICE DRILL — when one office clearly dominates
+  if (dominantOffice && dominantOfficePct >= 0.50 && isAgencyQuery && !isVendorQuery) {
+    // Build an office-specific query using keywords
+    const officeShort = dominantOffice.split(/\s+/).slice(0, 3).join(' ');
+    add(`${pillSubject || ''} at ${officeShort}`.trim());
+  }
+
+  // Pill 4: VEHICLE — when a vehicle dominates, suggest getting on it
+  if (dominantVehicle && !isVendorQuery && pillSubject) {
+    add(`${dominantVehicle} awards at ${pillSubject}`);
+  }
+
+  // Pill 5: VENDOR → cross-agency follow
   if (isVendorQuery && topAgency && agencyEntries.length >= 2 && shortA(topAgency) !== attrs.agency) {
     add(`${recipientForPill} at ${shortA(topAgency)}`);
   }
 
-  // Pattern 2: agency query with concentration → who else competes there
-  if (isAgencyQuery && !isVendorQuery && topVendor && topVendorPct >= 0.30) {
-    add(`competitors to ${shortV(topVendor)} at ${shortA(attrs.agency)}`);
-  }
-
-  // Pattern 3: subaward drill — only useful for prime queries
-  // (skip when user already asked the subaward question)
-  if (isVendorQuery && attrs.subawards !== 'true') {
+  // Pill 6: SUBAWARD DRILL
+  if (isVendorQuery && attrs.subawards !== 'true' && !isConcentrated) {
     add(`who does ${recipientForPill} sub to`);
   }
 
-  // Pattern 4: expirations → recompete signal
-  if (expiringCount >= 3) {
-    if (isAgencyQuery) {
-      add(`what's expiring at ${shortA(attrs.agency)} in 90 days`);
-    } else if (isVendorQuery) {
-      add(`${recipientForPill} contracts expiring soon`);
-    }
+  // Pill 7: AGENCY-ONLY → suggest top vendor angle
+  if (isAgencyQuery && !isVendorQuery && topVendor && !isConcentrated) {
+    add(`${shortV(topVendor)} contracts`);
   }
 
-  // Subject for time-pivot pills. For vendor and agency queries, use the
-  // resolved short label. For keyword-only queries, use the first keyword
-  // from Mo's comma-list so the pill reads naturally ("jfrog lifetime"
-  // rather than "this market lifetime").
-  const keywordForPill = !isVendorQuery && !isAgencyQuery && attrs.keywords
-    ? `"${String(attrs.keywords).split(',')[0].trim()}"`
-    : null;
-  const pillSubject = isVendorQuery
-    ? recipientForPill
-    : isAgencyQuery
-    ? shortA(attrs.agency)
-    : keywordForPill;
-
-  // Pattern 5: time-window pivot. Skip entirely if we have no subject —
-  // a "this market lifetime" pill with no actual subject is gibberish.
+  // Pill 8: TIME PIVOT — widen or narrow window
   if (pillSubject) {
     if (attrs.since && attrs.until) {
-      // user explicitly narrowed → suggest widening
-      add(`${pillSubject} in fy26`);
-    } else if (attrs.since && !attrs.until) {
       add(`${pillSubject} lifetime`);
-    } else if (!attrs.since && (isVendorQuery || isAgencyQuery || keywordForPill)) {
-      add(`${pillSubject} in past 90 days`);
+    } else if (!expiringCount || expiringCount < 2) {
+      // Only add time pivot if expiry pill didn't fire — avoid duplication
+      add(`${pillSubject} lifetime`);
     }
-  }
-
-  // Pattern 6: fragmented market → name the long tail
-  if (vendorEntries.length >= 10 && total > 0) {
-    const top3Sum = vendorEntries.slice(0, 3).reduce((s, [, v]) => s + v, 0);
-    if (top3Sum / total < 0.30) {
-      add(`smallest vendors with >$10M${isAgencyQuery ? ' at ' + shortA(attrs.agency) : ''}`);
-    }
-  }
-
-  // Pattern 7: agency-only query → suggest a vendor angle
-  if (isAgencyQuery && !isVendorQuery && topVendor) {
-    add(`${shortV(topVendor)} contracts`);
   }
 
   return pills.slice(0, 4);
