@@ -1840,7 +1840,11 @@ async function pullOnce(attrs) {
 
   const [agencyResolution, recipientName] = await Promise.all([
     cleanAgency ? resolveAgency(cleanAgency) : Promise.resolve(null),
-    attrs.recipient ? resolveRecipient(attrs.recipient) : Promise.resolve(null),
+    // Use pre-resolved name from interceptor if available (skips autocomplete,
+    // uses exact string confirmed to work with combined AND query in probe)
+    attrs._recipient_search_text
+      ? Promise.resolve(attrs._recipient_search_text)
+      : attrs.recipient ? resolveRecipient(attrs.recipient) : Promise.resolve(null),
   ]);
 
   const agencyFilter = agencyResolution?.filter || null;
@@ -4058,12 +4062,19 @@ function detectTwoVendorQuery(q) {
 
   if (!integrator || !isvKey) return null;
 
-  // Build USASpending attrs directly — bypasses Gemini tag construction entirely
-  const recipientName = VENDOR_LEGAL_NAMES[integrator] || integrator.toUpperCase();
+  // Build USASpending attrs directly — bypasses Gemini tag construction entirely.
+  // Also pre-set recipient_search_text so pullOnce skips resolveRecipient autocomplete
+  // and uses the exact string the probe confirmed works with the combined AND query.
+  const recipientDisplay = VENDOR_LEGAL_NAMES[integrator] || integrator.toUpperCase();
   const keywords = ISV_KEYWORDS[isvKey];
   return {
-    attrs: { recipient: recipientName, keywords, since: '2020-01-01' },
-    question: `${recipientName} resells ${keywords.split(',')[0].trim()}`,
+    attrs: {
+      recipient: recipientDisplay,
+      _recipient_search_text: recipientDisplay,  // pre-resolved, skip autocomplete
+      keywords,
+      since: '2020-01-01',
+    },
+    question: `${recipientDisplay} resells ${keywords.split(',')[0].trim()}`,
   };
 }
 
