@@ -1645,9 +1645,23 @@ async function pullOnce(attrs) {
   const resolved = {
     agencyAsked: cleanAgency || null,
     agencyResolved: agencyResolution?.label || null,
+    // Flag dropped agencies before we even hit the API. Covers non-contracting
+    // entities (Federal Reserve, NSA via intel community routing, etc.) that
+    // USASpending's autocomplete doesn't recognize. Without this, agencyFilter
+    // is null so the cascade condition (rows === 0 && agencyFilter) never fires,
+    // the vendor's full federal footprint renders with the unresolved agency
+    // still in the title, and no warn chip appears.
+    agencyUnrecognized: null,
     recipientAsked: attrs.recipient || null,
     recipientResolved: recipientName || null,
   };
+
+  // If cleanAgency was provided but didn't resolve, mark it dropped immediately
+  // so the card title and chip both reflect what actually happened.
+  if (cleanAgency && !agencyResolution) {
+    resolved.agencyDropped = cleanAgency;
+    resolved.agencyAsked = null;
+  }
 
   // Subaward branch — prime-then-fanout pattern.
   //
@@ -1768,40 +1782,54 @@ async function pullOnce(attrs) {
       ? { ...baseFilters, keywords: keywordNeedles }
       : null;
 
-    const queries = [];
-    if (directFilters) queries.push(searchAwards(directFilters, false));
-    if (keywordFilters) queries.push(searchAwards(keywordFilters, false));
     console.log('[mo:filt]', JSON.stringify({
       recipient: attrs.recipient,
       recipientName,
       directFilters: directFilters ? { recipient_search_text: directFilters.recipient_search_text } : null,
       keywordNeedles,
-      baseFilters: { ...baseFilters },
     }));
-    const results = await Promise.all(queries);
-    console.log('[mo:search]', results.map(r => ({ rows: r.rows.length, error: r.error })));
 
-    const errors = results.filter(r => r.error).map(r => r.error);
-    if (errors.length > 0 && errors.length === results.length) {
+    const directResults = directFilters
+      ? await searchAwards(directFilters, false)
+      : { rows: [], error: null };
+    const keywordResults = keywordFilters
+      ? await searchAwards(keywordFilters, false)
+      : { rows: [], error: null };
+
+    console.log('[mo:search]', [
+      { path: 'direct', rows: directResults.rows.length, error: directResults.error },
+      { path: 'keyword', rows: keywordResults.rows.length, error: keywordResults.error },
+    ]);
+
+    const errors = [directResults, keywordResults].filter(r => r.error).map(r => r.error);
+    const allQueries = [directResults, keywordResults].filter(r => !r.error);
+    if (errors.length > 0 && allQueries.length === 0) {
       return { rows: [], resolved, error: errors[0] };
     }
 
+    // Direct-path rows (recipientName resolved + recipient_search_text) are
+    // trusted as-is — USASpending's own recipient resolver is authoritative.
+    // Word-boundary post-filter is only applied to keyword-path rows, where
+    // we need to prune false matches (e.g. "NSA" inside "KANSAS CORP").
     const seen = new Map();
-    for (const r of results) {
-      for (const row of r.rows) {
-        const id = row['Award ID'];
-        if (id && !seen.has(id)) seen.set(id, row);
-      }
+    for (const row of directResults.rows) {
+      const id = row['Award ID'];
+      if (id && !seen.has(id)) seen.set(id, row);
+    }
+    let keywordRows = keywordResults.rows;
+    if (needles.length > 0 && keywordRows.length > 0) {
+      const beforeKwFilter = keywordRows.length;
+      keywordRows = keywordRows.filter(row =>
+        matchesAny([row['Description'], row['Recipient Name']], needles)
+      );
+      console.log('[mo:postfilter]', { needles, before: beforeKwFilter, after: keywordRows.length });
+    }
+    for (const row of keywordRows) {
+      const id = row['Award ID'];
+      if (id && !seen.has(id)) seen.set(id, row);
     }
 
     let rows = [...seen.values()];
-    const beforeFilter = rows.length;
-    if (needles.length > 0) {
-      rows = rows.filter(row =>
-        matchesAny([row['Description'], row['Recipient Name']], needles)
-      );
-    }
-    console.log('[mo:postfilter]', { needles, before: beforeFilter, after: rows.length });
 
     // Cascading fallback: if vendor + agency narrowed everything to zero,
     // retry without the agency filter so the user gets the vendor's broader
@@ -1833,12 +1861,13 @@ async function pullOnce(attrs) {
           matchesAny([row['Description'], row['Recipient Name']], needles)
         );
       }
-      // Mark the resolved object so the card knows the agency was dropped
-      if (rows.length > 0) {
-        resolved.agencyDropped = resolved.agencyResolved || resolved.agencyAsked;
-        resolved.agencyResolved = null;
-        resolved.agencyAsked = null;
-      }
+      // Mark agency as dropped whether or not retry found results.
+      // This ensures a warn chip always appears when we attempted the cascade,
+      // even if the vendor has zero federal contracts overall. Without this,
+      // NSA/Pure Storage returns a silent empty card with no explanation.
+      resolved.agencyDropped = resolved.agencyResolved || resolved.agencyAsked;
+      resolved.agencyResolved = null;
+      resolved.agencyAsked = null;
     }
 
     rows.sort((a, b) => (Number(b['Award Amount']) || 0) - (Number(a['Award Amount']) || 0));
@@ -2517,14 +2546,14 @@ async function loadSecFilings(rows) {
   }
   if (!publics.length) return [];
 
-  const filings = await Promise.all(publics.map(async (v) => {
+  const filings = [];
+  for (const v of publics) {
     const payload = await fetchEdgarFilings(v.cik);
-    if (!payload || payload.error) return null;
+    if (!payload || payload.error) continue;
     const list = extractRecentFilings(payload, 3);
-    if (!list.length) return null;
-    return { ...v, filings: list };
-  }));
-  return filings.filter(Boolean);
+    if (list.length) filings.push({ ...v, filings: list });
+  }
+  return filings;
 }
 
 // =============================================================================
