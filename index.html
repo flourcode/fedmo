@@ -3941,6 +3941,100 @@ function scrollBottom() {
 //
 // If Mo emits a broken tag (e.g. prose inside `until="..."` with no `/>`),
 // the parser doesn't fire, but we still need to clean the displayed prose
+// TWO-VENDOR QUERY INTERCEPTOR
+// Gemini reliably drops keywords= when a query names both an integrator and
+// an ISV, treating the integrator as the whole query. Intercept before the
+// query reaches the LLM and rewrite it to an unambiguous canonical form that
+// the prompt rules can't misparse.
+//
+// Canonical form: "SAIC resells Amazon Web Services" — explicit verb makes
+// the pattern match the verbatim examples in the prompt.
+
+const KNOWN_INTEGRATORS = new Set([
+  'saic','science applications','gdit','general dynamics information technology',
+  'leidos','booz allen','bah','booz','accenture','accenture federal',
+  'deloitte','deloitte consulting','caci','mantech','peraton','kbr','cgi','cgi federal',
+  'maximus','lockheed','northrop','raytheon','rtx','l3harris','lm','lmco',
+  'carahsoft','wwt','world wide technology','four points','thundercat',
+  'immixgroup','govplace','fcn','cdw','shi','connection','insight direct',
+  'optiv','presidio','trace3','wwt','planet technologies',
+]);
+
+const ISV_KEYWORDS = {
+  'aws':                   'Amazon Web Services, Amazon',
+  'amazon web services':   'Amazon Web Services, Amazon',
+  'amazon':                'Amazon Web Services, Amazon',
+  'azure':                 'Azure, Microsoft Azure',
+  'microsoft azure':       'Azure, Microsoft Azure',
+  'm365':                  'Microsoft 365, M365',
+  'microsoft 365':         'Microsoft 365, M365, Office 365',
+  'office 365':            'Microsoft 365, M365, Office 365',
+  'defender':              'Microsoft Defender, Defender',
+  'microsoft defender':    'Microsoft Defender, Defender',
+  'sentinel':              'Microsoft Sentinel, Sentinel SIEM',
+  'microsoft sentinel':    'Microsoft Sentinel, Sentinel SIEM',
+  'google cloud':          'Google Cloud, GCP',
+  'gcp':                   'Google Cloud, GCP',
+  'salesforce':            'Salesforce',
+  'servicenow':            'ServiceNow',
+  'snowflake':             'Snowflake',
+  'palantir':              'Palantir, Gotham, Foundry',
+  'gotham':                'Palantir, Gotham, Foundry',
+  'foundry':               'Palantir, Gotham, Foundry',
+  'splunk':                'Splunk',
+  'crowdstrike':           'CrowdStrike',
+  'sentinelone':           'SentinelOne',
+  'sentinel one':          'SentinelOne',
+  'datadog':               'Datadog',
+  'palo alto':             'Palo Alto Networks',
+  'jira':                  'Jira, Confluence, Atlassian',
+  'confluence':            'Jira, Confluence, Atlassian',
+  'atlassian':             'Jira, Confluence, Atlassian',
+  'okta':                  'Okta',
+  'zscaler':               'Zscaler',
+  'akamai':                'Akamai, Guardicore',
+  'guardicore':            'Akamai, Guardicore',
+  'tenable':               'Tenable',
+  'rapid7':                'Rapid7',
+  'elastic':               'Elastic, Elasticsearch',
+  'elasticsearch':         'Elastic, Elasticsearch',
+  'databricks':            'Databricks',
+  'oracle cloud':          'Oracle Cloud',
+  'sap':                   'SAP',
+  'workday':               'Workday',
+};
+
+// Strip filler words to isolate vendor tokens
+const FILLER = /\b(resells?|reselling|integrates?|integrating|uses?|with|and|at|for|in|the|where|does|show me|who|what|tell me about|how|federal|government|contracts?)\b/gi;
+
+function detectTwoVendorQuery(q) {
+  const lower = q.toLowerCase();
+  const stripped = lower.replace(FILLER, ' ').replace(/\s+/g, ' ').trim();
+  const tokens = stripped.split(' ').filter(Boolean);
+
+  let integrator = null;
+  let isvKey = null;
+
+  // Try all 1, 2, and 3-word combinations from the original lowercased query
+  const words = lower.replace(/[^\w\s]/g, ' ').split(/\s+/).filter(Boolean);
+  for (let len = 3; len >= 1; len--) {
+    for (let i = 0; i <= words.length - len; i++) {
+      const phrase = words.slice(i, i + len).join(' ');
+      if (!integrator && KNOWN_INTEGRATORS.has(phrase)) integrator = phrase;
+      if (!isvKey && ISV_KEYWORDS[phrase]) isvKey = phrase;
+    }
+  }
+
+  if (!integrator || !isvKey) return null;
+
+  // Resolve integrator display name
+  const integratorDisplay = VENDOR_LEGAL_NAMES[integrator] || integrator.toUpperCase();
+  const keywords = ISV_KEYWORDS[isvKey];
+
+  // Return canonical rewrite that matches the verbatim prompt examples
+  return `${integratorDisplay} resells ${keywords.split(',')[0].trim()}`;
+}
+
 // so the broken fragment doesn't render as visible garbage. We track whether
 // Mo started a tag (`<data`) and suppress all subsequent text until either
 // `/>` arrives or the stream ends.
@@ -3949,6 +4043,12 @@ async function askMo(question, opts = {}) {
   busy = true;
   $send.disabled = true;
   const { autoSort } = opts;
+
+  // Intercept two-vendor queries before they reach Gemini
+  const rewritten = detectTwoVendorQuery(question);
+  if (rewritten && rewritten !== question.toLowerCase()) {
+    question = rewritten;
+  }
 
   renderUserTurn(question);
   history.push({ role: 'user', parts: [{ text: question }] });
