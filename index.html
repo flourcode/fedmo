@@ -2119,6 +2119,41 @@ function aggregateRowsBy(rows, isSub, dimension) {
 // and Medicaid Services") get truncated to "Centers fo…" in narrow treemap
 // cells, which tells the user nothing. The abbreviations are how federal
 // staff actually refer to these agencies day-to-day.
+
+// AGENCY_ABBREVIATIONS — maps full toptier agency name to the short form used
+// in row meta when we have an office-level label. E.g. when the office prefix
+// resolves to "NNSA NON-MO CNTRCTNG OPS DIV" and the toptier is
+// "Department of Energy", we show "NNSA NON-MO CNTRCTNG OPS DIV · DOE"
+// so sellers unfamiliar with DOE office codes still know the parent agency.
+const AGENCY_ABBREVIATIONS = {
+  'Department of Defense':                         'DoD',
+  'Department of Health and Human Services':       'HHS',
+  'Department of Homeland Security':               'DHS',
+  'Department of Veterans Affairs':                'VA',
+  'Department of Energy':                          'DOE',
+  'Department of Justice':                         'DOJ',
+  'Department of State':                           'DOS',
+  'Department of Transportation':                  'DOT',
+  'Department of the Treasury':                    'Treasury',
+  'Department of Commerce':                        'DOC',
+  'Department of Agriculture':                     'USDA',
+  'Department of the Interior':                    'DOI',
+  'Department of Labor':                           'DOL',
+  'Department of Education':                       'ED',
+  'Department of Housing and Urban Development':   'HUD',
+  'General Services Administration':               'GSA',
+  'National Aeronautics and Space Administration': 'NASA',
+  'Social Security Administration':                'SSA',
+  'Environmental Protection Agency':               'EPA',
+  'National Science Foundation':                   'NSF',
+  'Small Business Administration':                 'SBA',
+  'Office of Personnel Management':                'OPM',
+  'Nuclear Regulatory Commission':                 'NRC',
+  'Federal Communications Commission':             'FCC',
+  'Federal Trade Commission':                      'FTC',
+  'Securities and Exchange Commission':            'SEC',
+};
+
 const AGENCY_SHORT_LABELS = {
   'Centers for Medicare and Medicaid Services': 'CMS',
   'National Institutes of Health': 'NIH',
@@ -2962,7 +2997,27 @@ function renderContractRows(card, rows) {
     const subAgency = r['Awarding Sub Agency'] || agencyTop;
     const awardId = r['Award ID'] || '';
     const prefixOffice = lookupOffice(awardId);
-    const agency = prefixOffice || subAgency || agencyTop;
+    // When we have an office-level label, append the parent context so sellers
+    // who don't know office codes still see the agency. E.g.:
+    //   "NNSA NON-MO CNTRCTNG OPS DIV · DOE"
+    //   "OFC OF ACQUISITION AND GRANTS MGMT · HHS"
+    // Use sub-agency if it differs from toptier (more specific than "Department of Defense").
+    // Fall back to toptier abbreviation if sub-agency == toptier.
+    // Skip suffix if the parent name is already contained in the office string.
+    let agency;
+    if (prefixOffice) {
+      const officeUpper = prefixOffice.toUpperCase();
+      // Prefer sub-agency (e.g. "Department of the Navy") over toptier ("Department of Defense")
+      // unless sub-agency == toptier (fully flattened)
+      const parentFull = (subAgency && subAgency !== agencyTop) ? subAgency : agencyTop;
+      const parentAbbr = AGENCY_ABBREVIATIONS[parentFull.trim()] || AGENCY_ABBREVIATIONS[agencyTop.trim()] || agencyTop;
+      // Only append if the parent name isn't already implied by the office string
+      const parentWords = parentFull.split(/\s+/).filter(w => w.length > 3);
+      const parentAlreadyInOffice = parentWords.some(w => officeUpper.includes(w.toUpperCase()));
+      agency = parentAlreadyInOffice ? prefixOffice : `${prefixOffice} · ${parentAbbr}`;
+    } else {
+      agency = subAgency || agencyTop;
+    }
     const status = computeStatus(r);
     const pop = formatPoP(r);
     const term = formatTerm(r);
