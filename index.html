@@ -1262,6 +1262,31 @@ function lookupOffice(awardId) {
   return null;
 }
 
+// Build the display label for the agency column / treemap cell.
+// When an office prefix resolves, format as "ABBR · OFFICE NAME" so:
+//   - Parent agency always appears first (hierarchy reads left-to-right)
+//   - Sellers who don't know office codes see the agency immediately
+//   - Short abbr keeps it readable in both treemap cells and row meta
+// Suppresses the abbr prefix when the parent is already semantically
+// contained in the office name (NASA IT PROCUREMENT OFFICE, DEFENSE HEALTH AGENCY).
+// Falls back to sub-agency → toptier agency when no office prefix resolves.
+function buildOfficeLabel(awardId, agencyTop, subAgency) {
+  const officeRaw = lookupOffice(awardId);
+  if (officeRaw) {
+    const officeUpper = officeRaw.toUpperCase();
+    // Prefer sub-agency when more specific than toptier
+    const parentFull = (subAgency && subAgency !== agencyTop) ? subAgency : agencyTop;
+    const parentAbbr = AGENCY_ABBREVIATIONS[parentFull.trim()]
+                    || AGENCY_ABBREVIATIONS[agencyTop.trim()]
+                    || agencyTop;
+    // Suppress prefix if parent name already appears in the office string
+    const parentWords = parentFull.split(/\s+/).filter(w => w.length > 3);
+    const parentAlreadyInOffice = parentWords.some(w => officeUpper.includes(w.toUpperCase()));
+    return parentAlreadyInOffice ? officeRaw : `${parentAbbr} · ${officeRaw}`;
+  }
+  return subAgency || agencyTop;
+}
+
 // =============================================================================
 // USASPENDING
 // =============================================================================
@@ -2103,8 +2128,7 @@ function aggregateRowsBy(rows, isSub, dimension) {
       // Award ID prefix resolves to AFLCMC, AFMC, AFRL, etc. regardless.
       const agency = r['Awarding Agency'] || '';
       const sub = r['Awarding Sub Agency'] || agency;
-      const prefixOffice = lookupOffice(r['Award ID']);
-      name = prefixOffice || sub || '(unknown)';
+      name = buildOfficeLabel(r['Award ID'], agency, sub) || '(unknown)';
       amt = Number(r['Award Amount']) || 0;
     } else {
       name = r['Recipient Name'] || '(unknown)';
@@ -2996,28 +3020,7 @@ function renderContractRows(card, rows) {
     const agencyTop = r['Awarding Agency'] || '';
     const subAgency = r['Awarding Sub Agency'] || agencyTop;
     const awardId = r['Award ID'] || '';
-    const prefixOffice = lookupOffice(awardId);
-    // When we have an office-level label, append the parent context so sellers
-    // who don't know office codes still see the agency. E.g.:
-    //   "NNSA NON-MO CNTRCTNG OPS DIV · DOE"
-    //   "OFC OF ACQUISITION AND GRANTS MGMT · HHS"
-    // Use sub-agency if it differs from toptier (more specific than "Department of Defense").
-    // Fall back to toptier abbreviation if sub-agency == toptier.
-    // Skip suffix if the parent name is already contained in the office string.
-    let agency;
-    if (prefixOffice) {
-      const officeUpper = prefixOffice.toUpperCase();
-      // Prefer sub-agency (e.g. "Department of the Navy") over toptier ("Department of Defense")
-      // unless sub-agency == toptier (fully flattened)
-      const parentFull = (subAgency && subAgency !== agencyTop) ? subAgency : agencyTop;
-      const parentAbbr = AGENCY_ABBREVIATIONS[parentFull.trim()] || AGENCY_ABBREVIATIONS[agencyTop.trim()] || agencyTop;
-      // Only append if the parent name isn't already implied by the office string
-      const parentWords = parentFull.split(/\s+/).filter(w => w.length > 3);
-      const parentAlreadyInOffice = parentWords.some(w => officeUpper.includes(w.toUpperCase()));
-      agency = parentAlreadyInOffice ? prefixOffice : `${prefixOffice} · ${parentAbbr}`;
-    } else {
-      agency = subAgency || agencyTop;
-    }
+    const agency = buildOfficeLabel(awardId, agencyTop, subAgency);
     const status = computeStatus(r);
     const pop = formatPoP(r);
     const term = formatTerm(r);
@@ -3450,8 +3453,9 @@ function renderCard(rows, attrs, resolved) {
         // Use the same Office-fallback logic as aggregateRowsBy so the
         // count matches the cells the treemap actually shows.
         uniqueCount = new Set(rows.map(r => {
-          const sub = r['Awarding Sub Agency'] || r['Awarding Agency'] || '';
-          return lookupOffice(r['Award ID']) || sub;
+          const at = r['Awarding Agency'] || '';
+          const sub = r['Awarding Sub Agency'] || at;
+          return buildOfficeLabel(r['Award ID'], at, sub);
         }).filter(Boolean)).size;
         label = 'Where the money is';
         meta = `top ${namedCellCount} of ${uniqueCount} agencies`;
