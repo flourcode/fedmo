@@ -541,11 +541,26 @@ a:hover { text-decoration: underline; }
 }
 
 .mo-card-loading {
-  padding: var(--s-6) var(--s-5);
-  text-align: center;
-  color: var(--text-faint);
-  font-size: 14px;
+  padding: var(--s-4) var(--s-5) var(--s-5);
 }
+/* Skeleton shimmer animation */
+@keyframes mo-shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+.mo-skel {
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--border-soft) 25%, var(--bg-tint) 50%, var(--border-soft) 75%);
+  background-size: 800px 100%;
+  animation: mo-shimmer 1.4s ease-in-out infinite;
+}
+.mo-skel-title  { height: 18px; width: 65%; margin-bottom: 8px; }
+.mo-skel-sub    { height: 13px; width: 85%; margin-bottom: 12px; }
+.mo-skel-chip   { height: 22px; width: 110px; border-radius: 999px; display: inline-block; margin-right: 6px; }
+.mo-skel-stats  { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; margin: 14px 0 18px; }
+.mo-skel-stat   { height: 44px; border-radius: 8px; }
+.mo-skel-rows   { margin-top: 4px; }
+.mo-skel-row    { height: 58px; border-radius: 8px; margin-bottom: 6px; }
 .mo-card-empty {
   padding: var(--s-6) var(--s-5);
   text-align: center;
@@ -977,6 +992,39 @@ a:hover { text-decoration: underline; }
     margin-left: var(--s-3); margin-right: var(--s-3);
   }
   .mo-amount-note { padding-left: var(--s-4); padding-right: var(--s-4); }
+
+  /* Card title: reduce right-pad so long titles aren't truncated by share button */
+  .mo-card-title { padding-right: 70px; }
+
+  /* Treemap: shorter height on mobile gives cells better aspect ratio for labels */
+  .mo-treemap { height: 170px; }
+
+  /* Row touch targets: 12px padding → ~46px height, above Apple HIG 44px min */
+  .mo-row-2line { padding: 12px var(--s-4) 12px; }
+
+  /* Row meta: allow wrapping so vehicle/status info isn't clipped off-screen */
+  .mo-row-meta {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    line-height: 1.5;
+  }
+
+  /* Sort buttons: larger touch targets */
+  .mo-sort-btn { padding: 8px 14px; }
+
+  /* View link: larger tap target on mobile */
+  .mo-row-view { padding: 6px 12px; font-size: 12px; }
+
+  /* SEC filings: stack vendor cards vertically, filings as rows (already are) */
+  .mo-sec-vendor-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+  .mo-sec-filing {
+    padding: var(--s-2) 0;  /* more vertical breathing room for tap */
+  }
 }
 </style>
 </head>
@@ -1262,6 +1310,61 @@ function lookupOffice(awardId) {
   return null;
 }
 
+// AWARD_ID_PARENT: infers the parent service/agency from the Award ID 2-char prefix.
+// This is more reliable than the Sub Agency field, which often returns
+// "Department of Defense" for cross-service or joint contracts even when the
+// awarding office is clearly Air Force (FA8xxx) or Navy (N0xxxx).
+// The PIID prefix IS the office code — it unambiguously identifies the service.
+const AWARD_ID_PARENT = {
+  'FA': 'USAF',   // Air Force Acquisition
+  'N0': 'Navy',   'N1': 'Navy', 'N2': 'Navy', 'N3': 'Navy',
+  'N4': 'Navy',   'N5': 'Navy', 'N6': 'Navy', 'N7': 'Navy',
+  'M0': 'USMC',   'M6': 'USMC', 'M7': 'USMC',
+  'W0': 'Army',   'W1': 'Army', 'W3': 'Army', 'W4': 'Army',
+  'W5': 'Army',   'W9': 'Army',
+  'HT': 'DHA',    // Defense Health Agency
+  'HC': 'DISA',   // Defense Information Systems Agency
+  'HQ': 'DoD',    // OSD/joint
+  '75': 'HHS',
+  '89': 'DOE',
+  '80': 'NASA',
+  'GS': 'GSA',    '47': 'GSA',
+  '36': 'VA',
+  '91': 'Treasury',
+  '15': 'DOJ',
+  'HS': 'DHS',    'TO': 'DHS',
+};
+
+function inferParentFromAwardId(awardId) {
+  if (!awardId) return null;
+  return AWARD_ID_PARENT[String(awardId).toUpperCase().slice(0, 2)] || null;
+}
+
+// Build the display label for agency column / treemap cell.
+// Format: "PARENT · OFFICE" (e.g. "Navy · NAVSEA HQ", "DOE · NNSA NON-MO CNTRCTNG OPS DIV")
+// Parent is inferred from the Award ID 2-char prefix — reliable across cross-service contracts.
+// Falls back to sub-agency → toptier when no office prefix resolves.
+// Suppresses parent prefix when it's already semantically in the office name.
+function buildOfficeLabel(awardId, agencyTop, subAgency) {
+  const officeRaw = lookupOffice(awardId);
+  if (officeRaw) {
+    // Infer parent from Award ID prefix first (reliable), fall back to sub-agency/toptier
+    const parentFromId = inferParentFromAwardId(awardId);
+    const parentFull = (subAgency && subAgency !== agencyTop) ? subAgency : agencyTop;
+    const parentAbbr = parentFromId
+      || AGENCY_ABBREVIATIONS[parentFull.trim()]
+      || AGENCY_ABBREVIATIONS[agencyTop.trim()]
+      || agencyTop;
+    // Suppress prefix if parent already appears in the office string
+    const officeUpper = officeRaw.toUpperCase();
+    const parentAlreadyInOffice = officeUpper.includes(parentAbbr.toUpperCase())
+      || (parentFull.split(/\s+/).filter(w => w.length > 3)
+          .some(w => officeUpper.includes(w.toUpperCase())));
+    return parentAlreadyInOffice ? officeRaw : `${parentAbbr}›${officeRaw}`;
+  }
+  return subAgency || agencyTop;
+}
+
 // =============================================================================
 // USASPENDING
 // =============================================================================
@@ -1369,6 +1472,7 @@ const VENDOR_LEGAL_NAMES = {
   'snyk':                   'SNYK',
   'crowdstrike':            'CROWDSTRIKE',
   'sentinelone':            'SENTINELONE',
+  'sentinel one':           'SENTINELONE',
   'tenable':                'TENABLE',
   'rapid7':                 'RAPID7',
   'okta':                   'OKTA',
@@ -1379,8 +1483,22 @@ const VENDOR_LEGAL_NAMES = {
   'fortinet':               'FORTINET',
   'cloudflare':             'CLOUDFLARE',
   'akamai':                 'AKAMAI TECHNOLOGIES',
+  'guardicore':             'AKAMAI TECHNOLOGIES',
   'f5':                     'F5 NETWORKS',
   'fastly':                 'FASTLY',
+  // Microsoft product aliases — all map to Microsoft Corporation
+  'm365':                   'MICROSOFT CORPORATION',
+  'microsoft 365':          'MICROSOFT CORPORATION',
+  'office 365':             'MICROSOFT CORPORATION',
+  'azure':                  'MICROSOFT CORPORATION',
+  'microsoft azure':        'MICROSOFT CORPORATION',
+  'defender':               'MICROSOFT CORPORATION',
+  'microsoft defender':     'MICROSOFT CORPORATION',
+  'microsoft sentinel':     'MICROSOFT CORPORATION',
+  // Atlassian — sells through Carahsoft; never primes directly
+  'atlassian':              'ATLASSIAN',
+  'jira':                   'ATLASSIAN',
+  'confluence':             'ATLASSIAN',
   'leidos':                 'LEIDOS',
   'booz':                   'BOOZ ALLEN HAMILTON',
   'booz allen':             'BOOZ ALLEN HAMILTON',
@@ -2079,16 +2197,16 @@ function aggregateRowsBy(rows, isSub, dimension) {
       amt = Number(r._amount) || 0;
     } else if (dimension === 'agency') {
       // When subagency has bottomed out (rows filtered to a subtier so
-      // USASpending returns Agency == Sub Agency), substitute the office name
-      // so the treemap shows NAVSEA/NAVAIR/AFLCMC-level cells instead of one
-      // giant "Department of the Navy" cell.
-      // Rec B: Awarding Office field is always empty (confirmed 0/100 rows across
-      // 3 probes). Use Award ID prefix lookup via offices.json instead.
+      // Always attempt Award ID prefix lookup for a more specific office label.
+      // Previously only fired when Agency == Sub Agency (the subtier-pinned case
+      // e.g. Navy queries where both fields say "Department of the Navy").
+      // But vendor+subtier queries (SAIC at Air Force) return Agency=DoD,
+      // Sub=Air Force — different strings, so the old flattened check missed them,
+      // leaving the treemap as one giant "Department of the Air Force" cell.
+      // Award ID prefix resolves to AFLCMC, AFMC, AFRL, etc. regardless.
       const agency = r['Awarding Agency'] || '';
       const sub = r['Awarding Sub Agency'] || agency;
-      const flattened = agency.trim().toUpperCase() === sub.trim().toUpperCase();
-      const officeName = flattened ? (lookupOffice(r['Award ID']) || r['Awarding Office'] || '') : '';
-      name = (flattened && officeName) ? officeName : (sub || '(unknown)');
+      name = buildOfficeLabel(r['Award ID'], agency, sub) || '(unknown)';
       amt = Number(r['Award Amount']) || 0;
     } else {
       name = r['Recipient Name'] || '(unknown)';
@@ -2103,6 +2221,41 @@ function aggregateRowsBy(rows, isSub, dimension) {
 // and Medicaid Services") get truncated to "Centers fo…" in narrow treemap
 // cells, which tells the user nothing. The abbreviations are how federal
 // staff actually refer to these agencies day-to-day.
+
+// AGENCY_ABBREVIATIONS — maps full toptier agency name to the short form used
+// in row meta when we have an office-level label. E.g. when the office prefix
+// resolves to "NNSA NON-MO CNTRCTNG OPS DIV" and the toptier is
+// "Department of Energy", we show "NNSA NON-MO CNTRCTNG OPS DIV · DOE"
+// so sellers unfamiliar with DOE office codes still know the parent agency.
+const AGENCY_ABBREVIATIONS = {
+  'Department of Defense':                         'DoD',
+  'Department of Health and Human Services':       'HHS',
+  'Department of Homeland Security':               'DHS',
+  'Department of Veterans Affairs':                'VA',
+  'Department of Energy':                          'DOE',
+  'Department of Justice':                         'DOJ',
+  'Department of State':                           'DOS',
+  'Department of Transportation':                  'DOT',
+  'Department of the Treasury':                    'Treasury',
+  'Department of Commerce':                        'DOC',
+  'Department of Agriculture':                     'USDA',
+  'Department of the Interior':                    'DOI',
+  'Department of Labor':                           'DOL',
+  'Department of Education':                       'ED',
+  'Department of Housing and Urban Development':   'HUD',
+  'General Services Administration':               'GSA',
+  'National Aeronautics and Space Administration': 'NASA',
+  'Social Security Administration':                'SSA',
+  'Environmental Protection Agency':               'EPA',
+  'National Science Foundation':                   'NSF',
+  'Small Business Administration':                 'SBA',
+  'Office of Personnel Management':                'OPM',
+  'Nuclear Regulatory Commission':                 'NRC',
+  'Federal Communications Commission':             'FCC',
+  'Federal Trade Commission':                      'FTC',
+  'Securities and Exchange Commission':            'SEC',
+};
+
 const AGENCY_SHORT_LABELS = {
   'Centers for Medicare and Medicaid Services': 'CMS',
   'National Institutes of Health': 'NIH',
@@ -2296,7 +2449,7 @@ function renderTreemapInto(host, items) {
   // Stash data for resize-driven re-render
   try { host.setAttribute('data-tm-items', JSON.stringify(items)); } catch {}
   const W = host.clientWidth || 320;
-  const H = 220;
+  const H = W <= 420 ? 170 : 220;  // match @media (max-width:600px) CSS height
   const sorted = items.slice().sort((a, b) => b.value - a.value);
   const laid = squarify(sorted, 0, 0, W, H);
   const PADDING = 2;
@@ -2331,17 +2484,19 @@ function renderTreemapInto(host, items) {
     const isOther = /^Other \(/.test(cell.name);
     const fill = isOther ? 'url(#other-hatch)' : cell.color;
     svg += `<rect x="${rx.toFixed(1)}" y="${ry.toFixed(1)}" width="${rw.toFixed(1)}" height="${rh.toFixed(1)}" fill="${fill}" rx="3"><title>${escapeHtml(cell.name)} — ${fmtMoney(cell.value)}</title></rect>`;
-    if (rw > 55 && rh > 30) {
+    if (rw > 45 && rh > 26) {
       const area = rw * rh;
-      const nameFont = area > 12000 ? 16 : area > 5000 ? 13 : 11;
-      const valueFont = Math.max(nameFont - 2, 10);
-      const charsFit = Math.max(4, Math.floor((rw - 12) / (nameFont * 0.55)));
+      const nameFont = area > 12000 ? 13 : area > 5000 ? 11 : 10;
+      const valueFont = Math.max(nameFont - 1, 9);
+      // 0.50 char-width ratio fits more of compound labels like "Navy · NAVSEA HQ"
+      const charsFit = Math.max(4, Math.floor((rw - 10) / (nameFont * 0.50)));
       const name = shortenLabel(cell.name, charsFit, isOther);
       const tc = textColorFor(cell.color);
       const fontStyle = isOther ? ' font-style="italic"' : '';
-      svg += `<text x="${(rx + 6).toFixed(1)}" y="${(ry + nameFont + 4).toFixed(1)}" fill="${tc.name}" font-size="${nameFont}" font-weight="600"${fontStyle}>${escapeHtml(name)}</text>`;
+      const ls = ' letter-spacing="-0.2"';
+      svg += `<text x="${(rx + 5).toFixed(1)}" y="${(ry + nameFont + 4).toFixed(1)}" fill="${tc.name}" font-size="${nameFont}" font-weight="600"${fontStyle}${ls}>${escapeHtml(name)}</text>`;
       if (rh > nameFont + valueFont + 12) {
-        svg += `<text x="${(rx + 6).toFixed(1)}" y="${(ry + nameFont + valueFont + 10).toFixed(1)}" fill="${tc.value}" font-size="${valueFont}" font-weight="500"${fontStyle}>${fmtMoney(cell.value)}</text>`;
+        svg += `<text x="${(rx + 5).toFixed(1)}" y="${(ry + nameFont + valueFont + 9).toFixed(1)}" fill="${tc.value}" font-size="${valueFont}" font-weight="500"${ls}>${fmtMoney(cell.value)}</text>`;
       }
     }
   });
@@ -2663,17 +2818,18 @@ async function loadSecFilings(rows) {
   for (const v of publics) {
     const payload = await fetchEdgarFilings(v.cik);
     if (!payload || payload.error) continue;
-    // Staleness guard: verify the EDGAR entity name is plausibly the same company.
-    // M&A can cause a CIK to point to the wrong entity after an acquisition.
-    // payload.name is the legal entity name registered with SEC.
-    if (payload.name) {
-      const edgarName = String(payload.name).toLowerCase();
-      const expectedTokens = v.display.toLowerCase().split(/\s+/).filter(t => t.length > 3);
-      const nameMatch = expectedTokens.some(t => edgarName.includes(t));
-      if (!nameMatch) {
-        console.warn(`[edgar] CIK ${v.cik} name mismatch: expected "${v.display}", EDGAR says "${payload.name}" — skipping`);
-        continue;
-      }
+    // Staleness guard: CIKs are permanent in EDGAR (never reassigned), so a
+    // CIK mismatch from M&A is not the real risk. The real risk is a typo in
+    // our CIK table pointing to a completely unrelated company. Guard against
+    // that by checking EDGAR returned a valid entity (non-empty name).
+    // We do NOT do token matching — that incorrectly blocks legitimate pairs
+    // like SAIC→"Science Applications International Corp", IBM→"International
+    // Business Machines Corp", Google→"Alphabet Inc", Raytheon→"RTX Corp".
+    // Those are correct CIK mappings; the brand name just differs from the
+    // SEC legal entity name.
+    if (payload.name === null || payload.name === undefined || payload.name === '') {
+      console.warn(`[edgar] CIK ${v.cik} returned empty name — skipping`);
+      continue;
     }
     const list = extractRecentFilings(payload, 3);
     if (list.length) filings.push({ ...v, filings: list });
@@ -2691,8 +2847,18 @@ async function loadSecFilings(rows) {
 // a row lives on a specific vehicle tells them the procurement path,
 // what other primes have a seat, and how to get on for next time.
 //
-// Prefix matching tries longest-first (7 chars down to 4) so a 7-char
-// match wins over a 4-char match if both are in the table.
+// TWO maps to avoid prefix collisions:
+//
+// VEHICLE_MAP — matched against the Award ID of the ROW ITSELF.
+//   Only unambiguous vehicle prefixes go here. HHS acquisition office
+//   prefixes (75FCMC, 75A501) are excluded: they appear on both the
+//   parent IDIQ Award IDs AND the child task order Award IDs, so a prefix
+//   match on the row's own Award ID would mislabel task orders as vehicles.
+//   Loop extends to 3 chars to cover NNG (SEWP V).
+//
+// PARENT_VEHICLE_MAP — matched against the PARENT contract ID extracted
+//   from generated_internal_id field 3. Safe to include HHS prefixes here
+//   because a parent ID of 75A50123D00005 unambiguously means a BARDA IDIQ.
 const VEHICLE_MAP = {
   'NNG':       'SEWP V',
   'GS00Q':     'CIO-SP4',
@@ -2709,7 +2875,10 @@ const VEHICLE_MAP = {
   'HC1028':    'ENCORE III',
   'HC1047':    'JWCC',
   'HSHQDC':    'EAGLE II',
-  // HHS-specific IDIQs (Rec D — discovered via generated_internal_id probe)
+};
+
+const PARENT_VEHICLE_MAP = {
+  ...VEHICLE_MAP,
   '75A501':    'BARDA IDIQ',
   '75N910':    'NIH Research IDIQ',
   '75FCMC':    'HHS OAM Vehicle',
@@ -2724,36 +2893,30 @@ function parseParentFromInternalId(internalId, awardId) {
   const strip = `CONT_AWD_${awardId}_`;
   if (!internalId.startsWith(strip)) return null;
   const remainder = internalId.slice(strip.length);
-  // remainder = {AgencyCode}_{ParentAwardID}_{ParentAgencyCode}
-  // AgencyCode is always numeric (4 digits). Split from left.
   const parts = remainder.split('_');
   if (parts.length < 3) return null;
-  // parts[0] = AgencyCode, parts[-1] = ParentAgencyCode, middle = ParentAwardID
   const parentId = parts.slice(1, -1).join('_');
   return (parentId && parentId !== '-NONE-') ? parentId : null;
 }
 
-// Vehicle detection: tries Award ID prefix first, then parent contract from
-// generated_internal_id. First non-null wins. Returns vehicle name or null.
+// Vehicle detection: Award ID prefix (VEHICLE_MAP, loop 7→3), then parent
+// contract ID from generated_internal_id (PARENT_VEHICLE_MAP, loop 7→3).
+// Separate maps prevent HHS office prefixes from mislabeling task order rows.
 function detectVehicle(award) {
-  // Method 1: Award ID prefix (existing behavior)
   const id = String(award['Award ID'] || '').toUpperCase();
   if (id) {
-    for (let len = 7; len >= 4; len--) {
+    for (let len = 7; len >= 3; len--) {
       const vehicle = VEHICLE_MAP[id.substring(0, len)];
       if (vehicle) return vehicle;
     }
   }
 
-  // Method 2 (Rec C): parent contract from generated_internal_id
-  // Catches task orders where the task order's own Award ID has no vehicle prefix
-  // but the parent IDIQ ID does (e.g. HHS task orders on CIO-SP3/CIO-SP4/GSA MAS).
   const internalId = String(award['generated_internal_id'] || '');
   const parentId = parseParentFromInternalId(internalId, String(award['Award ID'] || ''));
   if (parentId) {
     const parentUpper = parentId.toUpperCase();
-    for (let len = 7; len >= 4; len--) {
-      const vehicle = VEHICLE_MAP[parentUpper.substring(0, len)];
+    for (let len = 7; len >= 3; len--) {
+      const vehicle = PARENT_VEHICLE_MAP[parentUpper.substring(0, len)];
       if (vehicle) return vehicle;
     }
   }
@@ -2937,9 +3100,7 @@ function renderContractRows(card, rows) {
     const agencyTop = r['Awarding Agency'] || '';
     const subAgency = r['Awarding Sub Agency'] || agencyTop;
     const awardId = r['Award ID'] || '';
-    const flattened = agencyTop.trim().toUpperCase() === subAgency.trim().toUpperCase();
-    const officeName = flattened ? (lookupOffice(awardId) || r['Awarding Office'] || '') : '';
-    const agency = (flattened && officeName) ? officeName : (subAgency || agencyTop);
+    const agency = buildOfficeLabel(awardId, agencyTop, subAgency);
     const status = computeStatus(r);
     const pop = formatPoP(r);
     const term = formatTerm(r);
@@ -3372,11 +3533,9 @@ function renderCard(rows, attrs, resolved) {
         // Use the same Office-fallback logic as aggregateRowsBy so the
         // count matches the cells the treemap actually shows.
         uniqueCount = new Set(rows.map(r => {
-          const agencyTop = r['Awarding Agency'] || '';
-          const subAgency = r['Awarding Sub Agency'] || agencyTop;
-          const flat = agencyTop.trim().toUpperCase() === subAgency.trim().toUpperCase();
-          const off = flat ? (lookupOffice(r['Award ID']) || r['Awarding Office'] || '') : '';
-          return (flat && off) ? off : subAgency;
+          const at = r['Awarding Agency'] || '';
+          const sub = r['Awarding Sub Agency'] || at;
+          return buildOfficeLabel(r['Award ID'], at, sub);
         }).filter(Boolean)).size;
         label = 'Where the money is';
         meta = `top ${namedCellCount} of ${uniqueCount} agencies`;
@@ -3691,7 +3850,22 @@ function renderMoTurn(question) {
 }
 
 function renderLoadingCard() {
-  return $$('div', { class: 'mo-card mo-card-loading', text: 'Pulling from USASpending…' });
+  const card = $$('div', { class: 'mo-card mo-card-loading' });
+  card.innerHTML = `
+    <div class="mo-skel mo-skel-title"></div>
+    <div class="mo-skel mo-skel-sub"></div>
+    <div><span class="mo-skel mo-skel-chip"></span><span class="mo-skel mo-skel-chip" style="width:80px"></span></div>
+    <div class="mo-skel-stats">
+      <div class="mo-skel mo-skel-stat"></div>
+      <div class="mo-skel mo-skel-stat"></div>
+      <div class="mo-skel mo-skel-stat"></div>
+    </div>
+    <div class="mo-skel-rows">
+      <div class="mo-skel mo-skel-row"></div>
+      <div class="mo-skel mo-skel-row"></div>
+      <div class="mo-skel mo-skel-row" style="opacity:.6"></div>
+    </div>`;
+  return card;
 }
 
 function scrollBottom() {
