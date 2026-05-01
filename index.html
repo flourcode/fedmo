@@ -1291,7 +1291,8 @@ const VENDOR_LEGAL_NAMES = {
   'bah':                    'BOOZ ALLEN HAMILTON',
   'gdit':                   'GENERAL DYNAMICS INFORMATION TECHNOLOGY',
   'general dynamics':       'GENERAL DYNAMICS',
-  'saic':                   'SCIENCE APPLICATIONS INTERNATIONAL',
+  'saic':                   'SCIENCE APPLICATIONS INTERNATIONAL CORPORATION',
+  'science applications':   'SCIENCE APPLICATIONS INTERNATIONAL CORPORATION',
   'lockheed':               'LOCKHEED MARTIN',
   'northrop':               'NORTHROP GRUMMAN',
   'raytheon':               'RAYTHEON',
@@ -3112,7 +3113,10 @@ function renderCard(rows, attrs, resolved) {
   if (vendorEntries.length > 0 && total > 0) {
     const [topName, topAmount] = vendorEntries[0];
     const topPct = Math.round((topAmount / total) * 100);
-    if (vendorEntries.length === 1) {
+    const isIgt = detectIGT({ 'Recipient Name': topName });
+    if (isIgt && topPct >= 30) {
+      insightBits.push(`The majority of this volume (${topPct}%) is an interagency transfer to ${topName}, not a private contract.`);
+    } else if (vendorEntries.length === 1) {
       insightBits.push(`All of this volume sits with ${topName} (${fmtMoney(topAmount)}).`);
     } else if (topPct >= 50) {
       insightBits.push(`${topName} dominates here at ${fmtMoney(topAmount)}, ${topPct}% of the volume.`);
