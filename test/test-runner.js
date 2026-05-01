@@ -84,16 +84,35 @@ async function callLambda(question, history = []) {
 // do the same — using the short acronym as a keyword needle hits description text
 // and returns 0 rows for vendors whose descriptions use the long form.
 const VENDOR_LEGAL_NAMES = {
-  'aws':           'AMAZON WEB SERVICES',
-  'amazon':        'AMAZON WEB SERVICES',
-  'saic':          'SCIENCE APPLICATIONS INTERNATIONAL CORPORATION',
-  'gdit':          'GENERAL DYNAMICS INFORMATION TECHNOLOGY',
-  'bah':           'BOOZ ALLEN HAMILTON',
-  'booz':          'BOOZ ALLEN HAMILTON',
-  'rtx':           'RAYTHEON',
-  'ibm':           'INTERNATIONAL BUSINESS MACHINES',
-  'msft':          'MICROSOFT CORPORATION',
-  'hpe':           'HEWLETT PACKARD ENTERPRISE',
+  'aws':                    'AMAZON WEB SERVICES',
+  'amazon':                 'AMAZON WEB SERVICES',
+  'saic':                   'SCIENCE APPLICATIONS INTERNATIONAL CORPORATION',
+  'gdit':                   'GENERAL DYNAMICS INFORMATION TECHNOLOGY',
+  'bah':                    'BOOZ ALLEN HAMILTON',
+  'booz':                   'BOOZ ALLEN HAMILTON',
+  'rtx':                    'RAYTHEON',
+  'ibm':                    'INTERNATIONAL BUSINESS MACHINES',
+  'msft':                   'MICROSOFT CORPORATION',
+  'hpe':                    'HEWLETT PACKARD ENTERPRISE',
+  // Microsoft product aliases
+  'm365':                   'MICROSOFT CORPORATION',
+  'microsoft 365':          'MICROSOFT CORPORATION',
+  'office 365':             'MICROSOFT CORPORATION',
+  'azure':                  'MICROSOFT CORPORATION',
+  'microsoft azure':        'MICROSOFT CORPORATION',
+  'defender':               'MICROSOFT CORPORATION',
+  'microsoft defender':     'MICROSOFT CORPORATION',
+  'microsoft sentinel':     'MICROSOFT CORPORATION',
+  // Cybersecurity vendors
+  'sentinelone':            'SENTINELONE',
+  'sentinel one':           'SENTINELONE',
+  'crowdstrike':            'CROWDSTRIKE',
+  'akamai':                 'AKAMAI TECHNOLOGIES',
+  'guardicore':             'AKAMAI TECHNOLOGIES',
+  // Atlassian — reseller-only play
+  'atlassian':              'ATLASSIAN',
+  'jira':                   'ATLASSIAN',
+  'confluence':             'ATLASSIAN',
 };
 
 // ── USASpending pull ──────────────────────────────────────────────────────
@@ -117,7 +136,15 @@ async function pullUSASpending(attrs) {
   const filters = { award_type_codes: AWARD_TYPES };
 
   if (attrs.agency) {
-    filters.agencies = [{ tier: 'toptier', name: attrs.agency, type: 'awarding' }];
+    // Military branches are subtier under DoD — must use subtier or USASpending returns 0 rows
+    const subtierAgencies = [
+      'department of the navy', 'department of the army', 'department of the air force',
+      'united states space force', 'u.s. cyber command', 'defense information systems agency',
+      'defense advanced research projects agency', 'defense health agency',
+    ];
+    const agencyLower = attrs.agency.toLowerCase();
+    const tier = subtierAgencies.some(s => agencyLower.includes(s.split(' ').slice(-1)[0])) ? 'subtier' : 'toptier';
+    filters.agencies = [{ tier, name: attrs.agency, type: 'awarding' }];
   }
 
   if (attrs.naics) {

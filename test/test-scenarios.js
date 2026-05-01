@@ -352,4 +352,315 @@ export const SCENARIOS = [
       { kind: 'hard', check: tagAttrIncludes('keywords', 'AFLCMC'), msg: 'keywords includes AFLCMC' },
     ],
   },
+  // ── AWS seller persona ──────────────────────────────────────────────────
+  {
+    name: 'AWS: Who resells AWS at DoD',
+    question: 'Who resells AWS at DoD',
+    tags: ['seller', 'aws', 'reseller'],
+    assertions: [
+      { kind: 'hard', check: tagHas('recipient', /Amazon/i), msg: 'recipient = Amazon (not "AWS" alone — denylist collision)' },
+      { kind: 'hard', check: tagHas('agency', /Defense/i), msg: 'agency = DoD' },
+      { kind: 'hard', check: rowsAtLeast(10), msg: 'at least 10 rows' },
+      { kind: 'hard', check: totalAtLeast(100e6), msg: 'total at least $100M' },
+    ],
+  },
+
+  {
+    name: 'AWS: JWCC vehicle query (no agency filter)',
+    question: 'Show me JWCC awards',
+    tags: ['seller', 'aws', 'vehicle'],
+    assertions: [
+      { kind: 'hard', check: tagAbsent('agency'), msg: 'no agency filter — JWCC spans all agencies' },
+      { kind: 'hard', check: tagAttrIncludes('keywords', 'JWCC'), msg: 'keywords includes JWCC' },
+      { kind: 'hard', check: rowsAtLeast(5), msg: 'at least 5 rows' },
+    ],
+  },
+
+  {
+    name: 'AWS: cloud at Space Force',
+    question: 'Show me cloud at Space Force',
+    tags: ['seller', 'aws', 'space-force'],
+    assertions: [
+      { kind: 'hard', check: (s) => tagHas('agency', /Space Force/i)(s) || tagHas('agency', /Air Force/i)(s), msg: 'agency = Space Force or Air Force (Space Force is subtier under AF)' },
+      { kind: 'hard', check: tagAttrIncludes('keywords', 'cloud'), msg: 'keywords includes cloud' },
+      { kind: 'soft', check: rowsAtLeast(3), msg: 'at least 3 rows' },
+    ],
+  },
+
+  {
+    name: 'AWS: IC community (agencyDropped expected)',
+    question: 'AWS at IC community',
+    tags: ['seller', 'aws', 'fallback'],
+    assertions: [
+      { kind: 'hard', check: tagHas('recipient', /Amazon/i), msg: 'recipient = Amazon' },
+      { kind: 'soft', check: (s) => s.rowCount > 0 || s.resolved?.agencyDropped,
+        msg: 'either rows returned OR agencyDropped fired (IC not a USASpending agency)' },
+    ],
+  },
+
+  // ── Microsoft seller persona ────────────────────────────────────────────
+  {
+    name: 'Microsoft: M365 at Army',
+    question: 'Show me M365 at Army',
+    tags: ['seller', 'microsoft', 'alias'],
+    assertions: [
+      { kind: 'hard', check: tagHas('recipient', /Microsoft/i), msg: 'recipient = Microsoft (M365 alias resolves to MICROSOFT CORPORATION)' },
+      { kind: 'hard', check: tagHas('agency', /Army/i), msg: 'agency = Army (subtier)' },
+      { kind: 'hard', check: rowsAtLeast(5), msg: 'at least 5 rows' },
+    ],
+  },
+
+  {
+    name: 'Microsoft: Azure at HHS',
+    question: 'Azure at HHS',
+    tags: ['seller', 'microsoft', 'alias'],
+    assertions: [
+      { kind: 'hard', check: tagHas('recipient', /Microsoft/i), msg: 'recipient = Microsoft (Azure alias resolves to MICROSOFT CORPORATION)' },
+      { kind: 'hard', check: tagHas('agency', /Health and Human Services/i), msg: 'agency = HHS' },
+      { kind: 'hard', check: rowsAtLeast(5), msg: 'at least 5 rows' },
+    ],
+  },
+
+  {
+    name: 'Microsoft: Defender at Air Force',
+    question: 'Defender at Air Force',
+    tags: ['seller', 'microsoft', 'alias'],
+    assertions: [
+      { kind: 'soft', check: tagHas('recipient', /Microsoft/i), msg: 'recipient = Microsoft (Defender alias)' },
+      { kind: 'hard', check: tagHas('agency', /Air Force/i), msg: 'agency = Air Force' },
+      { kind: 'soft', check: rowsAtLeast(3), msg: 'at least 3 rows' },
+    ],
+  },
+
+  {
+    name: 'Microsoft: Sentinel SIEM at CISA',
+    question: 'Microsoft Sentinel SIEM at CISA',
+    tags: ['seller', 'microsoft', 'cisa'],
+    assertions: [
+      { kind: 'soft', check: tagHas('recipient', /Microsoft/i), msg: 'recipient = Microsoft' },
+      { kind: 'hard', check: tagHas('agency', /Homeland Security|CISA|Cybersecurity/i), msg: 'agency = DHS or CISA' },
+      { kind: 'soft', check: rowsAtLeast(3), msg: 'at least 3 rows' },
+    ],
+  },
+
+  // ── Atlassian seller persona ────────────────────────────────────────────
+  {
+    name: 'Atlassian: Atlassian at DoD (reseller-only play)',
+    question: 'Atlassian at DoD',
+    tags: ['seller', 'atlassian', 'reseller'],
+    assertions: [
+      // Atlassian never primes — aliases path catches Carahsoft task orders
+      { kind: 'soft', check: (s) => {
+          const aliases = String(s.tagAttrs?.aliases || '').toLowerCase();
+          return aliases.includes('jira') || aliases.includes('confluence') || aliases.includes('atlassian');
+        }, msg: 'aliases includes Jira/Confluence/Atlassian so keyword path fires' },
+      { kind: 'hard', check: tagHas('agency', /Defense/i), msg: 'agency = DoD' },
+      { kind: 'soft', check: rowsAtLeast(3), msg: 'at least 3 rows via keyword path' },
+    ],
+  },
+
+  {
+    name: 'Atlassian: Who resells Jira in federal',
+    question: 'Who resells Jira in federal',
+    tags: ['seller', 'atlassian', 'reseller'],
+    assertions: [
+      { kind: 'soft', check: (s) => {
+          const aliases = String(s.tagAttrs?.aliases || '').toLowerCase();
+          const kw = String(s.tagAttrs?.keywords || '').toLowerCase();
+          return aliases.includes('jira') || kw.includes('jira');
+        }, msg: 'Jira appears in aliases or keywords' },
+      { kind: 'soft', check: rowsAtLeast(3), msg: 'at least 3 rows' },
+    ],
+  },
+
+  {
+    name: 'Atlassian: ITSM at DHS',
+    question: 'Show me ITSM at DHS',
+    tags: ['seller', 'atlassian', 'capability'],
+    assertions: [
+      { kind: 'hard', check: tagHas('agency', /Homeland Security/i), msg: 'agency = DHS' },
+      { kind: 'soft', check: (s) => {
+          const kw = String(s.tagAttrs?.keywords || '').toLowerCase();
+          return kw.includes('itsm') || kw.includes('service management') || kw.includes('it service');
+        }, msg: 'keywords includes ITSM or IT service management' },
+      { kind: 'soft', check: rowsAtLeast(3), msg: 'at least 3 rows' },
+    ],
+  },
+
+  // ── Datadog seller persona ──────────────────────────────────────────────
+  {
+    name: 'Datadog: monitoring at DISA',
+    question: 'Monitoring contracts at DISA',
+    tags: ['seller', 'datadog', 'program-office'],
+    assertions: [
+      { kind: 'hard', check: tagHas('agency', /Defense/i), msg: 'agency = DoD (parent of DISA)' },
+      { kind: 'hard', check: (s) => {
+          const kw = String(s.tagAttrs?.keywords || '').toLowerCase();
+          return kw.includes('disa') || kw.includes('monitoring');
+        }, msg: 'keywords includes DISA or monitoring' },
+      { kind: 'soft', check: rowsAtLeast(5), msg: 'at least 5 rows' },
+    ],
+  },
+
+  {
+    name: 'Datadog: observability at NSA (agencyDropped expected)',
+    question: 'Show me observability at NSA',
+    tags: ['seller', 'datadog', 'fallback'],
+    assertions: [
+      // NSA returns 0 on both tiers — agencyDropped chip fires
+      { kind: 'soft', check: (s) => s.rowCount > 0 || s.resolved?.agencyDropped,
+        msg: 'either rows returned OR agencyDropped fired (NSA = no USASpending data)' },
+      { kind: 'soft', check: (s) => {
+          const kw = String(s.tagAttrs?.keywords || '').toLowerCase();
+          return kw.includes('observability') || kw.includes('monitor');
+        }, msg: 'keywords includes observability or monitoring' },
+    ],
+  },
+
+  {
+    name: 'Datadog: APM at Army',
+    question: 'APM at Army',
+    tags: ['seller', 'datadog', 'capability'],
+    assertions: [
+      { kind: 'hard', check: tagHas('agency', /Army/i), msg: 'agency = Army' },
+      { kind: 'soft', check: (s) => {
+          const kw = String(s.tagAttrs?.keywords || '').toLowerCase();
+          return kw.includes('apm') || kw.includes('performance monitoring') || kw.includes('application performance');
+        }, msg: 'keywords includes APM or application performance monitoring' },
+      { kind: 'soft', check: rowsAtLeast(3), msg: 'at least 3 rows' },
+    ],
+  },
+
+  // ── Sonatype seller persona ─────────────────────────────────────────────
+  {
+    name: 'Sonatype: SBOM contracts at DoD',
+    question: 'SBOM contracts at DoD',
+    tags: ['seller', 'sonatype', 'sbom'],
+    assertions: [
+      { kind: 'hard', check: tagHas('agency', /Defense/i), msg: 'agency = DoD' },
+      { kind: 'hard', check: tagAttrIncludes('keywords', 'SBOM'), msg: 'keywords includes SBOM' },
+      { kind: 'soft', check: rowsAtLeast(3), msg: 'at least 3 rows' },
+    ],
+  },
+
+  {
+    name: 'Sonatype: DevSecOps at Air Force',
+    question: 'DevSecOps at Air Force',
+    tags: ['seller', 'sonatype', 'capability'],
+    assertions: [
+      { kind: 'hard', check: tagHas('agency', /Air Force/i), msg: 'agency = Air Force (subtier)' },
+      { kind: 'hard', check: (s) => {
+          const kw = String(s.tagAttrs?.keywords || '').toLowerCase();
+          return kw.includes('devsecops') || kw.includes('devops');
+        }, msg: 'keywords includes DevSecOps or DevOps' },
+      { kind: 'soft', check: rowsAtLeast(3), msg: 'at least 3 rows' },
+    ],
+  },
+
+  {
+    name: 'Sonatype: software supply chain at NSA (agencyDropped expected)',
+    question: 'Software supply chain at NSA',
+    tags: ['seller', 'sonatype', 'fallback'],
+    assertions: [
+      { kind: 'soft', check: (s) => s.rowCount > 0 || s.resolved?.agencyDropped,
+        msg: 'either rows returned OR agencyDropped fired (NSA = no data)' },
+      { kind: 'soft', check: (s) => {
+          const kw = String(s.tagAttrs?.keywords || '').toLowerCase();
+          return kw.includes('supply chain') || kw.includes('software composition') || kw.includes('sbom');
+        }, msg: 'keywords includes supply chain or SBOM' },
+    ],
+  },
+
+  // ── Akamai seller persona ───────────────────────────────────────────────
+  {
+    name: 'Akamai: zero trust at CISA',
+    question: 'Zero trust at CISA',
+    tags: ['seller', 'akamai', 'capability', 'cisa'],
+    assertions: [
+      { kind: 'hard', check: tagHas('agency', /Homeland Security|CISA|Cybersecurity/i), msg: 'agency = DHS or CISA' },
+      { kind: 'hard', check: tagAttrIncludes('keywords', 'zero trust'), msg: 'keywords includes zero trust' },
+      { kind: 'soft', check: rowsAtLeast(3), msg: 'at least 3 rows' },
+    ],
+  },
+
+  {
+    name: 'Akamai: Guardicore alias resolves to Akamai',
+    question: 'Akamai Guardicore at Army',
+    tags: ['seller', 'akamai', 'alias'],
+    assertions: [
+      { kind: 'hard', check: tagHas('recipient', /Akamai/i), msg: 'recipient = Akamai (Guardicore is Akamai acquisition)' },
+      { kind: 'hard', check: tagHas('agency', /Army/i), msg: 'agency = Army' },
+      { kind: 'soft', check: rowsAtLeast(3), msg: 'at least 3 rows' },
+    ],
+  },
+
+  {
+    name: 'Akamai: DDoS protection at Treasury',
+    question: 'DDoS protection at Treasury',
+    tags: ['seller', 'akamai', 'capability'],
+    assertions: [
+      { kind: 'hard', check: tagHas('agency', /Treasury/i), msg: 'agency = Treasury' },
+      { kind: 'soft', check: (s) => {
+          const kw = String(s.tagAttrs?.keywords || '').toLowerCase();
+          return kw.includes('ddos') || kw.includes('denial') || kw.includes('cdn') || kw.includes('edge');
+        }, msg: 'keywords includes DDoS, denial of service, CDN, or edge' },
+      { kind: 'soft', check: rowsAtLeast(3), msg: 'at least 3 rows' },
+    ],
+  },
+
+  // ── SentinelOne seller persona ──────────────────────────────────────────
+  {
+    name: 'SentinelOne: at Air Force (direct)',
+    question: 'SentinelOne at Air Force',
+    tags: ['seller', 'sentinelone', 'subtier'],
+    assertions: [
+      { kind: 'hard', check: tagHas('recipient', /Sentinel/i), msg: 'recipient = SentinelOne' },
+      { kind: 'hard', check: tagHas('agency', /Air Force/i), msg: 'agency = Air Force (subtier)' },
+      { kind: 'hard', check: rowsAtLeast(3), msg: 'at least 3 rows' },
+    ],
+  },
+
+  {
+    name: 'SentinelOne: XDR at CYBERCOM',
+    question: 'XDR contracts at CYBERCOM',
+    tags: ['seller', 'sentinelone', 'program-office'],
+    assertions: [
+      { kind: 'hard', check: tagHas('agency', /Defense|Cyber Command/i), msg: 'agency = DoD or Cyber Command (CYBERCOM parent)' },
+      { kind: 'soft', check: (s) => {
+          const kw = String(s.tagAttrs?.keywords || '').toLowerCase();
+          return kw.includes('xdr') || kw.includes('endpoint') || kw.includes('cyber command') || kw.includes('cybercom');
+        }, msg: 'keywords includes XDR, endpoint, or CYBERCOM' },
+      { kind: 'soft', check: rowsAtLeast(3), msg: 'at least 3 rows' },
+    ],
+  },
+
+  {
+    name: 'SentinelOne: CrowdStrike vs SentinelOne at DHS (no recipient bleed)',
+    question: 'CrowdStrike vs SentinelOne at DHS',
+    tags: ['seller', 'sentinelone', 'competitor'],
+    assertions: [
+      { kind: 'hard', check: tagHas('agency', /Homeland Security/i), msg: 'agency = DHS' },
+      // Mo should pick one — not pack both into a comma-list that breaks parsing
+      { kind: 'hard', check: (s) => {
+          const r = String(s.tagAttrs?.recipient || '');
+          return !r.includes(',');
+        }, msg: 'recipient is single vendor (no comma-list that breaks resolver)' },
+      { kind: 'soft', check: rowsAtLeast(3), msg: 'at least 3 rows for whichever vendor Mo chose' },
+    ],
+  },
+
+  {
+    name: 'SentinelOne: endpoint at IC (agencyDropped expected)',
+    question: 'Show me endpoint at IC',
+    tags: ['seller', 'sentinelone', 'fallback'],
+    assertions: [
+      { kind: 'soft', check: (s) => s.rowCount > 0 || s.resolved?.agencyDropped,
+        msg: 'either rows returned OR agencyDropped fired (IC not a USASpending agency)' },
+      { kind: 'soft', check: (s) => {
+          const kw = String(s.tagAttrs?.keywords || '').toLowerCase();
+          return kw.includes('endpoint') || kw.includes('edr') || kw.includes('xdr');
+        }, msg: 'keywords includes endpoint, EDR, or XDR' },
+    ],
+  },
+
 ];
