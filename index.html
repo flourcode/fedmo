@@ -1987,14 +1987,14 @@ async function pullOnce(attrs) {
       ? { ...baseFilters, keywords: keywordNeedles }
       : null;
 
-    // COMBINED query: recipient AND keywords in one request.
+    // COMBINED query: recipient AND keywords.
+    // USASpending does NOT support true AND between recipient_search_text and keywords —
+    // when both are present, recipient_search_text wins and keywords is ignored.
+    // The correct approach: run the keywords query (which searches descriptions),
+    // then post-filter results to only rows where the recipient name matches.
     // This is the integrator+ISV case (e.g. GDIT + Amazon Web Services).
-    // The direct query returns GDIT's full footprint; the keyword query
-    // returns all AWS-mentioning contracts. Neither is what the user wants.
-    // A combined query returns only contracts where GDIT primes AND
-    // "Amazon Web Services" appears in the description — exactly right.
     const combinedFilters = recipientName && keywordNeedles.length > 0
-      ? { ...baseFilters, recipient_search_text: [recipientName], keywords: keywordNeedles }
+      ? { ...baseFilters, keywords: keywordNeedles }  // keywords-only, recipient applied post
       : null;
 
     console.log('[mo:filt]', JSON.stringify({
@@ -2007,17 +2007,23 @@ async function pullOnce(attrs) {
     let directResults, keywordResults;
 
     if (combinedFilters) {
-      // Integrator+ISV: use the combined AND query as primary.
-      // Also run the keyword-only query to catch cases where the ISV appears
-      // in a contract the integrator holds via a differently-resolved name.
+      // Integrator+ISV: keywords query returns contracts mentioning the ISV.
+      // Post-filter to only rows where recipient matches the integrator.
+      // This achieves GDIT AND "Amazon Web Services" without relying on
+      // USASpending to AND the two filters (it doesn't — recipient wins).
       const [combinedRes, kwRes] = await Promise.all([
         searchAwards(combinedFilters, false),
         searchAwards(keywordFilters, false),
       ]);
-      // Treat combined result as "direct" (authoritative, no post-filter needed)
-      // and keyword result as supplementary
+      // Post-filter combined results to recipient match
+      const recipientUpper = recipientName.toUpperCase();
+      const recipientPrefix = recipientUpper.slice(0, 20);  // handles truncated names
+      combinedRes.rows = combinedRes.rows.filter(r => {
+        const rn = (r['Recipient Name'] || '').toUpperCase();
+        return rn.startsWith(recipientPrefix) || recipientUpper.startsWith(rn.slice(0, 20));
+      });
       directResults = combinedRes;
-      keywordResults = kwRes;
+      keywordResults = { rows: [], error: null };  // already covered by combined post-filter
     } else {
       const [dr, kr] = await Promise.all([
         directFilters ? searchAwards(directFilters, false) : Promise.resolve({ rows: [], error: null }),
