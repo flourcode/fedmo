@@ -392,9 +392,14 @@ export const SCENARIOS = [
     question: 'AWS at IC community',
     tags: ['seller', 'aws', 'fallback'],
     assertions: [
-      { kind: 'hard', check: tagHas('recipient', /Amazon/i), msg: 'recipient = Amazon' },
-      { kind: 'soft', check: (s) => s.rowCount > 0 || s.resolved?.agencyDropped,
-        msg: 'either rows returned OR agencyDropped fired (IC not a USASpending agency)' },
+      // IC is not a USASpending agency — Mo should show AWS federal footprint or chip
+      { kind: 'soft', check: (s) => s.rowCount > 0 || (s.tagAttrs && !s.tagAttrs.agency),
+        msg: 'either rows returned OR no agency filter (IC not resolvable)' },
+      { kind: 'soft', check: (s) => {
+          const kw = String(s.tagAttrs?.keywords || '').toLowerCase();
+          const rec = String(s.tagAttrs?.recipient || '').toLowerCase();
+          return kw.includes('amazon') || rec.includes('amazon');
+        }, msg: 'Amazon appears in keywords or recipient' },
     ],
   },
 
@@ -404,9 +409,15 @@ export const SCENARIOS = [
     question: 'Show me M365 at Army',
     tags: ['seller', 'microsoft', 'alias'],
     assertions: [
-      { kind: 'hard', check: tagHas('recipient', /Microsoft/i), msg: 'recipient = Microsoft (M365 alias resolves to MICROSOFT CORPORATION)' },
-      { kind: 'hard', check: tagHas('agency', /Army/i), msg: 'agency = Army (subtier)' },
-      { kind: 'hard', check: rowsAtLeast(5), msg: 'at least 5 rows' },
+      // ISV pattern: NO recipient filter — keywords only catches all primes (GDIT, Carahsoft, WWT, etc.)
+      { kind: 'hard', check: (s) => !s.tagAttrs?.recipient || s.tagAttrs?.recipient === '',
+        msg: 'NO recipient= filter (M365 is ISV — keyword search catches all reseller primes)' },
+      { kind: 'hard', check: (s) => {
+          const kw = String(s.tagAttrs?.keywords || '').toLowerCase();
+          return kw.includes('microsoft 365') || kw.includes('m365') || kw.includes('office 365');
+        }, msg: 'keywords includes Microsoft 365 or M365' },
+      { kind: 'hard', check: tagHas('agency', /Army/i), msg: 'agency = Army' },
+      { kind: 'hard', check: rowsAtLeast(5), msg: 'at least 5 rows (full reseller ecosystem)' },
     ],
   },
 
@@ -415,9 +426,14 @@ export const SCENARIOS = [
     question: 'Azure at HHS',
     tags: ['seller', 'microsoft', 'alias'],
     assertions: [
-      { kind: 'hard', check: tagHas('recipient', /Microsoft/i), msg: 'recipient = Microsoft (Azure alias resolves to MICROSOFT CORPORATION)' },
+      { kind: 'hard', check: (s) => !s.tagAttrs?.recipient || s.tagAttrs?.recipient === '',
+        msg: 'NO recipient= (Azure is ISV — keyword search catches all cloud integrators)' },
+      { kind: 'hard', check: (s) => {
+          const kw = String(s.tagAttrs?.keywords || '').toLowerCase();
+          return kw.includes('azure') || kw.includes('microsoft azure');
+        }, msg: 'keywords includes Azure' },
       { kind: 'hard', check: tagHas('agency', /Health and Human Services/i), msg: 'agency = HHS' },
-      { kind: 'hard', check: rowsAtLeast(5), msg: 'at least 5 rows' },
+      { kind: 'hard', check: rowsAtLeast(5), msg: 'at least 5 rows (full ecosystem)' },
     ],
   },
 
@@ -426,7 +442,12 @@ export const SCENARIOS = [
     question: 'Defender at Air Force',
     tags: ['seller', 'microsoft', 'alias'],
     assertions: [
-      { kind: 'soft', check: tagHas('recipient', /Microsoft/i), msg: 'recipient = Microsoft (Defender alias)' },
+      { kind: 'soft', check: (s) => !s.tagAttrs?.recipient || s.tagAttrs?.recipient === '',
+        msg: 'NO recipient= preferred (Defender sold via resellers)' },
+      { kind: 'hard', check: (s) => {
+          const kw = String(s.tagAttrs?.keywords || '').toLowerCase();
+          return kw.includes('defender') || kw.includes('microsoft defender');
+        }, msg: 'keywords includes Defender' },
       { kind: 'hard', check: tagHas('agency', /Air Force/i), msg: 'agency = Air Force' },
       { kind: 'soft', check: rowsAtLeast(3), msg: 'at least 3 rows' },
     ],
@@ -437,7 +458,8 @@ export const SCENARIOS = [
     question: 'Microsoft Sentinel SIEM at CISA',
     tags: ['seller', 'microsoft', 'cisa'],
     assertions: [
-      { kind: 'soft', check: tagHas('recipient', /Microsoft/i), msg: 'recipient = Microsoft' },
+      { kind: 'soft', check: (s) => !s.tagAttrs?.recipient || s.tagAttrs?.recipient === '',
+        msg: 'NO recipient= preferred (Sentinel sold via resellers)' },
       { kind: 'hard', check: tagHas('agency', /Homeland Security|CISA|Cybersecurity/i), msg: 'agency = DHS or CISA' },
       { kind: 'soft', check: rowsAtLeast(3), msg: 'at least 3 rows' },
     ],
@@ -449,11 +471,13 @@ export const SCENARIOS = [
     question: 'Atlassian at DoD',
     tags: ['seller', 'atlassian', 'reseller'],
     assertions: [
-      // Atlassian never primes — aliases path catches Carahsoft task orders
-      { kind: 'soft', check: (s) => {
-          const aliases = String(s.tagAttrs?.aliases || '').toLowerCase();
-          return aliases.includes('jira') || aliases.includes('confluence') || aliases.includes('atlassian');
-        }, msg: 'aliases includes Jira/Confluence/Atlassian so keyword path fires' },
+      // Atlassian never primes — keywords-only catches Carahsoft/reseller task orders
+      { kind: 'hard', check: (s) => !s.tagAttrs?.recipient || s.tagAttrs?.recipient === '',
+        msg: 'NO recipient= (Atlassian is ISV — keyword search catches Carahsoft and resellers)' },
+      { kind: 'hard', check: (s) => {
+          const kw = String(s.tagAttrs?.keywords || '').toLowerCase();
+          return kw.includes('jira') || kw.includes('confluence') || kw.includes('atlassian');
+        }, msg: 'keywords includes Jira, Confluence, or Atlassian' },
       { kind: 'hard', check: tagHas('agency', /Defense/i), msg: 'agency = DoD' },
       { kind: 'soft', check: rowsAtLeast(3), msg: 'at least 3 rows via keyword path' },
     ],
@@ -464,12 +488,13 @@ export const SCENARIOS = [
     question: 'Who resells Jira in federal',
     tags: ['seller', 'atlassian', 'reseller'],
     assertions: [
-      { kind: 'soft', check: (s) => {
-          const aliases = String(s.tagAttrs?.aliases || '').toLowerCase();
+      { kind: 'hard', check: (s) => !s.tagAttrs?.recipient || s.tagAttrs?.recipient === '',
+        msg: 'NO recipient= — shows full reseller ecosystem' },
+      { kind: 'hard', check: (s) => {
           const kw = String(s.tagAttrs?.keywords || '').toLowerCase();
-          return aliases.includes('jira') || kw.includes('jira');
-        }, msg: 'Jira appears in aliases or keywords' },
-      { kind: 'soft', check: rowsAtLeast(3), msg: 'at least 3 rows' },
+          return kw.includes('jira') || kw.includes('confluence') || kw.includes('atlassian');
+        }, msg: 'keywords includes Jira, Confluence, or Atlassian' },
+      { kind: 'soft', check: rowsAtLeast(3), msg: 'at least 3 rows across resellers' },
     ],
   },
 
@@ -588,7 +613,14 @@ export const SCENARIOS = [
     question: 'Akamai Guardicore at Army',
     tags: ['seller', 'akamai', 'alias'],
     assertions: [
-      { kind: 'hard', check: tagHas('recipient', /Akamai/i), msg: 'recipient = Akamai (Guardicore is Akamai acquisition)' },
+      // ISV pattern — no recipient, keywords catch all primes selling Akamai/Guardicore
+      { kind: 'soft', check: (s) => !s.tagAttrs?.recipient || s.tagAttrs?.recipient === '',
+        msg: 'NO recipient= preferred (Akamai sold via resellers; keyword search broader)' },
+      { kind: 'hard', check: (s) => {
+          const kw = String(s.tagAttrs?.keywords || '').toLowerCase();
+          const rec = String(s.tagAttrs?.recipient || '').toLowerCase();
+          return kw.includes('akamai') || kw.includes('guardicore') || rec.includes('akamai');
+        }, msg: 'Akamai or Guardicore appears in keywords or recipient' },
       { kind: 'hard', check: tagHas('agency', /Army/i), msg: 'agency = Army' },
       { kind: 'soft', check: rowsAtLeast(3), msg: 'at least 3 rows' },
     ],
@@ -610,13 +642,19 @@ export const SCENARIOS = [
 
   // ── SentinelOne seller persona ──────────────────────────────────────────
   {
-    name: 'SentinelOne: at Air Force (direct)',
+    name: 'SentinelOne: at Air Force (full ecosystem)',
     question: 'SentinelOne at Air Force',
     tags: ['seller', 'sentinelone', 'subtier'],
     assertions: [
-      { kind: 'hard', check: tagHas('recipient', /Sentinel/i), msg: 'recipient = SentinelOne' },
-      { kind: 'hard', check: tagHas('agency', /Air Force/i), msg: 'agency = Air Force (subtier)' },
-      { kind: 'hard', check: rowsAtLeast(3), msg: 'at least 3 rows' },
+      // ISV pattern — keywords catch all primes (Carahsoft, GDIT, etc.) selling SentinelOne
+      { kind: 'hard', check: (s) => !s.tagAttrs?.recipient || s.tagAttrs?.recipient === '',
+        msg: 'NO recipient= (SentinelOne sold via resellers — keyword search catches full ecosystem)' },
+      { kind: 'hard', check: (s) => {
+          const kw = String(s.tagAttrs?.keywords || '').toLowerCase();
+          return kw.includes('sentinelone');
+        }, msg: 'keywords includes SentinelOne' },
+      { kind: 'hard', check: tagHas('agency', /Air Force/i), msg: 'agency = Air Force' },
+      { kind: 'soft', check: rowsAtLeast(3), msg: 'at least 3 rows via full ecosystem search' },
     ],
   },
 

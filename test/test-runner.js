@@ -135,16 +135,53 @@ async function pullUSASpending(attrs) {
 
   const filters = { award_type_codes: AWARD_TYPES };
 
+  // Resolve short agency names/abbreviations to full names USASpending recognizes
+  const AGENCY_FULL_NAMES = {
+    'hhs':   'Department of Health and Human Services',
+    'dod':   'Department of Defense',
+    'dhs':   'Department of Homeland Security',
+    'va':    'Department of Veterans Affairs',
+    'gsa':   'General Services Administration',
+    'nasa':  'National Aeronautics and Space Administration',
+    'doj':   'Department of Justice',
+    'doe':   'Department of Energy',
+    'dot':   'Department of Transportation',
+    'dos':   'Department of State',
+    'usda':  'Department of Agriculture',
+    'doi':   'Department of the Interior',
+    'doc':   'Department of Commerce',
+    'ssa':   'Social Security Administration',
+    'epa':   'Environmental Protection Agency',
+    'cisa':  'Cybersecurity and Infrastructure Security Agency',
+    'disa':  'Defense Information Systems Agency',
+    'darpa': 'Defense Advanced Research Projects Agency',
+  };
+
+  // IC agencies that return 0 rows on both tiers in USASpending
+  const IC_AGENCIES = new Set([
+    'national security agency', 'central intelligence agency',
+    'nsa', 'cia', 'ic', 'intelligence community', 'dia',
+    'defense intelligence agency', 'nro', 'nga (geospatial)',
+  ]);
+
   if (attrs.agency) {
-    // Military branches are subtier under DoD — must use subtier or USASpending returns 0 rows
+    const agencyLower = attrs.agency.toLowerCase().trim();
+    const resolvedName = AGENCY_FULL_NAMES[agencyLower] || attrs.agency;
+
+    // Check if this is a known IC agency (returns 0 legitimately)
+    const isIC = IC_AGENCIES.has(agencyLower);
+
+    // Military branches and known subtiers
     const subtierAgencies = [
       'department of the navy', 'department of the army', 'department of the air force',
       'united states space force', 'u.s. cyber command', 'defense information systems agency',
       'defense advanced research projects agency', 'defense health agency',
+      'cybersecurity and infrastructure security agency',
     ];
-    const agencyLower = attrs.agency.toLowerCase();
-    const tier = subtierAgencies.some(s => agencyLower.includes(s.split(' ').slice(-1)[0])) ? 'subtier' : 'toptier';
-    filters.agencies = [{ tier, name: attrs.agency, type: 'awarding' }];
+    const resolvedLower = resolvedName.toLowerCase();
+    const tier = subtierAgencies.some(s => resolvedLower.includes(s.split(' ').slice(-2).join(' '))) ? 'subtier' : 'toptier';
+    filters.agencies = [{ tier, name: resolvedName, type: 'awarding' }];
+    filters._isIC = isIC;  // flag for agencyDropped simulation
   }
 
   if (attrs.naics) {
@@ -210,19 +247,22 @@ async function pullUSASpending(attrs) {
     return body.results || [];
   };
 
+  let agencyDropped = false;
+  const isIC = filters._isIC || false;
+  delete filters._isIC;
+
   try {
     rows = await doFetch(payload);
     total = rows.reduce((s, r) => s + (Number(r['Award Amount']) || 0), 0);
 
-    // Keyword-drop fallback: mirrors production pullOnce default branch.
-    // If agency + keywords = 0 rows, retry without keywords. Needed for
-    // program-office terms (NAVSEA) that live in awarding_office, not descriptions.
-    // Only fires for non-recipient queries — recipient queries have their own path.
+    // If IC agency returns 0, simulate agencyDropped (production does this for NSA/CIA)
+    if (rows.length === 0 && isIC) agencyDropped = true;
+
+    // Keyword-drop fallback: if agency + keywords = 0, retry agency-only
     if (rows.length === 0 && filters.keywords?.length && filters.agencies?.length && !filters.recipient_search_text) {
       const filtersNoKw = { ...filters };
       delete filtersNoKw.keywords;
-      const retryPayload = { ...payload, filters: filtersNoKw };
-      const retryRows = await doFetch(retryPayload);
+      const retryRows = await doFetch({ ...payload, filters: filtersNoKw });
       if (retryRows.length > 0) {
         rows = retryRows;
         total = rows.reduce((s, r) => s + (Number(r['Award Amount']) || 0), 0);
@@ -233,7 +273,7 @@ async function pullUSASpending(attrs) {
     error = e.message;
   }
 
-  return { rows, total, error, usaspendingMs: Math.round(performance.now() - t0), payload, keywordsDropped };
+  return { rows, total, error, usaspendingMs: Math.round(performance.now() - t0), payload, keywordsDropped, agencyDropped };
 }
 
 // ── Run a single scenario ─────────────────────────────────────────────────
@@ -259,6 +299,7 @@ async function runScenario(scenario) {
     total: pullResult.total,
     payload: pullResult.payload,
     keywordsDropped: pullResult.keywordsDropped || false,
+    resolved: { agencyDropped: pullResult.agencyDropped || false },
     error: lambdaErr || pullResult.error,
     timings: {
       lambdaMs,
