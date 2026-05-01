@@ -1840,11 +1840,7 @@ async function pullOnce(attrs) {
 
   const [agencyResolution, recipientName] = await Promise.all([
     cleanAgency ? resolveAgency(cleanAgency) : Promise.resolve(null),
-    // Use pre-resolved name from interceptor if available (skips autocomplete,
-    // uses exact string confirmed to work with combined AND query in probe)
-    attrs._recipient_search_text
-      ? Promise.resolve(attrs._recipient_search_text)
-      : attrs.recipient ? resolveRecipient(attrs.recipient) : Promise.resolve(null),
+    attrs.recipient ? resolveRecipient(attrs.recipient) : Promise.resolve(null),
   ]);
 
   const agencyFilter = agencyResolution?.filter || null;
@@ -1991,52 +1987,16 @@ async function pullOnce(attrs) {
       ? { ...baseFilters, keywords: keywordNeedles }
       : null;
 
-    // COMBINED query: recipient AND keywords — USASpending ANDs them correctly.
-    // Probe confirmed: "AWS" as a keyword substring-matches "AWARD" and returns
-    // SAIC's entire footprint. Only use keywords that won't false-positive on
-    // common contract boilerplate words. "Amazon Web Services" and "Amazon" are safe.
-    // "AWS" is NOT safe as a standalone keyword — exclude it from combined queries.
-    const UNSAFE_COMBINED_KEYWORDS = new Set(['aws', 'sap', 'ibm', 'gcm', 'api']);
-    const combinedKeywords = keywordNeedles.filter(k =>
-      !UNSAFE_COMBINED_KEYWORDS.has(k.toLowerCase())
-    );
-    const combinedFilters = recipientName && combinedKeywords.length > 0
-      ? { ...baseFilters, recipient_search_text: [recipientName], keywords: combinedKeywords }
-      : null;
-
     console.log('[mo:filt]', JSON.stringify({
       recipient: attrs.recipient,
       recipientName,
-      combined: combinedFilters ? true : false,
       keywordNeedles,
     }));
 
-    let directResults, keywordResults;
-
-    if (combinedFilters) {
-      // Integrator+ISV: USASpending ANDs recipient_search_text + keywords.
-      // Run combined as primary. Also run keyword-only in parallel to catch
-      // any contracts where the ISV name appears but recipient resolves differently.
-      const [combinedRes, kwRes] = await Promise.all([
-        searchAwards(combinedFilters, false),
-        keywordFilters ? searchAwards(keywordFilters, false) : Promise.resolve({ rows: [], error: null }),
-      ]);
-      // Combined result is already correctly filtered — no post-processing needed.
-      // Keyword result may include non-integrator rows; filter to recipient match.
-      const recipientPrefix = recipientName.toUpperCase().slice(0, 20);
-      const kwFiltered = kwRes.rows.filter(r =>
-        (r['Recipient Name'] || '').toUpperCase().startsWith(recipientPrefix)
-      );
-      directResults = combinedRes;
-      keywordResults = { rows: kwFiltered, error: kwRes.error };
-    } else {
-      const [dr, kr] = await Promise.all([
-        directFilters ? searchAwards(directFilters, false) : Promise.resolve({ rows: [], error: null }),
-        keywordFilters ? searchAwards(keywordFilters, false) : Promise.resolve({ rows: [], error: null }),
-      ]);
-      directResults = dr;
-      keywordResults = kr;
-    }
+    const [directResults, keywordResults] = await Promise.all([
+      directFilters ? searchAwards(directFilters, false) : Promise.resolve({ rows: [], error: null }),
+      keywordFilters ? searchAwards(keywordFilters, false) : Promise.resolve({ rows: [], error: null }),
+    ]);
 
     console.log('[mo:search]', [
       { path: 'direct', rows: directResults.rows.length, error: directResults.error },
@@ -3978,106 +3938,6 @@ function scrollBottom() {
 //
 // If Mo emits a broken tag (e.g. prose inside `until="..."` with no `/>`),
 // the parser doesn't fire, but we still need to clean the displayed prose
-// TWO-VENDOR QUERY INTERCEPTOR
-// Gemini reliably drops keywords= when a query names both an integrator and
-// an ISV, treating the integrator as the whole query. Intercept before the
-// query reaches the LLM and rewrite it to an unambiguous canonical form that
-// the prompt rules can't misparse.
-//
-// Canonical form: "SAIC resells Amazon Web Services" — explicit verb makes
-// the pattern match the verbatim examples in the prompt.
-
-const KNOWN_INTEGRATORS = new Set([
-  'saic','science applications','gdit','general dynamics information technology',
-  'leidos','booz allen','bah','booz','accenture','accenture federal',
-  'deloitte','deloitte consulting','caci','mantech','peraton','kbr','cgi','cgi federal',
-  'maximus','lockheed','northrop','raytheon','rtx','l3harris','lm','lmco',
-  'carahsoft','wwt','world wide technology','four points','thundercat',
-  'immixgroup','govplace','fcn','cdw','shi','connection','insight direct',
-  'optiv','presidio','trace3','wwt','planet technologies',
-]);
-
-const ISV_KEYWORDS = {
-  'aws':                   'Amazon Web Services, Amazon',  // note: "AWS" stripped from combined queries (matches "AWARD")
-  'amazon web services':   'Amazon Web Services, Amazon',
-  'amazon':                'Amazon Web Services, Amazon',
-  'azure':                 'Azure, Microsoft Azure',
-  'microsoft azure':       'Azure, Microsoft Azure',
-  'm365':                  'Microsoft 365, M365',
-  'microsoft 365':         'Microsoft 365, M365, Office 365',
-  'office 365':            'Microsoft 365, M365, Office 365',
-  'defender':              'Microsoft Defender, Defender',
-  'microsoft defender':    'Microsoft Defender, Defender',
-  'sentinel':              'Microsoft Sentinel, Sentinel SIEM',
-  'microsoft sentinel':    'Microsoft Sentinel, Sentinel SIEM',
-  'google cloud':          'Google Cloud, GCP',
-  'gcp':                   'Google Cloud, GCP',
-  'salesforce':            'Salesforce',
-  'servicenow':            'ServiceNow',
-  'snowflake':             'Snowflake',
-  'palantir':              'Palantir, Gotham, Foundry',
-  'gotham':                'Palantir, Gotham, Foundry',
-  'foundry':               'Palantir, Gotham, Foundry',
-  'splunk':                'Splunk',
-  'crowdstrike':           'CrowdStrike',
-  'sentinelone':           'SentinelOne',
-  'sentinel one':          'SentinelOne',
-  'datadog':               'Datadog',
-  'palo alto':             'Palo Alto Networks',
-  'jira':                  'Jira, Confluence, Atlassian',
-  'confluence':            'Jira, Confluence, Atlassian',
-  'atlassian':             'Jira, Confluence, Atlassian',
-  'okta':                  'Okta',
-  'zscaler':               'Zscaler',
-  'akamai':                'Akamai, Guardicore',
-  'guardicore':            'Akamai, Guardicore',
-  'tenable':               'Tenable',
-  'rapid7':                'Rapid7',
-  'elastic':               'Elastic, Elasticsearch',
-  'elasticsearch':         'Elastic, Elasticsearch',
-  'databricks':            'Databricks',
-  'oracle cloud':          'Oracle Cloud',
-  'sap':                   'SAP',
-  'workday':               'Workday',
-};
-
-// Strip filler words to isolate vendor tokens
-const FILLER = /\b(resells?|reselling|integrates?|integrating|uses?|with|and|at|for|in|the|where|does|show me|who|what|tell me about|how|federal|government|contracts?)\b/gi;
-
-function detectTwoVendorQuery(q) {
-  const lower = q.toLowerCase();
-  const words = lower.replace(/[^\w\s]/g, ' ').split(/\s+/).filter(Boolean);
-
-  let integrator = null;
-  let isvKey = null;
-
-  // Try all 1, 2, and 3-word combinations longest-first
-  for (let len = 3; len >= 1; len--) {
-    for (let i = 0; i <= words.length - len; i++) {
-      const phrase = words.slice(i, i + len).join(' ');
-      if (!integrator && KNOWN_INTEGRATORS.has(phrase)) integrator = phrase;
-      if (!isvKey && ISV_KEYWORDS[phrase]) isvKey = phrase;
-    }
-  }
-
-  if (!integrator || !isvKey) return null;
-
-  // Build USASpending attrs directly — bypasses Gemini tag construction entirely.
-  // Also pre-set recipient_search_text so pullOnce skips resolveRecipient autocomplete
-  // and uses the exact string the probe confirmed works with the combined AND query.
-  const recipientDisplay = VENDOR_LEGAL_NAMES[integrator] || integrator.toUpperCase();
-  const keywords = ISV_KEYWORDS[isvKey];
-  return {
-    attrs: {
-      recipient: recipientDisplay,
-      _recipient_search_text: recipientDisplay,  // pre-resolved, skip autocomplete
-      keywords,
-      since: '2020-01-01',
-    },
-    question: `${recipientDisplay} resells ${keywords.split(',')[0].trim()}`,
-  };
-}
-
 // so the broken fragment doesn't render as visible garbage. We track whether
 // Mo started a tag (`<data`) and suppress all subsequent text until either
 // `/>` arrives or the stream ends.
@@ -4085,14 +3945,7 @@ async function askMo(question, opts = {}) {
   if (busy) return;
   busy = true;
   $send.disabled = true;
-  // Intercept two-vendor queries before they reach Gemini
-  const twoVendor = detectTwoVendorQuery(question);
-  if (twoVendor) {
-    question = twoVendor.question;
-    opts = { ...opts, forcedAttrs: twoVendor.attrs };
-  }
-
-  const { autoSort, forcedAttrs } = opts;
+  const { autoSort } = opts;
 
   renderUserTurn(question);
   history.push({ role: 'user', parts: [{ text: question }] });
@@ -4102,39 +3955,6 @@ async function askMo(question, opts = {}) {
   let tagFired = false;
   let loadingEl = null;
   let suppressFrom = -1;  // index in fullText to start hiding from (broken tag opener)
-
-  // If the interceptor detected a two-vendor query, fire the data pull immediately
-  // with the correct attrs — don't wait for Gemini to emit a tag (it will get it wrong).
-  // Mo's streamed prose still renders; we just skip its tag entirely.
-  if (forcedAttrs && !tagFired) {
-    tagFired = true;
-    loadingEl = renderLoadingCard();
-    moTurn.insertEl(loadingEl);
-    pull(forcedAttrs)
-      .then(({ rows, resolved, error }) => {
-        const cardEl = renderCard(rows, forcedAttrs, resolved);
-        if (autoSort) {
-          requestAnimationFrame(() => {
-            const btn = cardEl.querySelector(`.mo-sort-btn[data-sort="${autoSort}"]`);
-            if (btn) btn.click();
-          });
-        }
-        if (loadingEl && loadingEl.parentNode) {
-          loadingEl.parentNode.replaceChild(cardEl, loadingEl);
-        } else {
-          moTurn.insertEl(cardEl);
-        }
-        if (cardEl._pendingPills && cardEl.parentNode) {
-          cardEl.parentNode.insertBefore(cardEl._pendingPills, cardEl.nextSibling);
-          delete cardEl._pendingPills;
-        }
-        if (error) moTurn.setError(error);
-      })
-      .catch(err => {
-        console.warn('[mo:forced-pull]', err);
-        if (loadingEl && loadingEl.parentNode) loadingEl.parentNode.removeChild(loadingEl);
-      });
-  }
 
   try {
     const res = await fetch(LAMBDA_URL, {
@@ -4153,8 +3973,7 @@ async function askMo(question, opts = {}) {
       fullText += decoder.decode(value, { stream: true });
 
       // Check for a valid self-closing tag first
-      // When forcedAttrs is set, the pull already fired — suppress any tag Gemini emits
-      if (!tagFired && !forcedAttrs) {
+      if (!tagFired) {
         const tag = findDataTag(fullText);
         if (tag) {
           tagFired = true;
@@ -4217,21 +4036,11 @@ async function askMo(question, opts = {}) {
           }
         }
       } else {
-        // First tag already fired (or forcedAttrs took over). Strip any
-        // complete tag Gemini emits so it doesn't bleed into prose as raw text.
+        // First tag already fired. Strip any subsequent tags so they don't
+        // bleed into prose as raw text.
         const extraTag = findDataTag(fullText);
         if (extraTag) {
           fullText = fullText.slice(0, extraTag.start) + fullText.slice(extraTag.end);
-        }
-        // Also suppress the partial/in-progress tag while it's still streaming in.
-        // Without this, "data recipient=..." renders as prose before the closing />
-        // arrives and findDataTag can strip it.
-        if (suppressFrom < 0) {
-          const broken = findBrokenTagStart(fullText);
-          if (broken >= 0) suppressFrom = broken;
-        } else if (findDataTag(fullText) === null) {
-          // Tag completed and was stripped above — clear suppression
-          suppressFrom = -1;
         }
       }
 
