@@ -3733,20 +3733,16 @@ function buildPillsForCard(rows, attrs, vendorEntries, agencyEntries, total, exp
   // Pill 2: MARKET STRUCTURE — based on concentration shape
   if (isAgencyQuery && !isVendorQuery) {
     if (isConcentrated && topVendor) {
-      // Concentrated market → drill into the incumbent
       add(`who subs to ${shortV(topVendor)} at ${shortA(attrs.agency)}`);
     } else if (isFragmented) {
-      // Fragmented → find the entry wedge
       add(`smallest contracts at ${shortA(attrs.agency)} past 12 months`);
     } else if (topVendor) {
-      // Normal → competitor angle
       add(`competitors to ${shortV(topVendor)} at ${shortA(attrs.agency)}`);
     }
   }
 
   // Pill 3: OFFICE DRILL — when one office clearly dominates
   if (dominantOffice && dominantOfficePct >= 0.50 && isAgencyQuery && !isVendorQuery) {
-    // Build an office-specific query using keywords
     const officeShort = dominantOffice.split(/\s+/).slice(0, 3).join(' ');
     add(`${pillSubject || ''} at ${officeShort}`.trim());
   }
@@ -3757,12 +3753,27 @@ function buildPillsForCard(rows, attrs, vendorEntries, agencyEntries, total, exp
   }
 
   // Pill 5: VENDOR → cross-agency follow
-  if (isVendorQuery && topAgency && agencyEntries.length >= 2 && shortA(topAgency) !== attrs.agency) {
-    add(`${recipientForPill} at ${shortA(topAgency)}`);
+  // Only fire when topAgency is genuinely a different agency, not just a
+  // subdivision (office/command) of the agency already being queried.
+  // Check: topAgency string must not START WITH or CONTAIN the current agency's
+  // short label — "Navy›NSWC DAHLGREN" contains "Navy" so skip it when querying Navy.
+  if (isVendorQuery && topAgency && agencyEntries.length >= 2) {
+    const currentShort = attrs.agency ? shortA(attrs.agency).toLowerCase() : '';
+    const topShort = shortA(topAgency).toLowerCase();
+    const isSameAgency = currentShort && (
+      topShort.startsWith(currentShort) ||
+      topShort.includes(currentShort) ||
+      currentShort.includes(topShort.split(/[›\/]/)[0].trim())
+    );
+    if (!isSameAgency) {
+      add(`${recipientForPill} at ${shortA(topAgency)}`);
+    }
   }
 
-  // Pill 6: SUBAWARD DRILL
-  if (isVendorQuery && attrs.subawards !== 'true' && !isConcentrated) {
+  // Pill 6: SUBAWARD DRILL — useful for concentrated vendor queries
+  // (previously blocked for concentrated markets, but that's exactly when
+  // it's most useful — if one prime holds everything, who are their subs?)
+  if (isVendorQuery && attrs.subawards !== 'true') {
     add(`who does ${recipientForPill} sub to`);
   }
 
@@ -3771,12 +3782,22 @@ function buildPillsForCard(rows, attrs, vendorEntries, agencyEntries, total, exp
     add(`${shortV(topVendor)} contracts`);
   }
 
-  // Pill 8: TIME PIVOT — widen or narrow window
-  if (pillSubject) {
+  // Pill 8: FALLBACK for concentrated vendor+agency dead-end
+  // When vendor+agency returns 100% concentration (one vendor holds all),
+  // pills 2/3/4 all skip. Without a fallback the user gets 1-2 pills and
+  // recurses. Give them useful escapes: widen scope or compare competitors.
+  if (isVendorQuery && isAgencyQuery && isConcentrated && pills.length < 3) {
+    // Widen to full vendor footprint
+    add(`${recipientForPill} lifetime`);
+    // Compare to peers
+    if (topVendor) add(`competitors to ${shortV(topVendor)} at ${shortA(attrs.agency)}`);
+  }
+
+  // Pill 9: TIME PIVOT — only if nothing better was generated
+  if (pills.length < 3 && pillSubject) {
     if (attrs.since && attrs.until) {
       add(`${pillSubject} lifetime`);
-    } else if (!expiringCount || expiringCount < 2) {
-      // Only add time pivot if expiry pill didn't fire — avoid duplication
+    } else if (!attrs.since) {
       add(`${pillSubject} lifetime`);
     }
   }
