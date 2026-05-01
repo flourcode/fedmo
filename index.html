@@ -1987,14 +1987,15 @@ async function pullOnce(attrs) {
       ? { ...baseFilters, keywords: keywordNeedles }
       : null;
 
-    // COMBINED query: recipient AND keywords.
-    // USASpending does NOT support true AND between recipient_search_text and keywords —
-    // when both are present, recipient_search_text wins and keywords is ignored.
-    // The correct approach: run the keywords query (which searches descriptions),
-    // then post-filter results to only rows where the recipient name matches.
-    // This is the integrator+ISV case (e.g. GDIT + Amazon Web Services).
-    const combinedFilters = recipientName && keywordNeedles.length > 0
-      ? { ...baseFilters, keywords: keywordNeedles }  // keywords-only, recipient applied post
+    // COMBINED query: recipient AND keywords in one request.
+    // Confirmed via probe: USASpending ANDs recipient_search_text + keywords correctly.
+    // A3 probe returned only SAIC contracts mentioning "Amazon Web Services" (~$8M, 6 rows)
+    // vs A1 (SAIC full footprint, $8B+). The AND is real and works.
+    // Use only the longest keyword forms to avoid false positives (e.g. "Amazon" alone
+    // matches "AMAZON FINDER" in unrelated relay socket contracts).
+    const combinedKeywords = keywordNeedles.filter(k => k.length >= 6);
+    const combinedFilters = recipientName && combinedKeywords.length > 0
+      ? { ...baseFilters, recipient_search_text: [recipientName], keywords: combinedKeywords }
       : null;
 
     console.log('[mo:filt]', JSON.stringify({
@@ -2007,23 +2008,21 @@ async function pullOnce(attrs) {
     let directResults, keywordResults;
 
     if (combinedFilters) {
-      // Integrator+ISV: keywords query returns contracts mentioning the ISV.
-      // Post-filter to only rows where recipient matches the integrator.
-      // This achieves GDIT AND "Amazon Web Services" without relying on
-      // USASpending to AND the two filters (it doesn't — recipient wins).
+      // Integrator+ISV: USASpending ANDs recipient_search_text + keywords.
+      // Run combined as primary. Also run keyword-only in parallel to catch
+      // any contracts where the ISV name appears but recipient resolves differently.
       const [combinedRes, kwRes] = await Promise.all([
         searchAwards(combinedFilters, false),
-        searchAwards(keywordFilters, false),
+        keywordFilters ? searchAwards(keywordFilters, false) : Promise.resolve({ rows: [], error: null }),
       ]);
-      // Post-filter combined results to recipient match
-      const recipientUpper = recipientName.toUpperCase();
-      const recipientPrefix = recipientUpper.slice(0, 20);  // handles truncated names
-      combinedRes.rows = combinedRes.rows.filter(r => {
-        const rn = (r['Recipient Name'] || '').toUpperCase();
-        return rn.startsWith(recipientPrefix) || recipientUpper.startsWith(rn.slice(0, 20));
-      });
+      // Combined result is already correctly filtered — no post-processing needed.
+      // Keyword result may include non-integrator rows; filter to recipient match.
+      const recipientPrefix = recipientName.toUpperCase().slice(0, 20);
+      const kwFiltered = kwRes.rows.filter(r =>
+        (r['Recipient Name'] || '').toUpperCase().startsWith(recipientPrefix)
+      );
       directResults = combinedRes;
-      keywordResults = { rows: [], error: null };  // already covered by combined post-filter
+      keywordResults = { rows: kwFiltered, error: kwRes.error };
     } else {
       const [dr, kr] = await Promise.all([
         directFilters ? searchAwards(directFilters, false) : Promise.resolve({ rows: [], error: null }),
