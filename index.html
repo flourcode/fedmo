@@ -541,11 +541,26 @@ a:hover { text-decoration: underline; }
 }
 
 .mo-card-loading {
-  padding: var(--s-6) var(--s-5);
-  text-align: center;
-  color: var(--text-faint);
-  font-size: 14px;
+  padding: var(--s-4) var(--s-5) var(--s-5);
 }
+/* Skeleton shimmer animation */
+@keyframes mo-shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+.mo-skel {
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--border-soft) 25%, var(--bg-tint) 50%, var(--border-soft) 75%);
+  background-size: 800px 100%;
+  animation: mo-shimmer 1.4s ease-in-out infinite;
+}
+.mo-skel-title  { height: 18px; width: 65%; margin-bottom: 8px; }
+.mo-skel-sub    { height: 13px; width: 85%; margin-bottom: 12px; }
+.mo-skel-chip   { height: 22px; width: 110px; border-radius: 999px; display: inline-block; margin-right: 6px; }
+.mo-skel-stats  { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; margin: 14px 0 18px; }
+.mo-skel-stat   { height: 44px; border-radius: 8px; }
+.mo-skel-rows   { margin-top: 4px; }
+.mo-skel-row    { height: 58px; border-radius: 8px; margin-bottom: 6px; }
 .mo-card-empty {
   padding: var(--s-6) var(--s-5);
   text-align: center;
@@ -977,6 +992,29 @@ a:hover { text-decoration: underline; }
     margin-left: var(--s-3); margin-right: var(--s-3);
   }
   .mo-amount-note { padding-left: var(--s-4); padding-right: var(--s-4); }
+
+  /* Card title: reduce right-pad so long titles aren't truncated by share button */
+  .mo-card-title { padding-right: 70px; }
+
+  /* Treemap: shorter height on mobile gives cells better aspect ratio for labels */
+  .mo-treemap { height: 170px; }
+
+  /* Row touch targets: 12px padding → ~46px height, above Apple HIG 44px min */
+  .mo-row-2line { padding: 12px var(--s-4) 12px; }
+
+  /* Row meta: allow wrapping so vehicle/status info isn't clipped off-screen */
+  .mo-row-meta {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    line-height: 1.5;
+  }
+
+  /* Sort buttons: larger touch targets */
+  .mo-sort-btn { padding: 8px 14px; }
+
+  /* View link: larger tap target on mobile */
+  .mo-row-view { padding: 6px 12px; font-size: 12px; }
 }
 </style>
 </head>
@@ -1312,7 +1350,7 @@ function buildOfficeLabel(awardId, agencyTop, subAgency) {
     const parentAlreadyInOffice = officeUpper.includes(parentAbbr.toUpperCase())
       || (parentFull.split(/\s+/).filter(w => w.length > 3)
           .some(w => officeUpper.includes(w.toUpperCase())));
-    return parentAlreadyInOffice ? officeRaw : `${parentAbbr}/${officeRaw}`;
+    return parentAlreadyInOffice ? officeRaw : `${parentAbbr}›${officeRaw}`;
   }
   return subAgency || agencyTop;
 }
@@ -2401,7 +2439,7 @@ function renderTreemapInto(host, items) {
   // Stash data for resize-driven re-render
   try { host.setAttribute('data-tm-items', JSON.stringify(items)); } catch {}
   const W = host.clientWidth || 320;
-  const H = 220;
+  const H = W <= 420 ? 170 : 220;  // match @media (max-width:600px) CSS height
   const sorted = items.slice().sort((a, b) => b.value - a.value);
   const laid = squarify(sorted, 0, 0, W, H);
   const PADDING = 2;
@@ -3802,7 +3840,22 @@ function renderMoTurn(question) {
 }
 
 function renderLoadingCard() {
-  return $$('div', { class: 'mo-card mo-card-loading', text: 'Pulling from USASpending…' });
+  const card = $$('div', { class: 'mo-card mo-card-loading' });
+  card.innerHTML = `
+    <div class="mo-skel mo-skel-title"></div>
+    <div class="mo-skel mo-skel-sub"></div>
+    <div><span class="mo-skel mo-skel-chip"></span><span class="mo-skel mo-skel-chip" style="width:80px"></span></div>
+    <div class="mo-skel-stats">
+      <div class="mo-skel mo-skel-stat"></div>
+      <div class="mo-skel mo-skel-stat"></div>
+      <div class="mo-skel mo-skel-stat"></div>
+    </div>
+    <div class="mo-skel-rows">
+      <div class="mo-skel mo-skel-row"></div>
+      <div class="mo-skel mo-skel-row"></div>
+      <div class="mo-skel mo-skel-row" style="opacity:.6"></div>
+    </div>`;
+  return card;
 }
 
 function scrollBottom() {
