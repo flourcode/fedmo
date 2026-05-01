@@ -2793,13 +2793,13 @@ async function loadSecFilings(rows, attrs) {
   }
   const topPrimes = Object.entries(byPrime).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([n]) => n);
 
-  // For ISV/keyword queries (no recipient=, keywords only), the ISV itself
-  // may not rank in the top 5 recipients because resellers dominate by volume.
-  // But when a user asks "who resells AWS", they always want to see Amazon's
-  // filings alongside the resellers. Inject any keyword-matched public vendor
-  // that doesn't already appear in topPrimes.
+  // For keyword queries and integrator+ISV queries, inject any keyword-matched
+  // public vendor into the SEC check. This covers two patterns:
+  //   1. keywords-only (no recipient): "who resells AWS" → inject Amazon
+  //   2. integrator+ISV (recipient + keywords): "SAIC resells AWS" → inject Amazon
+  //      even though SAIC is the prime — the user wants to see Amazon's filings too.
   const injected = [];
-  if (attrs && !attrs.recipient && attrs.keywords) {
+  if (attrs && attrs.keywords) {
     const kwVendors = String(attrs.keywords).split(',').map(k => k.trim()).filter(Boolean);
     for (const kw of kwVendors) {
       const match = matchPublicVendor(kw);
