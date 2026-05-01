@@ -1262,27 +1262,57 @@ function lookupOffice(awardId) {
   return null;
 }
 
-// Build the display label for the agency column / treemap cell.
-// When an office prefix resolves, format as "ABBR · OFFICE NAME" so:
-//   - Parent agency always appears first (hierarchy reads left-to-right)
-//   - Sellers who don't know office codes see the agency immediately
-//   - Short abbr keeps it readable in both treemap cells and row meta
-// Suppresses the abbr prefix when the parent is already semantically
-// contained in the office name (NASA IT PROCUREMENT OFFICE, DEFENSE HEALTH AGENCY).
-// Falls back to sub-agency → toptier agency when no office prefix resolves.
+// AWARD_ID_PARENT: infers the parent service/agency from the Award ID 2-char prefix.
+// This is more reliable than the Sub Agency field, which often returns
+// "Department of Defense" for cross-service or joint contracts even when the
+// awarding office is clearly Air Force (FA8xxx) or Navy (N0xxxx).
+// The PIID prefix IS the office code — it unambiguously identifies the service.
+const AWARD_ID_PARENT = {
+  'FA': 'USAF',   // Air Force Acquisition
+  'N0': 'Navy',   'N1': 'Navy', 'N2': 'Navy', 'N3': 'Navy',
+  'N4': 'Navy',   'N5': 'Navy', 'N6': 'Navy', 'N7': 'Navy',
+  'M0': 'USMC',   'M6': 'USMC', 'M7': 'USMC',
+  'W0': 'Army',   'W1': 'Army', 'W3': 'Army', 'W4': 'Army',
+  'W5': 'Army',   'W9': 'Army',
+  'HT': 'DHA',    // Defense Health Agency
+  'HC': 'DISA',   // Defense Information Systems Agency
+  'HQ': 'DoD',    // OSD/joint
+  '75': 'HHS',
+  '89': 'DOE',
+  '80': 'NASA',
+  'GS': 'GSA',    '47': 'GSA',
+  '36': 'VA',
+  '91': 'Treasury',
+  '15': 'DOJ',
+  'HS': 'DHS',    'TO': 'DHS',
+};
+
+function inferParentFromAwardId(awardId) {
+  if (!awardId) return null;
+  return AWARD_ID_PARENT[String(awardId).toUpperCase().slice(0, 2)] || null;
+}
+
+// Build the display label for agency column / treemap cell.
+// Format: "PARENT · OFFICE" (e.g. "Navy · NAVSEA HQ", "DOE · NNSA NON-MO CNTRCTNG OPS DIV")
+// Parent is inferred from the Award ID 2-char prefix — reliable across cross-service contracts.
+// Falls back to sub-agency → toptier when no office prefix resolves.
+// Suppresses parent prefix when it's already semantically in the office name.
 function buildOfficeLabel(awardId, agencyTop, subAgency) {
   const officeRaw = lookupOffice(awardId);
   if (officeRaw) {
-    const officeUpper = officeRaw.toUpperCase();
-    // Prefer sub-agency when more specific than toptier
+    // Infer parent from Award ID prefix first (reliable), fall back to sub-agency/toptier
+    const parentFromId = inferParentFromAwardId(awardId);
     const parentFull = (subAgency && subAgency !== agencyTop) ? subAgency : agencyTop;
-    const parentAbbr = AGENCY_ABBREVIATIONS[parentFull.trim()]
-                    || AGENCY_ABBREVIATIONS[agencyTop.trim()]
-                    || agencyTop;
-    // Suppress prefix if parent name already appears in the office string
-    const parentWords = parentFull.split(/\s+/).filter(w => w.length > 3);
-    const parentAlreadyInOffice = parentWords.some(w => officeUpper.includes(w.toUpperCase()));
-    return parentAlreadyInOffice ? officeRaw : `${parentAbbr} · ${officeRaw}`;
+    const parentAbbr = parentFromId
+      || AGENCY_ABBREVIATIONS[parentFull.trim()]
+      || AGENCY_ABBREVIATIONS[agencyTop.trim()]
+      || agencyTop;
+    // Suppress prefix if parent already appears in the office string
+    const officeUpper = officeRaw.toUpperCase();
+    const parentAlreadyInOffice = officeUpper.includes(parentAbbr.toUpperCase())
+      || (parentFull.split(/\s+/).filter(w => w.length > 3)
+          .some(w => officeUpper.includes(w.toUpperCase())));
+    return parentAlreadyInOffice ? officeRaw : `${parentAbbr}/${officeRaw}`;
   }
   return subAgency || agencyTop;
 }
@@ -2406,17 +2436,19 @@ function renderTreemapInto(host, items) {
     const isOther = /^Other \(/.test(cell.name);
     const fill = isOther ? 'url(#other-hatch)' : cell.color;
     svg += `<rect x="${rx.toFixed(1)}" y="${ry.toFixed(1)}" width="${rw.toFixed(1)}" height="${rh.toFixed(1)}" fill="${fill}" rx="3"><title>${escapeHtml(cell.name)} — ${fmtMoney(cell.value)}</title></rect>`;
-    if (rw > 55 && rh > 30) {
+    if (rw > 45 && rh > 26) {
       const area = rw * rh;
-      const nameFont = area > 12000 ? 16 : area > 5000 ? 13 : 11;
-      const valueFont = Math.max(nameFont - 2, 10);
-      const charsFit = Math.max(4, Math.floor((rw - 12) / (nameFont * 0.55)));
+      const nameFont = area > 12000 ? 13 : area > 5000 ? 11 : 10;
+      const valueFont = Math.max(nameFont - 1, 9);
+      // 0.50 char-width ratio fits more of compound labels like "Navy · NAVSEA HQ"
+      const charsFit = Math.max(4, Math.floor((rw - 10) / (nameFont * 0.50)));
       const name = shortenLabel(cell.name, charsFit, isOther);
       const tc = textColorFor(cell.color);
       const fontStyle = isOther ? ' font-style="italic"' : '';
-      svg += `<text x="${(rx + 6).toFixed(1)}" y="${(ry + nameFont + 4).toFixed(1)}" fill="${tc.name}" font-size="${nameFont}" font-weight="600"${fontStyle}>${escapeHtml(name)}</text>`;
+      const ls = ' letter-spacing="-0.2"';
+      svg += `<text x="${(rx + 5).toFixed(1)}" y="${(ry + nameFont + 4).toFixed(1)}" fill="${tc.name}" font-size="${nameFont}" font-weight="600"${fontStyle}${ls}>${escapeHtml(name)}</text>`;
       if (rh > nameFont + valueFont + 12) {
-        svg += `<text x="${(rx + 6).toFixed(1)}" y="${(ry + nameFont + valueFont + 10).toFixed(1)}" fill="${tc.value}" font-size="${valueFont}" font-weight="500"${fontStyle}>${fmtMoney(cell.value)}</text>`;
+        svg += `<text x="${(rx + 5).toFixed(1)}" y="${(ry + nameFont + valueFont + 9).toFixed(1)}" fill="${tc.value}" font-size="${valueFont}" font-weight="500"${ls}>${fmtMoney(cell.value)}</text>`;
       }
     }
   });
