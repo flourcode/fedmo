@@ -1181,6 +1181,88 @@ function findBrokenTagStart(text) {
 }
 
 // =============================================================================
+// STATIC DATA BOOTSTRAP
+// =============================================================================
+//
+// Two JSON files fetched once at startup, in parallel, non-blocking:
+//
+//   entities.json  (171KB) — agency name → {tier, name, abbreviation}
+//     Powers resolveAgency(). Replaces the live autocomplete round-trip
+//     (~205ms every query) with an instant local lookup. Miss → live fallback.
+//     Wrong-tier is caught downstream by the existing 0-row cascade.
+//
+//   offices.json   (106KB) — FAR office code → office name
+//     Powers Award ID prefix → office label in treemap + row meta.
+//     The Awarding Office field from USASpending is always empty (confirmed
+//     across 100+ rows in 3 probes). Award ID prefix is the only reliable
+//     source. Miss → Sub Agency name (current behavior, no regression).
+//
+// Antifragile design:
+//   - Both files loaded with Promise.all — neither blocks the other.
+//   - If either fetch fails, the relevant Map stays empty and the existing
+//     live path is used transparently.
+//   - entities.json: miss → live autocomplete. Wrong tier → 0-row cascade retries.
+//   - offices.json: miss → Sub Agency name. No live alternative exists anyway.
+//
+// Staleness:
+//   - entities.json: agency structure changes ~1x/year. Miss fires live fallback.
+//   - offices.json: FAR office codes are permanent; renaming is cosmetic only.
+//   - public_vendors.json: M&A risk guarded by EDGAR name-match check (see below).
+
+let ENTITIES_MAP = new Map();   // lowercased name/abbr → {tier, name, label}
+let OFFICES_MAP  = new Map();   // 6-char prefix → office name string
+
+(async () => {
+  const BASE = window.location.origin + (window.location.pathname.replace(/\/[^/]+$/, '/') || '/');
+
+  const [entResult, offResult] = await Promise.allSettled([
+    fetch(`${BASE}entities.json`).then(r => r.ok ? r.json() : null).catch(() => null),
+    fetch(`${BASE}offices.json`).then(r => r.ok ? r.json() : null).catch(() => null),
+  ]);
+
+  if (entResult.status === 'fulfilled' && entResult.value?.entities) {
+    const raw = entResult.value.entities;
+    for (const [key, entries] of Object.entries(raw)) {
+      if (!Array.isArray(entries) || !entries[0]) continue;
+      const e = entries[0];
+      // Build the same shape resolveAgency() returns so the rest of the code is unchanged
+      const resolution = e.tier === 'toptier'
+        ? { filter: { tier: 'toptier', name: e.name, type: 'awarding' }, label: e.abbreviation || e.name }
+        : { filter: { tier: 'subtier', name: e.name, type: 'awarding' }, label: `${e.abbreviation || e.name}${e.toptier_name ? ` (${e.toptier_name.replace('Department of ', '').replace('Department of the ', '')})` : ''}` };
+      ENTITIES_MAP.set(key.toLowerCase(), resolution);
+      // Also index by abbreviation if present
+      if (e.abbreviation) ENTITIES_MAP.set(e.abbreviation.toLowerCase(), resolution);
+    }
+    console.log(`[mo:static] entities loaded: ${ENTITIES_MAP.size} entries`);
+  } else {
+    console.warn('[mo:static] entities.json unavailable — using live autocomplete');
+  }
+
+  if (offResult.status === 'fulfilled' && offResult.value) {
+    const raw = offResult.value;
+    for (const [code, name] of Object.entries(raw)) {
+      if (typeof name === 'string') OFFICES_MAP.set(code.toUpperCase(), name);
+    }
+    console.log(`[mo:static] offices loaded: ${OFFICES_MAP.size} entries`);
+  } else {
+    console.warn('[mo:static] offices.json unavailable — office prefix labels disabled');
+  }
+})();
+
+// Look up Award ID prefix → human office name.
+// Tries 6, 5, 4 char prefixes longest-first. Returns null on miss (caller
+// falls back to Sub Agency name, which is the existing behavior).
+function lookupOffice(awardId) {
+  if (!awardId || OFFICES_MAP.size === 0) return null;
+  const id = String(awardId).toUpperCase();
+  for (const len of [6, 5, 4]) {
+    const name = OFFICES_MAP.get(id.slice(0, len));
+    if (name) return name;
+  }
+  return null;
+}
+
+// =============================================================================
 // USASPENDING
 // =============================================================================
 const CSV = (s) => String(s || '').split(',').map(x => x.trim()).filter(Boolean);
@@ -1212,7 +1294,21 @@ const SUB_FIELDS = [
   'Sub-Award Date', 'Prime Recipient Name', 'Awarding Agency', 'Awarding Sub Agency',
 ];
 
+// resolveAgency: static-first (entities.json, ~0ms), falls back to live
+// autocomplete (~205ms) on miss. Wrong-tier caught by 0-row cascade downstream.
 async function resolveAgency(name) {
+  if (!name) return null;
+  const key = name.toLowerCase().trim();
+
+  // Static lookup — instant, no network
+  const local = ENTITIES_MAP.get(key);
+  if (local) {
+    console.log(`[mo:agency] static hit: "${name}" → ${JSON.stringify(local.filter)}`);
+    return local;
+  }
+
+  // Miss — fall back to live autocomplete
+  console.log(`[mo:agency] static miss for "${name}" — calling live autocomplete`);
   try {
     const r = await fetch(`${USASPENDING}/autocomplete/awarding_agency/`, {
       method: 'POST',
@@ -1983,14 +2079,16 @@ function aggregateRowsBy(rows, isSub, dimension) {
       amt = Number(r._amount) || 0;
     } else if (dimension === 'agency') {
       // When subagency has bottomed out (rows filtered to a subtier so
-      // USASpending returns Agency == Sub Agency), substitute Office so the
-      // treemap can show NAVSEA/NAVAIR/AFLCMC-level cells instead of one
+      // USASpending returns Agency == Sub Agency), substitute the office name
+      // so the treemap shows NAVSEA/NAVAIR/AFLCMC-level cells instead of one
       // giant "Department of the Navy" cell.
+      // Rec B: Awarding Office field is always empty (confirmed 0/100 rows across
+      // 3 probes). Use Award ID prefix lookup via offices.json instead.
       const agency = r['Awarding Agency'] || '';
       const sub = r['Awarding Sub Agency'] || agency;
-      const office = r['Awarding Office'] || '';
       const flattened = agency.trim().toUpperCase() === sub.trim().toUpperCase();
-      name = (flattened && office) ? office : (sub || '(unknown)');
+      const officeName = flattened ? (lookupOffice(r['Award ID']) || r['Awarding Office'] || '') : '';
+      name = (flattened && officeName) ? officeName : (sub || '(unknown)');
       amt = Number(r['Award Amount']) || 0;
     } else {
       name = r['Recipient Name'] || '(unknown)';
@@ -2353,6 +2451,10 @@ const FEDERAL_PUBLIC_VENDORS = {
   'arista networks': { cik: '0001596532', display: 'Arista Networks', ticker: 'ANET' },
   'at&t': { cik: '0000732717', display: 'AT&T', ticker: 'T' },
   'att': { cik: '0000732717', display: 'AT&T', ticker: 'T' },
+  'curtiss wright': { cik: '0000026324', display: 'Curtiss-Wright', ticker: 'CW' },
+  'curtiss-wright': { cik: '0000026324', display: 'Curtiss-Wright', ticker: 'CW' },
+  'l-3': { cik: '0000202058', display: 'L3Harris Technologies', ticker: 'LHX' },
+  'l-3 communications': { cik: '0000202058', display: 'L3Harris Technologies', ticker: 'LHX' },
   'aws': { cik: '0001018724', display: 'Amazon', ticker: 'AMZN' },
   'bae systems': { cik: '0000895564', display: 'BAE Systems', ticker: 'BAESY' },
   'boeing': { cik: '0000012927', display: 'Boeing', ticker: 'BA' },
@@ -2371,8 +2473,6 @@ const FEDERAL_PUBLIC_VENDORS = {
   'cognizant': { cik: '0001058290', display: 'Cognizant', ticker: 'CTSH' },
   'confluent': { cik: '0001699838', display: 'Confluent', ticker: 'CFLT' },
   'crowdstrike': { cik: '0001535527', display: 'CrowdStrike', ticker: 'CRWD' },
-  'curtiss wright': { cik: '0000026324', display: 'Curtiss-Wright', ticker: 'CW' },
-  'curtiss-wright': { cik: '0000026324', display: 'Curtiss-Wright', ticker: 'CW' },
   'datadog': { cik: '0001561550', display: 'Datadog', ticker: 'DDOG' },
   'dell': { cik: '0001571996', display: 'Dell Technologies', ticker: 'DELL' },
   'dell technologies': { cik: '0001571996', display: 'Dell Technologies', ticker: 'DELL' },
@@ -2404,8 +2504,6 @@ const FEDERAL_PUBLIC_VENDORS = {
   'jfrog': { cik: '0001800667', display: 'JFrog', ticker: 'FROG' },
   'kbr': { cik: '0001357615', display: 'KBR', ticker: 'KBR' },
   'kratos': { cik: '0001069258', display: 'Kratos Defense', ticker: 'KTOS' },
-  'l-3': { cik: '0000202058', display: 'L3Harris Technologies', ticker: 'LHX' },
-  'l-3 communications': { cik: '0000202058', display: 'L3Harris Technologies', ticker: 'LHX' },
   'l3': { cik: '0000202058', display: 'L3Harris Technologies', ticker: 'LHX' },
   'l3harris': { cik: '0000202058', display: 'L3Harris Technologies', ticker: 'LHX' },
   'l3harris technologies': { cik: '0000202058', display: 'L3Harris Technologies', ticker: 'LHX' },
@@ -2565,6 +2663,18 @@ async function loadSecFilings(rows) {
   for (const v of publics) {
     const payload = await fetchEdgarFilings(v.cik);
     if (!payload || payload.error) continue;
+    // Staleness guard: verify the EDGAR entity name is plausibly the same company.
+    // M&A can cause a CIK to point to the wrong entity after an acquisition.
+    // payload.name is the legal entity name registered with SEC.
+    if (payload.name) {
+      const edgarName = String(payload.name).toLowerCase();
+      const expectedTokens = v.display.toLowerCase().split(/\s+/).filter(t => t.length > 3);
+      const nameMatch = expectedTokens.some(t => edgarName.includes(t));
+      if (!nameMatch) {
+        console.warn(`[edgar] CIK ${v.cik} name mismatch: expected "${v.display}", EDGAR says "${payload.name}" — skipping`);
+        continue;
+      }
+    }
     const list = extractRecentFilings(payload, 3);
     if (list.length) filings.push({ ...v, filings: list });
   }
@@ -2599,15 +2709,55 @@ const VEHICLE_MAP = {
   'HC1028':    'ENCORE III',
   'HC1047':    'JWCC',
   'HSHQDC':    'EAGLE II',
+  // HHS-specific IDIQs (Rec D — discovered via generated_internal_id probe)
+  '75A501':    'BARDA IDIQ',
+  '75N910':    'NIH Research IDIQ',
+  '75FCMC':    'HHS OAM Vehicle',
+  'HHSM50':    'CMS Ordering Vehicle',
 };
 
+// Parse the generated_internal_id to extract the parent IDIQ/GWAC contract ID.
+// Format: CONT_AWD_{AwardID}_{AgencyCode}_{ParentAwardID}_{ParentAgencyCode}
+// Returns the parent Award ID string, or null if standalone (no parent vehicle).
+function parseParentFromInternalId(internalId, awardId) {
+  if (!internalId || !awardId) return null;
+  const strip = `CONT_AWD_${awardId}_`;
+  if (!internalId.startsWith(strip)) return null;
+  const remainder = internalId.slice(strip.length);
+  // remainder = {AgencyCode}_{ParentAwardID}_{ParentAgencyCode}
+  // AgencyCode is always numeric (4 digits). Split from left.
+  const parts = remainder.split('_');
+  if (parts.length < 3) return null;
+  // parts[0] = AgencyCode, parts[-1] = ParentAgencyCode, middle = ParentAwardID
+  const parentId = parts.slice(1, -1).join('_');
+  return (parentId && parentId !== '-NONE-') ? parentId : null;
+}
+
+// Vehicle detection: tries Award ID prefix first, then parent contract from
+// generated_internal_id. First non-null wins. Returns vehicle name or null.
 function detectVehicle(award) {
+  // Method 1: Award ID prefix (existing behavior)
   const id = String(award['Award ID'] || '').toUpperCase();
-  if (!id) return null;
-  for (let len = 7; len >= 4; len--) {
-    const prefix = id.substring(0, len);
-    if (VEHICLE_MAP[prefix]) return VEHICLE_MAP[prefix];
+  if (id) {
+    for (let len = 7; len >= 4; len--) {
+      const vehicle = VEHICLE_MAP[id.substring(0, len)];
+      if (vehicle) return vehicle;
+    }
   }
+
+  // Method 2 (Rec C): parent contract from generated_internal_id
+  // Catches task orders where the task order's own Award ID has no vehicle prefix
+  // but the parent IDIQ ID does (e.g. HHS task orders on CIO-SP3/CIO-SP4/GSA MAS).
+  const internalId = String(award['generated_internal_id'] || '');
+  const parentId = parseParentFromInternalId(internalId, String(award['Award ID'] || ''));
+  if (parentId) {
+    const parentUpper = parentId.toUpperCase();
+    for (let len = 7; len >= 4; len--) {
+      const vehicle = VEHICLE_MAP[parentUpper.substring(0, len)];
+      if (vehicle) return vehicle;
+    }
+  }
+
   return null;
 }
 
@@ -2781,15 +2931,15 @@ function renderContractRows(card, rows) {
     const amount = r['Award Amount'];
     const desc = r['Description'] || '';
     // Same Office-fallback logic as aggregateRowsBy. Subtier queries flatten
-    // Agency==Sub Agency; substitute Office so the row meta reads "NAVSEA"
+    // Agency==Sub Agency; substitute office name so the row meta reads "NAVSEA HQ"
     // instead of "Department of the Navy" for a Navy-pinned query.
+    // Rec B: Awarding Office field is always empty — use Award ID prefix lookup.
     const agencyTop = r['Awarding Agency'] || '';
     const subAgency = r['Awarding Sub Agency'] || agencyTop;
-    const office = r['Awarding Office'] || '';
-    const agency = (agencyTop.trim().toUpperCase() === subAgency.trim().toUpperCase() && office)
-      ? office
-      : (subAgency || agencyTop);
     const awardId = r['Award ID'] || '';
+    const flattened = agencyTop.trim().toUpperCase() === subAgency.trim().toUpperCase();
+    const officeName = flattened ? (lookupOffice(awardId) || r['Awarding Office'] || '') : '';
+    const agency = (flattened && officeName) ? officeName : (subAgency || agencyTop);
     const status = computeStatus(r);
     const pop = formatPoP(r);
     const term = formatTerm(r);
@@ -3224,10 +3374,9 @@ function renderCard(rows, attrs, resolved) {
         uniqueCount = new Set(rows.map(r => {
           const agencyTop = r['Awarding Agency'] || '';
           const subAgency = r['Awarding Sub Agency'] || agencyTop;
-          const office = r['Awarding Office'] || '';
-          return (agencyTop.trim().toUpperCase() === subAgency.trim().toUpperCase() && office)
-            ? office
-            : subAgency;
+          const flat = agencyTop.trim().toUpperCase() === subAgency.trim().toUpperCase();
+          const off = flat ? (lookupOffice(r['Award ID']) || r['Awarding Office'] || '') : '';
+          return (flat && off) ? off : subAgency;
         }).filter(Boolean)).size;
         label = 'Where the money is';
         meta = `top ${namedCellCount} of ${uniqueCount} agencies`;
