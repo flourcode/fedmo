@@ -1987,19 +1987,45 @@ async function pullOnce(attrs) {
       ? { ...baseFilters, keywords: keywordNeedles }
       : null;
 
+    // COMBINED query: recipient AND keywords in one request.
+    // This is the integrator+ISV case (e.g. GDIT + Amazon Web Services).
+    // The direct query returns GDIT's full footprint; the keyword query
+    // returns all AWS-mentioning contracts. Neither is what the user wants.
+    // A combined query returns only contracts where GDIT primes AND
+    // "Amazon Web Services" appears in the description — exactly right.
+    const combinedFilters = recipientName && keywordNeedles.length > 0
+      ? { ...baseFilters, recipient_search_text: [recipientName], keywords: keywordNeedles }
+      : null;
+
     console.log('[mo:filt]', JSON.stringify({
       recipient: attrs.recipient,
       recipientName,
-      directFilters: directFilters ? { recipient_search_text: directFilters.recipient_search_text } : null,
+      combined: combinedFilters ? true : false,
       keywordNeedles,
     }));
 
-    const directResults = directFilters
-      ? await searchAwards(directFilters, false)
-      : { rows: [], error: null };
-    const keywordResults = keywordFilters
-      ? await searchAwards(keywordFilters, false)
-      : { rows: [], error: null };
+    let directResults, keywordResults;
+
+    if (combinedFilters) {
+      // Integrator+ISV: use the combined AND query as primary.
+      // Also run the keyword-only query to catch cases where the ISV appears
+      // in a contract the integrator holds via a differently-resolved name.
+      const [combinedRes, kwRes] = await Promise.all([
+        searchAwards(combinedFilters, false),
+        searchAwards(keywordFilters, false),
+      ]);
+      // Treat combined result as "direct" (authoritative, no post-filter needed)
+      // and keyword result as supplementary
+      directResults = combinedRes;
+      keywordResults = kwRes;
+    } else {
+      const [dr, kr] = await Promise.all([
+        directFilters ? searchAwards(directFilters, false) : Promise.resolve({ rows: [], error: null }),
+        keywordFilters ? searchAwards(keywordFilters, false) : Promise.resolve({ rows: [], error: null }),
+      ]);
+      directResults = dr;
+      keywordResults = kr;
+    }
 
     console.log('[mo:search]', [
       { path: 'direct', rows: directResults.rows.length, error: directResults.error },
@@ -4173,11 +4199,21 @@ async function askMo(question, opts = {}) {
           }
         }
       } else {
-        // First tag already fired (or forcedAttrs took over). Strip any tag
-        // Gemini emits so it doesn't bleed into prose as raw text.
+        // First tag already fired (or forcedAttrs took over). Strip any
+        // complete tag Gemini emits so it doesn't bleed into prose as raw text.
         const extraTag = findDataTag(fullText);
         if (extraTag) {
           fullText = fullText.slice(0, extraTag.start) + fullText.slice(extraTag.end);
+        }
+        // Also suppress the partial/in-progress tag while it's still streaming in.
+        // Without this, "data recipient=..." renders as prose before the closing />
+        // arrives and findDataTag can strip it.
+        if (suppressFrom < 0) {
+          const broken = findBrokenTagStart(fullText);
+          if (broken >= 0) suppressFrom = broken;
+        } else if (findDataTag(fullText) === null) {
+          // Tag completed and was stripped above — clear suppression
+          suppressFrom = -1;
         }
       }
 
