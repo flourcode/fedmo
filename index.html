@@ -2691,8 +2691,18 @@ async function loadSecFilings(rows) {
 // a row lives on a specific vehicle tells them the procurement path,
 // what other primes have a seat, and how to get on for next time.
 //
-// Prefix matching tries longest-first (7 chars down to 4) so a 7-char
-// match wins over a 4-char match if both are in the table.
+// TWO maps to avoid prefix collisions:
+//
+// VEHICLE_MAP — matched against the Award ID of the ROW ITSELF.
+//   Only unambiguous vehicle prefixes go here. HHS acquisition office
+//   prefixes (75FCMC, 75A501) are excluded: they appear on both the
+//   parent IDIQ Award IDs AND the child task order Award IDs, so a prefix
+//   match on the row's own Award ID would mislabel task orders as vehicles.
+//   Loop extends to 3 chars to cover NNG (SEWP V).
+//
+// PARENT_VEHICLE_MAP — matched against the PARENT contract ID extracted
+//   from generated_internal_id field 3. Safe to include HHS prefixes here
+//   because a parent ID of 75A50123D00005 unambiguously means a BARDA IDIQ.
 const VEHICLE_MAP = {
   'NNG':       'SEWP V',
   'GS00Q':     'CIO-SP4',
@@ -2709,7 +2719,10 @@ const VEHICLE_MAP = {
   'HC1028':    'ENCORE III',
   'HC1047':    'JWCC',
   'HSHQDC':    'EAGLE II',
-  // HHS-specific IDIQs (Rec D — discovered via generated_internal_id probe)
+};
+
+const PARENT_VEHICLE_MAP = {
+  ...VEHICLE_MAP,
   '75A501':    'BARDA IDIQ',
   '75N910':    'NIH Research IDIQ',
   '75FCMC':    'HHS OAM Vehicle',
@@ -2724,36 +2737,30 @@ function parseParentFromInternalId(internalId, awardId) {
   const strip = `CONT_AWD_${awardId}_`;
   if (!internalId.startsWith(strip)) return null;
   const remainder = internalId.slice(strip.length);
-  // remainder = {AgencyCode}_{ParentAwardID}_{ParentAgencyCode}
-  // AgencyCode is always numeric (4 digits). Split from left.
   const parts = remainder.split('_');
   if (parts.length < 3) return null;
-  // parts[0] = AgencyCode, parts[-1] = ParentAgencyCode, middle = ParentAwardID
   const parentId = parts.slice(1, -1).join('_');
   return (parentId && parentId !== '-NONE-') ? parentId : null;
 }
 
-// Vehicle detection: tries Award ID prefix first, then parent contract from
-// generated_internal_id. First non-null wins. Returns vehicle name or null.
+// Vehicle detection: Award ID prefix (VEHICLE_MAP, loop 7→3), then parent
+// contract ID from generated_internal_id (PARENT_VEHICLE_MAP, loop 7→3).
+// Separate maps prevent HHS office prefixes from mislabeling task order rows.
 function detectVehicle(award) {
-  // Method 1: Award ID prefix (existing behavior)
   const id = String(award['Award ID'] || '').toUpperCase();
   if (id) {
-    for (let len = 7; len >= 4; len--) {
+    for (let len = 7; len >= 3; len--) {
       const vehicle = VEHICLE_MAP[id.substring(0, len)];
       if (vehicle) return vehicle;
     }
   }
 
-  // Method 2 (Rec C): parent contract from generated_internal_id
-  // Catches task orders where the task order's own Award ID has no vehicle prefix
-  // but the parent IDIQ ID does (e.g. HHS task orders on CIO-SP3/CIO-SP4/GSA MAS).
   const internalId = String(award['generated_internal_id'] || '');
   const parentId = parseParentFromInternalId(internalId, String(award['Award ID'] || ''));
   if (parentId) {
     const parentUpper = parentId.toUpperCase();
-    for (let len = 7; len >= 4; len--) {
-      const vehicle = VEHICLE_MAP[parentUpper.substring(0, len)];
+    for (let len = 7; len >= 3; len--) {
+      const vehicle = PARENT_VEHICLE_MAP[parentUpper.substring(0, len)];
       if (vehicle) return vehicle;
     }
   }
