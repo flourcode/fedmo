@@ -78,6 +78,24 @@ async function callLambda(question, history = []) {
   return { tagAttrs, proseBefore, proseAfter, rawText, lambdaMs: Math.round(performance.now() - t0), error };
 }
 
+// ── Recipient resolution (mirrors production VENDOR_LEGAL_NAMES) ──────────
+// Production's resolveRecipient maps shorthand like "SAIC" to the full USASpending
+// legal entity name before hitting recipient_search_text. The test runner must
+// do the same — using the short acronym as a keyword needle hits description text
+// and returns 0 rows for vendors whose descriptions use the long form.
+const VENDOR_LEGAL_NAMES = {
+  'aws':           'AMAZON WEB SERVICES',
+  'amazon':        'AMAZON WEB SERVICES',
+  'saic':          'SCIENCE APPLICATIONS INTERNATIONAL CORPORATION',
+  'gdit':          'GENERAL DYNAMICS INFORMATION TECHNOLOGY',
+  'bah':           'BOOZ ALLEN HAMILTON',
+  'booz':          'BOOZ ALLEN HAMILTON',
+  'rtx':           'RAYTHEON',
+  'ibm':           'INTERNATIONAL BUSINESS MACHINES',
+  'msft':          'MICROSOFT CORPORATION',
+  'hpe':           'HEWLETT PACKARD ENTERPRISE',
+};
+
 // ── USASpending pull ──────────────────────────────────────────────────────
 // Mirrors minimo's resolver: takes Mo's tag attrs, builds the right
 // USASpending payload, fetches rows. Slim version — doesn't do all the
@@ -118,12 +136,14 @@ async function pullUSASpending(attrs) {
   }
 
   if (attrs.recipient) {
-    // Tests don't replicate the full recipient resolver — instead use a
-    // keyword needle so we still get rows. Production resolver does
-    // entity matching + auto-aliasing. For test purposes, this is OK
-    // because we're testing what Mo EMITS, not the resolver's lookup.
+    // Resolve shorthand names (SAIC, AWS, etc.) to full legal names before
+    // using as keyword needles — matches production resolveRecipient behavior.
+    // Without this, "SAIC" as a keyword hits description text and finds nothing;
+    // "SCIENCE APPLICATIONS INTERNATIONAL CORPORATION" finds the actual contracts.
+    const lookupKey = String(attrs.recipient).toLowerCase().trim();
+    const resolvedName = VENDOR_LEGAL_NAMES[lookupKey] || attrs.recipient;
     filters.keywords = filters.keywords || [];
-    filters.keywords.push(attrs.recipient);
+    filters.keywords.push(resolvedName);
     if (attrs.aliases) {
       String(attrs.aliases).split(',').map(s => s.trim()).filter(Boolean).forEach(a => filters.keywords.push(a));
     }
@@ -149,22 +169,42 @@ async function pullUSASpending(attrs) {
   let rows = [];
   let total = 0;
   let error = null;
+  let keywordsDropped = false;
 
-  try {
+  const doFetch = async (p) => {
     const res = await fetch(USASPENDING_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(p),
     });
     if (!res.ok) throw new Error(`USASpending HTTP ${res.status}`);
     const body = await res.json();
-    rows = body.results || [];
+    return body.results || [];
+  };
+
+  try {
+    rows = await doFetch(payload);
     total = rows.reduce((s, r) => s + (Number(r['Award Amount']) || 0), 0);
+
+    // Keyword-drop fallback: mirrors production pullOnce default branch.
+    // If agency + keywords = 0 rows, retry without keywords. Needed for
+    // program-office terms (NAVSEA) that live in awarding_office, not descriptions.
+    if (rows.length === 0 && filters.keywords?.length && filters.agencies?.length) {
+      const filtersNoKw = { ...filters };
+      delete filtersNoKw.keywords;
+      const retryPayload = { ...payload, filters: filtersNoKw };
+      const retryRows = await doFetch(retryPayload);
+      if (retryRows.length > 0) {
+        rows = retryRows;
+        total = rows.reduce((s, r) => s + (Number(r['Award Amount']) || 0), 0);
+        keywordsDropped = true;
+      }
+    }
   } catch (e) {
     error = e.message;
   }
 
-  return { rows, total, error, usaspendingMs: Math.round(performance.now() - t0), payload };
+  return { rows, total, error, usaspendingMs: Math.round(performance.now() - t0), payload, keywordsDropped };
 }
 
 // ── Run a single scenario ─────────────────────────────────────────────────
@@ -189,6 +229,7 @@ async function runScenario(scenario) {
     rowCount: pullResult.rows.length,
     total: pullResult.total,
     payload: pullResult.payload,
+    keywordsDropped: pullResult.keywordsDropped || false,
     error: lambdaErr || pullResult.error,
     timings: {
       lambdaMs,
