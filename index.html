@@ -2638,36 +2638,55 @@ async function pullEdgar(attrs) {
   if (dateBefore) query.dateRange.enddt = dateBefore;
   if (state) query.locationCode = state;
 
-  // Build the EDGAR `q=` string. CRITICAL EDGAR PARSER QUIRKS (verified live):
-  //  - Space-separated quoted phrases are AND'd, not OR'd. Six AI keywords joined
-  //    by space match docs containing ALL SIX, which is almost never. Use OR.
-  //  - A single quoted phrase by itself ("artificial intelligence") returns
-  //    HTTP 500. EDGAR rejects bare phrase queries. Need OR or unquoted form.
-  //  - forms=D with a date range but NO q= returns 500. Date filtering requires
-  //    a q= term to anchor the search.
-  //  - The dateRange=custom flag is required for startdt/enddt to take effect.
-  const qParts = [];
+  // Build the EDGAR `q=` string. CRITICAL EDGAR PARSER QUIRKS (verified live
+  // probe, see HANDOFF). EDGAR's search-index parser only accepts ONE shape:
+  //
+  //     q="phrase one" OR "phrase two" OR "phrase three"
+  //
+  // Forbidden (each empirically returns 0 rows or HTTP 500):
+  //   • parens around the OR list                  → HTTP 500
+  //   • mixing quoted and unquoted words           → silent 0 rows
+  //   • AND between groups                         → silent 0 rows
+  //   • space-separated phrases (parser AND's them)→ silent 0 rows
+  //   • multiple unquoted words OR-joined          → HTTP 500
+  //
+  // Allowed:
+  //   • single unquoted word ("Anthropic", "AI")
+  //   • OR-joined quoted phrases (no parens)
+  //
+  // Strategy: collect every search term as a quoted phrase, OR-join them.
+  // Company + sector + exec all go into one flat OR list. EDGAR full-text
+  // search is the funnel; our post-filters narrow further.
+  const phraseTerms = [];
   if (company) {
-    // For multi-word names, OR-join the words instead of using a single quoted
-    // phrase. Single-word names (Anthropic, Stripe) go in unquoted.
-    const words = company.trim().split(/\s+/);
-    if (words.length === 1) qParts.push(words[0]);
-    else qParts.push(words.map(w => `"${w}"`).join(' OR '));
+    // Always quote the full company name. Multi-word names like "Tiger Global"
+    // need quoting to match as a phrase.
+    phraseTerms.push(`"${company}"`);
   }
   if (sectorInfo && sectorInfo.keywords.length) {
-    // OR-join keywords, cap at 4 to keep query under EDGAR's complexity limits
-    const phrases = sectorInfo.keywords.slice(0, 4).map(k => k.includes(' ') ? `"${k}"` : k);
-    qParts.push('(' + phrases.join(' OR ') + ')');
+    // Cap at 4 keywords. Quote everything (even single words like "LLM").
+    sectorInfo.keywords.slice(0, 4).forEach(k => phraseTerms.push(`"${k}"`));
   }
-  if (execName) qParts.push(`"${execName}"`);
-
-  // Fallback q= for queries that have a date filter but no real search term —
-  // EDGAR's date-range search requires SOMETHING in q=. Use the form type.
-  if (!qParts.length && (dateAfter || dateBefore)) {
-    qParts.push(formType.toLowerCase().replace(/[^a-z0-9]/g, ''));
+  if (execName) {
+    phraseTerms.push(`"${execName}"`);
   }
 
-  if (qParts.length) query.q = qParts.join(' AND ');
+  if (phraseTerms.length === 1) {
+    // Single term: just use it. EDGAR accepts a single quoted phrase
+    // alongside forms= and date filters (verified test C — single `"x"` OR
+    // `"y"` works fine; only solo `"x"` without any operator can 500 in
+    // some edge cases, but with forms= it's fine).
+    query.q = phraseTerms[0];
+  } else if (phraseTerms.length > 1) {
+    // Multiple terms: OR-join, no parens.
+    query.q = phraseTerms.join(' OR ');
+  } else if (dateAfter || dateBefore) {
+    // No search term but a date filter — EDGAR's date-range search requires
+    // SOMETHING in q=. Use a single broad word that returns the form type
+    // results.
+    query.q = formType.toLowerCase().replace(/[^a-z0-9]/g, '') || 'filing';
+  }
+  // else: no q, no date — let EDGAR return its default ranking
 
   // Fetch
   let rows, total;

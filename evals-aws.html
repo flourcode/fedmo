@@ -424,34 +424,49 @@ async function askMo(question, history = []) {
 // ─────────────────────────────────────────────────────────────────────
 // Follow-up data pulls (verify the data path actually works)
 // ─────────────────────────────────────────────────────────────────────
+// Sector keyword lists — MUST match the production EDGAR_SECTORS in
+// index.html so the test query mirrors what the user actually fires.
+const EVAL_SECTOR_KEYWORDS = {
+  'ai':            ['artificial intelligence', 'machine learning', 'LLM', 'foundation model'],
+  'cybersecurity': ['cybersecurity', 'cyber security', 'information security', 'endpoint security'],
+  'fintech':       ['fintech', 'financial technology', 'payments', 'neobank'],
+  'climate':       ['climate', 'carbon capture', 'clean energy', 'renewable energy'],
+  'biotech':       ['biotech', 'biotechnology', 'drug discovery', 'therapeutics'],
+  'hardware':      ['semiconductor', 'chip', 'custom silicon', 'robotics'],
+  'saas':          ['SaaS', 'software-as-a-service', 'cloud software', 'enterprise software'],
+  'crypto':        ['blockchain', 'cryptocurrency', 'digital assets', 'Web3'],
+  'real estate':   ['real estate', 'proptech', 'REIT', 'commercial real estate'],
+  'consumer':      ['consumer brand', 'DTC', 'direct to consumer', 'e-commerce'],
+};
+
 async function edgarFollowUp(attrs) {
   if (!attrs) return null;
   const t0 = performance.now();
-  // Build a search-index query from the attrs
   const params = new URLSearchParams();
   const formType = attrs.form_type || 'D';
-  // Form labels for EDGAR query
   const formForUrl = formType === '13F' ? '13F-HR' : formType;
   params.set('forms', formForUrl);
 
-  const qParts = [];
-  if (attrs.company) qParts.push(`"${attrs.company}"`);
+  // Mirror production: OR-joined quoted phrases, no parens, no AND, no
+  // mixing. EDGAR rejects every other shape.
+  const phraseTerms = [];
+  if (attrs.company) phraseTerms.push(`"${attrs.company}"`);
   if (attrs.sector) {
-    // Tiny sector→keyword map (the live client has the full one)
-    const sectorMap = {
-      'ai': 'artificial intelligence',
-      'cybersecurity': 'cybersecurity',
-      'fintech': 'fintech',
-      'climate': 'climate',
-      'biotech': 'biotech',
-      'hardware': 'semiconductor',
-      'saas': 'SaaS',
-      'crypto': 'blockchain',
-    };
-    const kw = sectorMap[String(attrs.sector).toLowerCase()] || attrs.sector;
-    qParts.push(`"${kw}"`);
+    const key = String(attrs.sector).toLowerCase();
+    const keywords = EVAL_SECTOR_KEYWORDS[key] || [attrs.sector];
+    keywords.forEach(k => phraseTerms.push(`"${k}"`));
   }
-  if (qParts.length) params.set('q', qParts.join(' '));
+  if (attrs.exec_name) phraseTerms.push(`"${attrs.exec_name}"`);
+
+  if (phraseTerms.length === 1) {
+    params.set('q', phraseTerms[0]);
+  } else if (phraseTerms.length > 1) {
+    params.set('q', phraseTerms.join(' OR '));
+  } else if (attrs.date_after || attrs.date_before) {
+    // Date filter requires a q= anchor
+    params.set('q', formType.toLowerCase().replace(/[^a-z0-9]/g, '') || 'filing');
+  }
+
   if (attrs.date_after || attrs.date_before) {
     params.set('dateRange', 'custom');
     if (attrs.date_after) params.set('startdt', attrs.date_after);
@@ -478,6 +493,7 @@ async function edgarFollowUp(attrs) {
       total: data?.hits?.total?.value || 0,
       returned: data?.hits?.hits?.length || 0,
       firstHit: data?.hits?.hits?.[0]?._source || null,
+      queryString: params.toString(),
     };
   } catch (e) {
     return { error: e.message, latencyMs: Math.round(performance.now() - t0) };
