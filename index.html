@@ -2638,14 +2638,36 @@ async function pullEdgar(attrs) {
   if (dateBefore) query.dateRange.enddt = dateBefore;
   if (state) query.locationCode = state;
 
+  // Build the EDGAR `q=` string. CRITICAL EDGAR PARSER QUIRKS (verified live):
+  //  - Space-separated quoted phrases are AND'd, not OR'd. Six AI keywords joined
+  //    by space match docs containing ALL SIX, which is almost never. Use OR.
+  //  - A single quoted phrase by itself ("artificial intelligence") returns
+  //    HTTP 500. EDGAR rejects bare phrase queries. Need OR or unquoted form.
+  //  - forms=D with a date range but NO q= returns 500. Date filtering requires
+  //    a q= term to anchor the search.
+  //  - The dateRange=custom flag is required for startdt/enddt to take effect.
   const qParts = [];
-  if (company) qParts.push(`"${company}"`);
+  if (company) {
+    // For multi-word names, OR-join the words instead of using a single quoted
+    // phrase. Single-word names (Anthropic, Stripe) go in unquoted.
+    const words = company.trim().split(/\s+/);
+    if (words.length === 1) qParts.push(words[0]);
+    else qParts.push(words.map(w => `"${w}"`).join(' OR '));
+  }
   if (sectorInfo && sectorInfo.keywords.length) {
-    const phrases = sectorInfo.keywords.slice(0, 6).map(k => k.includes(' ') ? `"${k}"` : k);
-    qParts.push(phrases.join(' '));
+    // OR-join keywords, cap at 4 to keep query under EDGAR's complexity limits
+    const phrases = sectorInfo.keywords.slice(0, 4).map(k => k.includes(' ') ? `"${k}"` : k);
+    qParts.push('(' + phrases.join(' OR ') + ')');
   }
   if (execName) qParts.push(`"${execName}"`);
-  if (qParts.length) query.q = qParts.join(' ');
+
+  // Fallback q= for queries that have a date filter but no real search term —
+  // EDGAR's date-range search requires SOMETHING in q=. Use the form type.
+  if (!qParts.length && (dateAfter || dateBefore)) {
+    qParts.push(formType.toLowerCase().replace(/[^a-z0-9]/g, ''));
+  }
+
+  if (qParts.length) query.q = qParts.join(' AND ');
 
   // Fetch
   let rows, total;

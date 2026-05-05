@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<!--
+  ════════════════════════════════════════════════════════════════════
+  AWS Demo Readiness Eval Harness
+  ════════════════════════════════════════════════════════════════════
+
+  Standalone test runner for fedmo's combined USASpending + EDGAR
+  capabilities. Tests ~30 scenarios covering 8 demo clusters.
+
+  Drop next to eval-scenarios-aws.js, or upload both to fedmo.com.
+  Override the endpoint via ?endpoint=... for testing a dev Lambda.
+
+  No build step, no module imports beyond eval-scenarios-aws.js.
+  ════════════════════════════════════════════════════════════════════
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>fedmo · AWS demo evals</title>
+<style>
+  :root {
+    --bg: #fdfcff;
+    --card: #ffffff;
+    --border: #e6e4ed;
+    --border-strong: #c8c4d6;
+    --text: #1a1625;
+    --muted: #6b6879;
+    --faint: #94909e;
+    --primary: #5b5bd6;
+    --primary-soft: #eceaf2;
+    --pass: #1a8a4b;
+    --pass-soft: #e6f4ec;
+    --warn: #d98b1a;
+    --warn-soft: #fbf2e0;
+    --fail: #c4372e;
+    --fail-soft: #fbe9e7;
+    --mono: 'SF Mono', 'Monaco', 'Consolas', 'Liberation Mono', monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 24px;
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    max-width: 1180px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .subtitle { color: var(--muted); margin-bottom: 16px; font-size: 13px; }
+
+  .controls {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  button {
+    background: var(--primary);
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+  }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  button.ghost {
+    background: white;
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .endpoint {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+    padding: 4px 8px;
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    max-width: 480px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .summary {
+    display: flex;
+    gap: 20px;
+    padding: 14px 16px;
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 20px;
+    font-size: 13px;
+    flex-wrap: wrap;
+  }
+  .summary .stat-num { font-weight: 600; font-family: var(--mono); margin-right: 4px; }
+  .summary .pass { color: var(--pass); }
+  .summary .warn { color: var(--warn); }
+  .summary .fail { color: var(--fail); }
+
+  .progress-bar {
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+  .progress-fill {
+    height: 100%;
+    background: var(--primary);
+    transition: width 200ms;
+  }
+
+  .cluster {
+    margin-bottom: 28px;
+  }
+  .cluster-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .cluster-stats {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: 400;
+  }
+  .cluster-killer {
+    background: linear-gradient(90deg, var(--primary-soft), transparent);
+    padding: 4px 10px;
+    border-radius: 4px;
+    border-left: 3px solid var(--primary);
+  }
+
+  .scenario {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 8px;
+    overflow: hidden;
+  }
+  .scenario-head {
+    padding: 12px 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    user-select: none;
+  }
+  .scenario-head:hover { background: #faf9fc; }
+  .status-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .status-dot.pending { background: #d4d2dc; }
+  .status-dot.running { background: var(--primary); animation: pulse 1s infinite; }
+  .status-dot.pass { background: var(--pass); }
+  .status-dot.warn { background: var(--warn); }
+  .status-dot.fail { background: var(--fail); }
+  @keyframes pulse { 50% { opacity: 0.4; } }
+
+  .scenario-name { font-weight: 500; flex: 1; font-size: 13px; }
+  .scenario-count { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  .scenario-body {
+    padding: 0 14px 14px;
+    border-top: 1px solid var(--border);
+    display: none;
+  }
+  .scenario.expanded .scenario-body { display: block; }
+  .scenario-desc {
+    color: var(--muted);
+    font-size: 12px;
+    margin: 10px 0 12px;
+    font-style: italic;
+    line-height: 1.5;
+  }
+
+  .turn {
+    border-left: 2px solid var(--border);
+    padding: 8px 12px;
+    margin-bottom: 10px;
+    background: #faf9fc;
+    border-radius: 0 6px 6px 0;
+  }
+  .turn-question {
+    font-weight: 600;
+    font-family: var(--mono);
+    font-size: 12px;
+    margin-bottom: 6px;
+  }
+  .turn-question::before {
+    content: '▸ ';
+    color: var(--primary);
+  }
+  .turn-meta {
+    color: var(--muted);
+    font-size: 11px;
+    margin-bottom: 8px;
+    font-family: var(--mono);
+  }
+  .turn-tag {
+    font-family: var(--mono);
+    font-size: 11px;
+    background: #22202b;
+    color: #e8e6f0;
+    padding: 6px 10px;
+    border-radius: 4px;
+    margin-bottom: 8px;
+    word-break: break-all;
+  }
+  .turn-tag.no-tag {
+    background: #f0eef5;
+    color: var(--muted);
+    font-style: italic;
+  }
+
+  .assertion {
+    display: flex;
+    align-items: start;
+    gap: 8px;
+    padding: 3px 0;
+    font-size: 12px;
+  }
+  .assertion-mark {
+    font-family: var(--mono);
+    flex-shrink: 0;
+    width: 14px;
+    font-weight: 600;
+  }
+  .assertion.pass .assertion-mark { color: var(--pass); }
+  .assertion.fail.hard .assertion-mark { color: var(--fail); }
+  .assertion.fail.soft .assertion-mark { color: var(--warn); }
+  .assertion-kind {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    padding: 1px 5px;
+    background: var(--primary-soft);
+    border-radius: 3px;
+    flex-shrink: 0;
+    text-transform: uppercase;
+  }
+  .assertion-msg { flex: 1; line-height: 1.4; }
+
+  .followup-result {
+    margin-top: 8px;
+    font-size: 11px;
+    color: var(--muted);
+    font-family: var(--mono);
+    padding: 6px 10px;
+    background: white;
+    border: 1px dashed var(--border);
+    border-radius: 4px;
+  }
+  .followup-result.empty {
+    color: var(--warn);
+  }
+
+  .intro {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+  .intro strong { color: var(--text); }
+
+  .scoreboard {
+    margin-top: 24px;
+    padding: 16px;
+    background: white;
+    border: 1px solid var(--border-strong);
+    border-radius: 8px;
+  }
+  .scoreboard h2 { margin: 0 0 12px; font-size: 16px; }
+  .scoreboard-row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    padding: 6px 0;
+    font-size: 13px;
+    border-bottom: 1px solid var(--border);
+  }
+  .scoreboard-row:last-child { border-bottom: none; }
+  .scoreboard-cluster { flex: 1; font-weight: 500; }
+  .scoreboard-stat { font-family: var(--mono); font-size: 12px; }
+  .scoreboard-bar {
+    width: 120px;
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .scoreboard-bar-fill {
+    height: 100%;
+    background: var(--pass);
+  }
+  .verdict {
+    margin-top: 16px;
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-weight: 600;
+    text-align: center;
+  }
+  .verdict.ship    { background: var(--pass-soft); color: var(--pass);  border: 1px solid var(--pass); }
+  .verdict.review  { background: var(--warn-soft); color: var(--warn);  border: 1px solid var(--warn); }
+  .verdict.block   { background: var(--fail-soft); color: var(--fail);  border: 1px solid var(--fail); }
+</style>
+</head>
+<body>
+  <h1>fedmo · AWS demo evals</h1>
+  <div class="subtitle">Comprehensive scenario tests for hybrid USASpending + EDGAR capabilities. Hits the live Lambda end-to-end.</div>
+
+  <div class="intro">
+    <strong>What this tests:</strong> Mo's tag emission shape across 8 capability clusters covering ~30 realistic AWS Director of Startups questions. <strong style="color: var(--pass);">Green</strong> = all hard assertions pass. <strong style="color: var(--warn);">Yellow</strong> = hard pass, soft assertions failed (Gemini drift, usually safe). <strong style="color: var(--fail);">Red</strong> = hard fail (product bug, fix before demo). Click any scenario to expand.
+  </div>
+
+  <div class="controls">
+    <button id="runAllBtn">Run all scenarios</button>
+    <button id="runSelectedBtn" class="ghost">Run cluster only</button>
+    <select id="clusterSelect" style="padding: 6px 8px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px;">
+      <option value="">— pick a cluster —</option>
+    </select>
+    <button id="clearBtn" class="ghost">Clear</button>
+    <div class="endpoint" id="endpointDisplay">endpoint: loading…</div>
+  </div>
+
+  <div class="summary" id="summary" style="display: none;">
+    <div><span class="stat-num pass" id="passCount">0</span>passed</div>
+    <div><span class="stat-num warn" id="warnCount">0</span>warning</div>
+    <div><span class="stat-num fail" id="failCount">0</span>failed</div>
+    <div><span class="stat-num" id="ranCount">0</span>of <span id="totalCount">0</span> run</div>
+    <div><span class="stat-num" id="runTime">0s</span>elapsed</div>
+  </div>
+
+  <div class="progress-bar" id="progressBar" style="display: none;">
+    <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+  </div>
+
+  <div id="clusters"></div>
+
+  <div class="scoreboard" id="scoreboard" style="display: none;">
+    <h2>Cluster scoreboard</h2>
+    <div id="scoreboardRows"></div>
+    <div class="verdict" id="verdict"></div>
+  </div>
+
+<script type="module">
+import { SCENARIOS } from './eval-scenarios-aws.js';
+
+// ─────────────────────────────────────────────────────────────────────
+// Endpoint resolution — defaults to production, overridable via ?endpoint=
+// ─────────────────────────────────────────────────────────────────────
+const DEFAULT_ENDPOINT = 'https://4gxuwrrugc4s6zqcxsos2exg5y0sjcrc.lambda-url.us-east-1.on.aws/';
+const params = new URLSearchParams(window.location.search);
+const ENDPOINT = params.get('endpoint') || DEFAULT_ENDPOINT;
+document.getElementById('endpointDisplay').textContent = 'endpoint: ' + ENDPOINT;
+
+// ─────────────────────────────────────────────────────────────────────
+// HELPERS
+// ─────────────────────────────────────────────────────────────────────
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+}
+
+function parseTagAttrs(tagStr) {
+  if (!tagStr) return null;
+  const attrs = {};
+  const attrRe = /(\w+)\s*=\s*("([^"]*)"|'([^']*)')/g;
+  let m;
+  while ((m = attrRe.exec(tagStr))) attrs[m[1]] = m[3] !== undefined ? m[3] : m[4];
+  return attrs;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// MO CHAT — drive the Lambda directly, capture streamed text + tag
+// ─────────────────────────────────────────────────────────────────────
+async function askMo(question, history = []) {
+  const t0 = performance.now();
+  const fullHistory = [...history, { role: 'user', parts: [{ text: question }] }];
+  try {
+    const r = await fetch(ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ history: fullHistory }),
+    });
+    const text = await r.text();
+    const tagMatch = text.match(/<\s*data\b[^>]{1,800}?\/>/i);
+    return {
+      status: r.status,
+      latencyMs: Math.round(performance.now() - t0),
+      responseText: text,
+      tag: tagMatch?.[0] || null,
+      attrs: tagMatch ? parseTagAttrs(tagMatch[0]) : null,
+    };
+  } catch (e) {
+    return {
+      status: 0,
+      latencyMs: Math.round(performance.now() - t0),
+      error: e.message,
+      responseText: '',
+      tag: null,
+      attrs: null,
+    };
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Follow-up data pulls (verify the data path actually works)
+// ─────────────────────────────────────────────────────────────────────
+async function edgarFollowUp(attrs) {
+  if (!attrs) return null;
+  const t0 = performance.now();
+  // Build a search-index query from the attrs
+  const params = new URLSearchParams();
+  const formType = attrs.form_type || 'D';
+  // Form labels for EDGAR query
+  const formForUrl = formType === '13F' ? '13F-HR' : formType;
+  params.set('forms', formForUrl);
+
+  const qParts = [];
+  if (attrs.company) qParts.push(`"${attrs.company}"`);
+  if (attrs.sector) {
+    // Tiny sector→keyword map (the live client has the full one)
+    const sectorMap = {
+      'ai': 'artificial intelligence',
+      'cybersecurity': 'cybersecurity',
+      'fintech': 'fintech',
+      'climate': 'climate',
+      'biotech': 'biotech',
+      'hardware': 'semiconductor',
+      'saas': 'SaaS',
+      'crypto': 'blockchain',
+    };
+    const kw = sectorMap[String(attrs.sector).toLowerCase()] || attrs.sector;
+    qParts.push(`"${kw}"`);
+  }
+  if (qParts.length) params.set('q', qParts.join(' '));
+  if (attrs.date_after || attrs.date_before) {
+    params.set('dateRange', 'custom');
+    if (attrs.date_after) params.set('startdt', attrs.date_after);
+    if (attrs.date_before) params.set('enddt', attrs.date_before);
+  }
+
+  try {
+    const r = await fetch(ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        request_type: 'edgar_proxy',
+        host: 'efts.sec.gov',
+        path: '/LATEST/search-index',
+        queryString: params.toString(),
+      }),
+    });
+    const text = await r.text();
+    let data = null;
+    try { data = JSON.parse(text); } catch {}
+    return {
+      status: r.status,
+      latencyMs: Math.round(performance.now() - t0),
+      total: data?.hits?.total?.value || 0,
+      returned: data?.hits?.hits?.length || 0,
+      firstHit: data?.hits?.hits?.[0]?._source || null,
+    };
+  } catch (e) {
+    return { error: e.message, latencyMs: Math.round(performance.now() - t0) };
+  }
+}
+
+async function usaSpendingFollowUp(attrs) {
+  if (!attrs) return null;
+  const t0 = performance.now();
+  const filters = {
+    time_period: [{ start_date: attrs.since || '2020-01-01', end_date: attrs.until || new Date().toISOString().slice(0, 10) }],
+    award_type_codes: ['A', 'B', 'C', 'D'],
+  };
+  if (attrs.recipient) filters.recipient_search_text = [attrs.recipient];
+  if (attrs.agency) {
+    filters.agencies = [{ type: 'awarding', tier: 'toptier', name: attrs.agency }];
+  }
+  try {
+    const r = await fetch('https://api.usaspending.gov/api/v2/search/spending_by_award/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        filters,
+        fields: ['Award ID', 'Recipient Name', 'Award Amount'],
+        page: 1, limit: 10, sort: 'Award Amount', order: 'desc',
+      }),
+    });
+    const data = await r.json();
+    return {
+      status: r.status,
+      latencyMs: Math.round(performance.now() - t0),
+      results: data?.results || [],
+    };
+  } catch (e) {
+    return { error: e.message, latencyMs: Math.round(performance.now() - t0) };
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// SCENARIO RUNNER
+// ─────────────────────────────────────────────────────────────────────
+async function runScenario(scenario) {
+  const turnResults = [];
+  const history = [];
+
+  for (let i = 0; i < scenario.turns.length; i++) {
+    const turn = scenario.turns[i];
+    const moResult = await askMo(turn.question, history);
+
+    let edgarResult = null;
+    let usaSpendingResult = null;
+    let dataPullMs = 0;
+    if (moResult.attrs && turn.followUp === 'edgar') {
+      edgarResult = await edgarFollowUp(moResult.attrs);
+      dataPullMs = edgarResult?.latencyMs || 0;
+    } else if (moResult.attrs && turn.followUp === 'usaspending') {
+      usaSpendingResult = await usaSpendingFollowUp(moResult.attrs);
+      dataPullMs = usaSpendingResult?.latencyMs || 0;
+    }
+
+    const snapshot = {
+      question: turn.question,
+      responseText: moResult.responseText || '',
+      tag: moResult.tag,
+      attrs: moResult.attrs,
+      mode: !moResult.tag ? 'prose' : (moResult.attrs?.form_type ? 'edgar' : 'usaspending'),
+      edgarResult,
+      usaSpendingResult,
+      latencyMs: moResult.latencyMs,
+      dataPullMs,
+      error: moResult.error,
+    };
+
+    // Run assertions
+    const assertionResults = [];
+    for (const a of (turn.assertions || [])) {
+      let pass = false, errMsg = null;
+      try { pass = !!a.check(snapshot); }
+      catch (err) { pass = false; errMsg = err.message; }
+      assertionResults.push({
+        kind: a.kind || 'hard',
+        msg: a.msg || '(unnamed)',
+        pass,
+        errMsg,
+      });
+    }
+
+    turnResults.push({ snapshot, assertions: assertionResults });
+
+    // Update history for multi-turn scenarios
+    history.push({ role: 'user', parts: [{ text: turn.question }] });
+    if (moResult.responseText) {
+      history.push({ role: 'model', parts: [{ text: moResult.responseText }] });
+    }
+  }
+
+  // Tally
+  let hardPassed = 0, hardFailed = 0, softPassed = 0, softFailed = 0;
+  for (const t of turnResults) {
+    for (const a of t.assertions) {
+      if (a.kind === 'soft') a.pass ? softPassed++ : softFailed++;
+      else                    a.pass ? hardPassed++ : hardFailed++;
+    }
+  }
+  const status = hardFailed > 0 ? 'fail' : (softFailed > 0 ? 'warn' : 'pass');
+
+  return {
+    name: scenario.name,
+    cluster: scenario.cluster,
+    description: scenario.description || '',
+    turns: turnResults,
+    hardPassed, hardFailed, softPassed, softFailed,
+    status,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// RENDERING
+// ─────────────────────────────────────────────────────────────────────
+function getClusters() {
+  const seen = new Set();
+  const out = [];
+  for (const s of SCENARIOS) {
+    if (!seen.has(s.cluster)) { seen.add(s.cluster); out.push(s.cluster); }
+  }
+  return out;
+}
+
+function renderSkeletons() {
+  const host = document.getElementById('clusters');
+  const clusters = getClusters();
+  host.innerHTML = clusters.map((cluster, ci) => {
+    const scenarios = SCENARIOS.filter(s => s.cluster === cluster);
+    const isKiller = /killer/i.test(cluster);
+    return `
+      <div class="cluster" data-cluster="${escapeHtml(cluster)}">
+        <div class="cluster-title ${isKiller ? 'cluster-killer' : ''}">
+          ${escapeHtml(cluster)}
+          <span class="cluster-stats" id="cluster-stats-${ci}">${scenarios.length} scenarios</span>
+        </div>
+        ${scenarios.map((s) => {
+          const idx = SCENARIOS.indexOf(s);
+          return `
+            <div class="scenario" id="scenario-${idx}">
+              <div class="scenario-head">
+                <div class="status-dot pending" id="dot-${idx}"></div>
+                <div class="scenario-name">${escapeHtml(s.name)}</div>
+                <div class="scenario-count" id="count-${idx}">— / —</div>
+              </div>
+              <div class="scenario-body">
+                <div class="scenario-desc">${escapeHtml(s.description || '')}</div>
+                <div id="body-${idx}"><em style="color: var(--faint);">Click "Run all" to start.</em></div>
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
+  }).join('');
+
+  // Wire expand/collapse
+  document.querySelectorAll('.scenario-head').forEach(head => {
+    head.addEventListener('click', () => head.parentElement.classList.toggle('expanded'));
+  });
+
+  // Populate cluster select
+  const select = document.getElementById('clusterSelect');
+  select.innerHTML = '<option value="">— pick a cluster —</option>' +
+    clusters.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+}
+
+function renderScenarioResult(idx, result) {
+  const body = document.getElementById('body-' + idx);
+  body.innerHTML = result.turns.map((t, ti) => {
+    const tagDisplay = t.snapshot.tag
+      ? `<div class="turn-tag">${escapeHtml(t.snapshot.tag)}</div>`
+      : `<div class="turn-tag no-tag">no &lt;data /&gt; tag emitted (prose mode)</div>`;
+
+    const followUp = t.snapshot.edgarResult || t.snapshot.usaSpendingResult;
+    let followUpHtml = '';
+    if (followUp) {
+      const isEmpty = followUp.total === 0 || (followUp.results && followUp.results.length === 0);
+      const summary = t.snapshot.edgarResult
+        ? `EDGAR: ${followUp.total || 0} matches, ${followUp.returned || 0} returned (${followUp.latencyMs}ms)`
+        : `USASpending: ${(followUp.results || []).length} rows (${followUp.latencyMs}ms)`;
+      followUpHtml = `<div class="followup-result ${isEmpty ? 'empty' : ''}">${escapeHtml(summary)}</div>`;
+    }
+
+    return `
+      <div class="turn">
+        <div class="turn-question">${escapeHtml(t.snapshot.question)}</div>
+        <div class="turn-meta">${t.snapshot.mode} · ${t.snapshot.latencyMs}ms${t.snapshot.dataPullMs ? ` + ${t.snapshot.dataPullMs}ms data pull` : ''}</div>
+        ${tagDisplay}
+        ${followUpHtml}
+        ${t.assertions.map(a => `
+          <div class="assertion ${a.pass ? 'pass' : 'fail'} ${a.kind}">
+            <span class="assertion-mark">${a.pass ? '✓' : '✗'}</span>
+            <span class="assertion-kind">${a.kind}</span>
+            <span class="assertion-msg">${escapeHtml(a.msg)}${a.errMsg ? ` <code style="color:var(--fail)">(err: ${escapeHtml(a.errMsg)})</code>` : ''}</span>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }).join('');
+
+  const dot = document.getElementById('dot-' + idx);
+  dot.className = 'status-dot ' + result.status;
+  const count = document.getElementById('count-' + idx);
+  const total = result.hardPassed + result.hardFailed + result.softPassed + result.softFailed;
+  const passed = result.hardPassed + result.softPassed;
+  count.textContent = `${passed} / ${total}`;
+
+  if (result.status === 'fail') {
+    document.getElementById('scenario-' + idx).classList.add('expanded');
+  }
+}
+
+function updateSummary(results, elapsedMs, totalToRun) {
+  let pass = 0, warn = 0, fail = 0;
+  for (const r of results) {
+    if (r.status === 'pass') pass++;
+    else if (r.status === 'warn') warn++;
+    else if (r.status === 'fail') fail++;
+  }
+  document.getElementById('passCount').textContent = pass;
+  document.getElementById('warnCount').textContent = warn;
+  document.getElementById('failCount').textContent = fail;
+  document.getElementById('ranCount').textContent = results.length;
+  document.getElementById('totalCount').textContent = totalToRun;
+  document.getElementById('runTime').textContent = (elapsedMs / 1000).toFixed(1) + 's';
+  document.getElementById('summary').style.display = 'flex';
+
+  document.getElementById('progressBar').style.display = 'block';
+  document.getElementById('progressFill').style.width = (results.length / totalToRun * 100) + '%';
+}
+
+function renderScoreboard(results) {
+  const board = document.getElementById('scoreboard');
+  const rows = document.getElementById('scoreboardRows');
+  const verdict = document.getElementById('verdict');
+
+  // Group by cluster
+  const byCluster = {};
+  for (const r of results) {
+    if (!byCluster[r.cluster]) byCluster[r.cluster] = { pass: 0, warn: 0, fail: 0, scenarios: [] };
+    byCluster[r.cluster][r.status]++;
+    byCluster[r.cluster].scenarios.push(r);
+  }
+
+  rows.innerHTML = Object.entries(byCluster).map(([cluster, data]) => {
+    const total = data.pass + data.warn + data.fail;
+    const pct = total ? Math.round(data.pass / total * 100) : 0;
+    const barColor = data.fail > 0 ? 'var(--fail)' : (data.warn > 0 ? 'var(--warn)' : 'var(--pass)');
+    return `
+      <div class="scoreboard-row">
+        <div class="scoreboard-cluster">${escapeHtml(cluster)}</div>
+        <div class="scoreboard-stat ${data.fail > 0 ? 'fail' : (data.warn > 0 ? 'warn' : 'pass')}">${data.pass}/${total} (${pct}%)</div>
+        <div class="scoreboard-bar">
+          <div class="scoreboard-bar-fill" style="width: ${pct}%; background: ${barColor};"></div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  // Verdict
+  const totalFail = results.filter(r => r.status === 'fail').length;
+  const totalWarn = results.filter(r => r.status === 'warn').length;
+  const total = results.length;
+  if (totalFail === 0 && totalWarn === 0) {
+    verdict.className = 'verdict ship';
+    verdict.textContent = `✓ All ${total} scenarios green — SHIP IT`;
+  } else if (totalFail === 0) {
+    verdict.className = 'verdict review';
+    verdict.textContent = `⚠ ${totalWarn} warnings (Gemini drift, usually safe) — review before demo`;
+  } else {
+    verdict.className = 'verdict block';
+    verdict.textContent = `✗ ${totalFail} hard failures — fix before the meeting`;
+  }
+
+  board.style.display = 'block';
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// EXEC
+// ─────────────────────────────────────────────────────────────────────
+async function runScenarios(scenariosToRun) {
+  const btn = document.getElementById('runAllBtn');
+  const btn2 = document.getElementById('runSelectedBtn');
+  btn.disabled = true; btn2.disabled = true;
+  btn.textContent = 'Running…';
+
+  const t0 = Date.now();
+  const results = [];
+
+  for (const scenario of scenariosToRun) {
+    const idx = SCENARIOS.indexOf(scenario);
+    const dot = document.getElementById('dot-' + idx);
+    dot.className = 'status-dot running';
+
+    try {
+      const result = await runScenario(scenario);
+      results.push(result);
+      renderScenarioResult(idx, result);
+    } catch (err) {
+      console.error('Scenario crashed:', scenario.name, err);
+      dot.className = 'status-dot fail';
+      document.getElementById('body-' + idx).innerHTML = `
+        <div class="assertion fail hard">
+          <span class="assertion-mark">✗</span>
+          <span class="assertion-msg">Scenario crashed: ${escapeHtml(err.message)}</span>
+        </div>
+      `;
+      document.getElementById('scenario-' + idx).classList.add('expanded');
+    }
+
+    updateSummary(results, Date.now() - t0, scenariosToRun.length);
+  }
+
+  renderScoreboard(results);
+
+  btn.disabled = false; btn2.disabled = false;
+  btn.textContent = 'Run all scenarios';
+}
+
+document.getElementById('runAllBtn').addEventListener('click', () => runScenarios(SCENARIOS));
+document.getElementById('runSelectedBtn').addEventListener('click', () => {
+  const cluster = document.getElementById('clusterSelect').value;
+  if (!cluster) {
+    alert('Pick a cluster from the dropdown first.');
+    return;
+  }
+  runScenarios(SCENARIOS.filter(s => s.cluster === cluster));
+});
+document.getElementById('clearBtn').addEventListener('click', () => {
+  renderSkeletons();
+  document.getElementById('summary').style.display = 'none';
+  document.getElementById('progressBar').style.display = 'none';
+  document.getElementById('scoreboard').style.display = 'none';
+});
+
+// Init
+renderSkeletons();
+</script>
+</body>
+</html>
