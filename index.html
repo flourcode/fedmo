@@ -2495,6 +2495,13 @@ function xmlGetAll(xml, tag) {
 function parseFormD(xml) {
   if (!xml || typeof xml !== 'string') return {};
   const num = (s) => { const n = parseFloat(s); return Number.isFinite(n) ? n : null; };
+
+  // Offering amount: usually a number string ("50000000"), but for open-ended
+  // pooled funds it's the literal "Indefinite". Detect that and surface as flag.
+  const rawOfferingAmount = xmlGet(xml, 'totalOfferingAmount');
+  const isIndefinite = rawOfferingAmount && /^indefinite$/i.test(rawOfferingAmount.trim());
+  const offeringAmount = isIndefinite ? null : num(rawOfferingAmount);
+
   const personBlocks = xmlGetAll(xml, 'relatedPersonInfo');
   const relatedPersons = personBlocks.map(block => {
     const first = xmlGet(block, 'firstName') || '';
@@ -2504,19 +2511,32 @@ function parseFormD(xml) {
     const rels = xmlGetAll(block, 'relationship');
     return { name, relationships: rels };
   }).filter(p => p.name.length > 0);
+
   const exemptions = xmlGetAll(xml, 'item').filter(x => /^[0-9]/.test(x));
+
+  // dateOfFirstSale has two shapes:
+  //   <dateOfFirstSale><value>2024-06-15</value></dateOfFirstSale>
+  //   <dateOfFirstSale><yetToOccur>true</yetToOccur></dateOfFirstSale>
   let dateOfFirstSale = null;
+  let saleYetToOccur = false;
   const dosBlock = xmlGet(xml, 'dateOfFirstSale');
-  if (dosBlock) dateOfFirstSale = xmlGet(`<x>${dosBlock}</x>`, 'value');
+  if (dosBlock) {
+    const v = /<value>([^<]+)<\/value>/i.exec(dosBlock);
+    if (v) dateOfFirstSale = v[1].trim();
+    if (/<yetToOccur>\s*true\s*<\/yetToOccur>/i.test(dosBlock)) saleYetToOccur = true;
+  }
+
   return {
-    offeringAmount: num(xmlGet(xml, 'totalOfferingAmount')),
+    offeringAmount,
+    offeringIndefinite: isIndefinite,
     totalSold: num(xmlGet(xml, 'totalAmountSold')),
     industryGroup: xmlGet(xml, 'industryGroupType'),
     investmentFundType: xmlGet(xml, 'investmentFundType'),
     investorCount: num(xmlGet(xml, 'totalNumberAlreadyInvested')),
     dateOfFirstSale,
+    saleYetToOccur,
     minInvestment: num(xmlGet(xml, 'minimumInvestmentAccepted')),
-    isAmendment: xmlGet(xml, 'isAmendment') === 'true',
+    isAmendment: /\<isAmendment>\s*true\s*<\/isAmendment>/i.test(xml),
     entityType: xmlGet(xml, 'entityType'),
     jurisdiction: xmlGet(xml, 'jurisdictionOfInc'),
     exemptions,
@@ -2840,9 +2860,16 @@ function renderEdgarCard(rows, resolved) {
 }
 
 function renderEdgarRow(r, resolved) {
-  const amt = r.offeringAmount > 0
-    ? `$${(r.offeringAmount / 1e6).toFixed(r.offeringAmount >= 1e9 ? 2 : 1)}${r.offeringAmount >= 1e9 ? 'B' : 'M'}`
-    : null;
+  // Amount label: numeric raise → "$50.0M"; indefinite open-ended fund → "Indefinite"
+  let amt = null;
+  if (r.offeringAmount > 0) {
+    amt = `$${(r.offeringAmount / 1e6).toFixed(r.offeringAmount >= 1e9 ? 2 : 1)}${r.offeringAmount >= 1e9 ? 'B' : 'M'}`;
+  } else if (r.offeringIndefinite) {
+    amt = `Indefinite`;
+  } else if (r.totalSold > 0) {
+    // Some filings have totalOfferingAmount=0 but show actual dollars sold
+    amt = `$${(r.totalSold / 1e6).toFixed(1)}M sold`;
+  }
 
   const accUrl = r.cik && r.accession
     ? `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${parseInt(r.cik, 10)}&type=${encodeURIComponent(r.form || resolved.formType)}&dateb=&owner=include&count=40`
