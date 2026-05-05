@@ -569,144 +569,63 @@ a:hover { text-decoration: underline; }
 }
 
 /* ── EDGAR card (capital markets) ─────────────────────── */
-.mo-card-edgar {
-  /* Slightly different left-edge accent so it visually identifies as
-     capital-markets data without breaking the unified look. */
-  border-left: 3px solid #6b46c1;
-  padding: var(--s-4) var(--s-5);
+/* Reuses fedmo's card grammar — no special border, no separate row style.
+   The data type is communicated through content (form labels, badges),
+   not through chrome decoration. */
+
+.mo-edgar-rows {
+  /* No padding/gap — rows use .mo-row-2line which has its own bottom-border
+     separator. Same layout as the contract row list. */
 }
-.mo-card-edgar .mo-card-title {
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--text-title);
-  margin-bottom: 4px;
-}
-.mo-card-edgar .mo-card-subtitle {
-  font-size: 13px;
-  color: var(--text-muted);
-  margin-bottom: var(--s-3);
-}
-.mo-card-edgar .mo-card-chips {
-  margin-bottom: var(--s-3);
-}
-.mo-stats-strip {
+
+.mo-edgar-stats {
+  /* Three-stat header for Form D queries — same grid as .mo-stats. */
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: var(--s-3);
-  margin: var(--s-2) 0 var(--s-4);
-  padding: var(--s-3);
-  background: var(--surface-alt, rgba(0,0,0,0.02));
-  border-radius: 8px;
+  padding: var(--s-3) var(--s-4) var(--s-4);
+  border-bottom: 1px solid var(--border-soft);
 }
-.mo-stats-strip .mo-stat {
-  text-align: center;
-}
-.mo-stats-strip .mo-stat-num {
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--text-title);
-  line-height: 1.1;
-}
-.mo-stats-strip .mo-stat-label {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-muted);
-  margin-top: 2px;
-}
-.mo-edgar-rows {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.mo-edgar-row {
-  padding: var(--s-3);
-  border: 1px solid var(--border, #e5e7eb);
-  border-radius: 8px;
-  background: var(--surface, #fff);
-}
-.mo-edgar-row-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: var(--s-3);
-  margin-bottom: 2px;
-}
-.mo-edgar-row-name {
-  font-weight: 600;
-  font-size: 14px;
-  color: var(--text-title);
-  line-height: 1.3;
-}
-.mo-edgar-row-amt {
-  font-weight: 700;
-  font-size: 15px;
-  color: #047857;
-  white-space: nowrap;
-}
-.mo-edgar-row-meta {
-  font-size: 12px;
-  color: var(--text-muted);
-  margin-bottom: 4px;
-}
-.mo-edgar-row-badges {
+
+.mo-edgar-badges {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  margin-top: 4px;
+  margin-top: 2px;
 }
 .mo-edgar-badge {
-  display: inline-block;
+  /* Same shape as .mo-card-chip — same visual weight as filter chips. */
+  display: inline-flex;
+  align-items: center;
   font-size: 11px;
+  font-weight: 500;
+  background: var(--primary-20);
+  color: var(--primary-100);
   padding: 2px 8px;
-  border-radius: 10px;
-  background: rgba(107, 70, 193, 0.08);
-  color: #6b46c1;
-  border: 1px solid rgba(107, 70, 193, 0.25);
-}
-.mo-edgar-badge-spv {
-  background: rgba(217, 119, 6, 0.08);
-  color: #b45309;
-  border-color: rgba(217, 119, 6, 0.25);
+  border-radius: 999px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 .mo-edgar-badge-fed {
-  background: rgba(4, 120, 87, 0.08);
-  color: #047857;
-  border-color: rgba(4, 120, 87, 0.3);
+  /* Federal-adjacent is the killer signal — slightly emphasized via weight,
+     not a different color. Stays in the fedmo palette. */
+  background: var(--primary-40);
+  color: var(--primary-100);
   font-weight: 600;
 }
-.mo-edgar-badge-amend {
-  background: rgba(75, 85, 99, 0.08);
-  color: #4b5563;
-}
+
 .mo-edgar-row-persons {
   font-size: 12px;
-  color: var(--text-body, #374151);
-  margin-top: 4px;
+  color: var(--text-faint);
+  margin-top: 2px;
   line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.mo-edgar-label {
-  font-weight: 600;
+.mo-edgar-row-persons-label {
   color: var(--text-muted);
-}
-.mo-edgar-row-link {
-  font-size: 12px;
-  margin-top: 6px;
-}
-.mo-edgar-row-link a {
-  color: #6b46c1;
-  text-decoration: none;
-}
-.mo-edgar-row-link a:hover {
-  text-decoration: underline;
-}
-.mo-card-footnote {
-  font-size: 11px;
-  color: var(--text-muted);
-  margin-top: var(--s-3);
-  padding-top: var(--s-2);
-  border-top: 1px dashed var(--border, #e5e7eb);
-  line-height: 1.4;
+  font-weight: 500;
 }
 
 /* ── Treemap ──────────────────────────────────────────── */
@@ -1190,7 +1109,7 @@ a:hover { text-decoration: underline; }
     <svg class="mo-modal-face" viewBox="0 0 40 40"><use href="#icon-face-open"/></svg>
     <div>
       <div class="mo-modal-title" id="aboutTitle">Meet Mo.</div>
-      <div class="mo-modal-sub">Your federal sales buddy. Plugged into USASpending.</div>
+      <div class="mo-modal-sub">Your federal sales buddy. Plugged into USASpending and SEC EDGAR.</div>
     </div>
     <button class="mo-modal-close" id="btnAboutClose" aria-label="Close">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -1213,7 +1132,7 @@ a:hover { text-decoration: underline; }
     <svg class="mo-greeting-face" viewBox="0 0 40 40"><use href="#icon-face-open"/></svg>
     <div class="mo-greeting-text">
       <div class="mo-greeting-hello">Hi, I'm Mo.</div>
-      <div class="mo-greeting-tagline">Ask me anything about federal contracts. I'll pull live data from USASpending so you can follow the money.</div>
+      <div class="mo-greeting-tagline">Ask me anything about federal contracts or private capital. I pull live data from USASpending and SEC EDGAR so you can follow the money.</div>
       <div class="mo-greeting-examples" id="greeting-examples"></div>
       <div class="mo-greeting-hint">Ask me anything about a vendor, agency, or keyword.</div>
     </div>
@@ -1248,13 +1167,16 @@ const USASPENDING = 'https://api.usaspending.gov/api/v2';
 //   1 pitch-style with a specific vendor    ("Show me FY26 HHS cloud awards under $1M")
 //   1 market intel / agency-wide question   ("Show me cyber opps at DoD")
 //   1 coaching / partner-finding            ("Who resells AWS")
-//   1 educational                           ("What is a NAICS")
-// Covers the three main modes plus an entry point for new users.
+// Four starters chosen to showcase fedmo's hybrid capability:
+//   1 EDGAR Form D recency           — "what's new in capital markets"
+//   2 cross-reference (killer query)  — both data sources joined, no commercial DB can do this
+//   3 classic federal contract        — proves the original USASpending depth
+//   4 entity-specific cross-mode      — single name, both views available
 const GREETING_PROMPTS = [
-  'Show me FY26 cloud awards at HHS',
-  'Show me cyber opps at DoD',
-  'Who resells AWS',
-  'What is a NAICS',
+  'AI startups that raised over $20M in the past 90 days',
+  'AI companies that raised this quarter and sell to fed',
+  'Top vendors on SEWP V',
+  "What's CrowdStrike's federal footprint and recent insider activity?",
 ];
 
 // =============================================================================
@@ -2735,7 +2657,13 @@ async function pullEdgar(attrs) {
     return { rows: [], resolved, error: e.message };
   }
 
-  // Enrich Form Ds with XML (top 20 for latency)
+  // Sort newest-first. EDGAR's search-index returns by relevance, which
+  // surfaces old filings (2020-2024) above recent ones for famous-name
+  // matches. For "what's hot right now" queries, recency is the only
+  // correct ordering. fileDate is YYYY-MM-DD so a string compare works.
+  rows.sort((a, b) => (b.fileDate || '').localeCompare(a.fileDate || ''));
+
+  // Enrich Form Ds with XML (top 20 for latency — now top 20 by date)
   if (formType === 'D' && rows.length > 0) {
     const enrichedTop = await enrichFormDsParallel(rows.slice(0, 20));
     rows = [...enrichedTop, ...rows.slice(20)];
@@ -2791,122 +2719,137 @@ async function pullEdgar(attrs) {
 function renderEdgarCard(rows, resolved) {
   const parts = [];
 
-  // Title
+  // ── HEAD ─────────────────────────────────────────────────
+  parts.push(`<div class="mo-card-head">`);
+
   const formLabels = { 'D': 'Form D — private offerings', '4': 'Form 4 — insider trades', '13F-HR': '13F — institutional positions', 'SC 13D': '13D — activist >5% stakes', 'SC 13G': '13G — passive >5% stakes', 'S-1': 'S-1 — IPO registrations', '10-K': '10-K — annual reports', '10-Q': '10-Q — quarterly reports', '8-K': '8-K — material events' };
   const formLabel = formLabels[resolved.formType] || resolved.formType;
   let titleParts = [formLabel];
-  if (resolved.company) titleParts.push(`for "${resolved.company}"`);
+  if (resolved.company) titleParts.push(`for ${resolved.company}`);
   if (resolved.sectorInfo) titleParts.push(`in ${resolved.sectorInfo.display}`);
   if (resolved.state) titleParts.push(`incorporated in ${resolved.state}`);
   if (resolved.spvOnly) titleParts.unshift('SPVs only —');
-  if (resolved.federalAdjacent) titleParts.push(`(federal-adjacent only)`);
+  if (resolved.federalAdjacent) titleParts.push('with federal contracts');
 
   parts.push(`<div class="mo-card-title">${escapeHtml(titleParts.join(' '))}</div>`);
 
-  // Subtitle / date range
-  const subParts = [];
-  if (resolved.dateAfter) subParts.push(`filed since ${resolved.dateAfter}`);
-  if (resolved.dateBefore) subParts.push(`through ${resolved.dateBefore}`);
-  if (resolved.minAmount) subParts.push(`min $${(resolved.minAmount / 1e6).toFixed(1)}M`);
-  if (resolved.maxAmount) subParts.push(`max $${(resolved.maxAmount / 1e6).toFixed(1)}M`);
-  if (subParts.length) parts.push(`<div class="mo-card-subtitle">${escapeHtml(subParts.join(' · '))}</div>`);
+  // Subtitle: human-readable date window, no jargon
+  const subBits = [];
+  if (resolved.dateAfter) {
+    const today = new Date().toISOString().slice(0, 10);
+    if (resolved.dateBefore) subBits.push(`Filed ${resolved.dateAfter} through ${resolved.dateBefore}`);
+    else subBits.push(`Filed since ${resolved.dateAfter}`);
+  } else if (resolved.dateBefore) {
+    subBits.push(`Filed through ${resolved.dateBefore}`);
+  }
+  if (resolved.minAmount) subBits.push(`offerings ≥ $${(resolved.minAmount / 1e6).toFixed(0)}M`);
+  if (subBits.length) {
+    parts.push(`<div class="mo-card-subtitle">${escapeHtml(subBits.join(' · '))}</div>`);
+  }
 
-  // Chips for filters / overrides
+  // Chips: filter outcomes
   const chips = [];
-  if (resolved.totalFromEdgar) chips.push(`<span class="mo-card-chip">${resolved.totalFromEdgar.toLocaleString()} total matches in EDGAR</span>`);
-  if (resolved.amountFiltered) chips.push(`<span class="mo-card-chip">Filtered to ${resolved.amountFiltered.after} by amount (from ${resolved.amountFiltered.before})</span>`);
-  if (resolved.spvFiltered) chips.push(`<span class="mo-card-chip">SPVs only — ${resolved.spvFiltered.after} of ${resolved.spvFiltered.before} rows</span>`);
+  if (typeof resolved.totalFromEdgar === 'number') {
+    chips.push(`<span class="mo-card-chip">${resolved.totalFromEdgar.toLocaleString()} matches in EDGAR</span>`);
+  }
+  if (resolved.amountFiltered) {
+    chips.push(`<span class="mo-card-chip">${resolved.amountFiltered.after} of ${resolved.amountFiltered.before} match amount filter</span>`);
+  }
+  if (resolved.spvFiltered) {
+    chips.push(`<span class="mo-card-chip">${resolved.spvFiltered.after} of ${resolved.spvFiltered.before} are SPVs</span>`);
+  }
   if (resolved.federalAdjacentResults) {
     if (resolved.federalAdjacentResults.hits > 0) {
-      chips.push(`<span class="mo-card-chip">${resolved.federalAdjacentResults.hits} of ${resolved.federalAdjacentResults.checked} checked are federal-adjacent</span>`);
+      chips.push(`<span class="mo-card-chip">${resolved.federalAdjacentResults.hits} of ${resolved.federalAdjacentResults.checked} have federal contracts</span>`);
     } else {
-      chips.push(`<span class="mo-card-chip mo-card-chip-warn">No federal contract footprint found in top ${resolved.federalAdjacentResults.checked} rows</span>`);
+      chips.push(`<span class="mo-card-chip mo-card-chip-warn">No federal footprint in top ${resolved.federalAdjacentResults.checked}</span>`);
     }
   }
   if (chips.length) parts.push(`<div class="mo-card-chips">${chips.join('')}</div>`);
 
-  // No rows
+  parts.push(`</div>`); // /mo-card-head
+
+  // ── EMPTY ────────────────────────────────────────────────
   if (!rows.length) {
-    parts.push(`<div class="mo-card-empty">No matching filings. EDGAR is the SEC's primary source — if it's not here, it hasn't been filed yet, or your filters are too tight. Try widening the date range or dropping a filter.</div>`);
+    parts.push(`<div class="mo-card-empty">No matching filings.</div>`);
     return parts.join('');
   }
 
-  // Stats strip — total raised, hottest sector, etc.
+  // ── STATS (Form D only — three-stat grid like fedmo's contract card) ──
   if (resolved.formType === 'D') {
     const withAmount = rows.filter(r => r.offeringAmount > 0);
     const totalRaised = withAmount.reduce((s, r) => s + r.offeringAmount, 0);
     const avgRaised = withAmount.length ? totalRaised / withAmount.length : 0;
-    const stats = [
-      `<div class="mo-stat"><div class="mo-stat-num">${rows.length}</div><div class="mo-stat-label">Filings</div></div>`,
-      `<div class="mo-stat"><div class="mo-stat-num">$${(totalRaised / 1e9).toFixed(2)}B</div><div class="mo-stat-label">Total Offered</div></div>`,
-      `<div class="mo-stat"><div class="mo-stat-num">$${(avgRaised / 1e6).toFixed(1)}M</div><div class="mo-stat-label">Avg Raise</div></div>`,
-    ];
-    parts.push(`<div class="mo-stats-strip">${stats.join('')}</div>`);
+    const fmtBig = (n) => n >= 1e9 ? `$${(n/1e9).toFixed(2)}B` : `$${(n/1e6).toFixed(1)}M`;
+    parts.push(`<div class="mo-edgar-stats">
+      <div class="mo-stat"><div class="mo-stat-num">${rows.length}</div><div class="mo-stat-label">Filings</div></div>
+      <div class="mo-stat"><div class="mo-stat-num">${fmtBig(totalRaised)}</div><div class="mo-stat-label">Total offered</div></div>
+      <div class="mo-stat"><div class="mo-stat-num">${withAmount.length ? fmtBig(avgRaised) : '—'}</div><div class="mo-stat-label">Avg raise</div></div>
+    </div>`);
   }
 
-  // Row list
+  // ── ROW LIST (uses fedmo's .mo-row-2line) ───────────────
   parts.push(`<div class="mo-edgar-rows">`);
-  rows.slice(0, 30).forEach(r => {
-    parts.push(renderEdgarRow(r, resolved));
-  });
+  rows.slice(0, 30).forEach(r => parts.push(renderEdgarRow(r, resolved)));
   parts.push(`</div>`);
-  if (rows.length > 30) {
-    parts.push(`<div class="mo-card-footnote">Showing top 30 of ${rows.length}. Refine the query for a tighter set.</div>`);
-  }
-
-  parts.push(`<div class="mo-card-footnote">Source: SEC EDGAR. ${resolved.formType === 'D' ? 'Form D filings are required within 15 days of the first sale — they often surface rounds 30-90 days before press coverage.' : ''}</div>`);
 
   return parts.join('');
 }
 
 function renderEdgarRow(r, resolved) {
-  // Amount label: numeric raise → "$50.0M"; indefinite open-ended fund → "Indefinite"
-  let amt = null;
+  // Amount label
+  let amt = '';
   if (r.offeringAmount > 0) {
-    amt = `$${(r.offeringAmount / 1e6).toFixed(r.offeringAmount >= 1e9 ? 2 : 1)}${r.offeringAmount >= 1e9 ? 'B' : 'M'}`;
+    amt = r.offeringAmount >= 1e9
+      ? `$${(r.offeringAmount / 1e9).toFixed(2)}B`
+      : `$${(r.offeringAmount / 1e6).toFixed(1)}M`;
   } else if (r.offeringIndefinite) {
-    amt = `Indefinite`;
+    amt = 'Indefinite';
   } else if (r.totalSold > 0) {
-    // Some filings have totalOfferingAmount=0 but show actual dollars sold
     amt = `$${(r.totalSold / 1e6).toFixed(1)}M sold`;
   }
 
+  // Action link to EDGAR
   const accUrl = r.cik && r.accession
     ? `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${parseInt(r.cik, 10)}&type=${encodeURIComponent(r.form || resolved.formType)}&dateb=&owner=include&count=40`
     : null;
 
+  // Badges in fedmo's chip style
   const badges = [];
-  if (r.spv) badges.push(`<span class="mo-edgar-badge mo-edgar-badge-spv">SPV → ${escapeHtml(r.spv.target)}${r.spv.series ? ' ' + escapeHtml(r.spv.series) : ''}</span>`);
+  if (r.spv) {
+    badges.push(`<span class="mo-edgar-badge">SPV → ${escapeHtml(r.spv.target)}${r.spv.series ? ' ' + escapeHtml(r.spv.series) : ''}</span>`);
+  }
   if (r.federalAdjacent) {
     const totalM = (r.federalAdjacent.totalDollars / 1e6).toFixed(1);
-    badges.push(`<span class="mo-edgar-badge mo-edgar-badge-fed">Federal contracts: ${r.federalAdjacent.contractCount} · $${totalM}M</span>`);
+    badges.push(`<span class="mo-edgar-badge mo-edgar-badge-fed">Federal · ${r.federalAdjacent.contractCount} contracts · $${totalM}M</span>`);
   }
-  if (r.isAmendment) badges.push(`<span class="mo-edgar-badge mo-edgar-badge-amend">Amendment</span>`);
+  if (r.isAmendment) badges.push(`<span class="mo-edgar-badge">Amendment</span>`);
   if (r.exemptions && r.exemptions.length) {
     badges.push(`<span class="mo-edgar-badge">Rule ${escapeHtml(r.exemptions.join(', '))}</span>`);
   }
 
-  const persons = (r.relatedPersons || []).slice(0, 4)
+  // Meta line
+  const metaBits = [];
+  metaBits.push(`Filed ${escapeHtml(r.fileDate || 'unknown')}`);
+  if (r.dateOfFirstSale) metaBits.push(`first sale ${escapeHtml(r.dateOfFirstSale)}`);
+  if (r.incStates && r.incStates.length) metaBits.push(`Inc. ${escapeHtml(r.incStates[0])}`);
+  if (r.sics && r.sics.length) metaBits.push(`SIC ${escapeHtml(r.sics[0])}`);
+
+  // Execs (Form D only — and only if present)
+  const persons = (r.relatedPersons || []).slice(0, 3)
     .map(p => `${escapeHtml(p.name)}${p.relationships && p.relationships.length ? ' (' + escapeHtml(p.relationships[0]) + ')' : ''}`)
     .join(', ');
 
-  const stateBlurb = r.incStates && r.incStates.length ? `Inc. ${escapeHtml(r.incStates[0])}` : '';
-  const sicBlurb = r.sics && r.sics.length ? `SIC ${escapeHtml(r.sics[0])}` : '';
-  const meta = [stateBlurb, sicBlurb, r.entityType ? escapeHtml(r.entityType) : ''].filter(Boolean).join(' · ');
-
   return `
-    <div class="mo-edgar-row">
-      <div class="mo-edgar-row-head">
-        <div class="mo-edgar-row-name">${escapeHtml(r.entityName || 'Unnamed entity')}</div>
-        ${amt ? `<div class="mo-edgar-row-amt">${amt}</div>` : ''}
+    <div class="mo-row-2line">
+      <div class="mo-row-2line-top">
+        <div class="mo-row-name">${escapeHtml(r.entityName || 'Unnamed entity')}</div>
+        ${amt ? `<div class="mo-row-amount">${escapeHtml(amt)}</div>` : ''}
       </div>
-      <div class="mo-edgar-row-meta">
-        ${escapeHtml(r.form || resolved.formType)} · filed ${escapeHtml(r.fileDate || 'unknown')}${r.dateOfFirstSale ? ` · first sale ${escapeHtml(r.dateOfFirstSale)}` : ''}
-        ${meta ? ' · ' + meta : ''}
-      </div>
-      ${badges.length ? `<div class="mo-edgar-row-badges">${badges.join('')}</div>` : ''}
-      ${persons ? `<div class="mo-edgar-row-persons"><span class="mo-edgar-label">Execs:</span> ${persons}</div>` : ''}
-      ${accUrl ? `<div class="mo-edgar-row-link"><a href="${accUrl}" target="_blank" rel="noopener">View on EDGAR ↗</a></div>` : ''}
+      <div class="mo-row-meta">${metaBits.join(' · ')}</div>
+      ${badges.length ? `<div class="mo-edgar-badges">${badges.join('')}</div>` : ''}
+      ${persons ? `<div class="mo-edgar-row-persons"><span class="mo-edgar-row-persons-label">Execs:</span> ${persons}</div>` : ''}
+      ${accUrl ? `<div class="mo-row-actions"><a class="mo-row-view" href="${accUrl}" target="_blank" rel="noopener">View on EDGAR</a></div>` : ''}
     </div>
   `;
 }
@@ -4178,7 +4121,7 @@ function renderSubawardRows(card, rows, attrs, resolved) {
 function renderCard(rows, attrs, resolved) {
   // EDGAR branch — capital-markets cards (Form D, Form 4, 13F, etc.)
   if (resolved && resolved.edgarMode) {
-    const card = $$('div', { class: 'mo-card mo-card-edgar' });
+    const card = $$('div', { class: 'mo-card' });
     card.innerHTML = renderEdgarCard(rows, resolved);
     return card;
   }
