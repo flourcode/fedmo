@@ -3703,6 +3703,72 @@ function renderCard(rows, attrs, resolved) {
 // the next logical seller thought, not a generic follow-up menu.
 // Click populates the composer rather than auto-submitting so the user can
 // tweak before sending — preserves agency.
+//
+// Design rule: every pill MUST map cleanly to a canonical Mo template. If we
+// can't write a single tag emission for the pill text, we don't suggest it.
+// This eliminates the prior frustration where pills like "competitors to X
+// at Y" or "VEHICLE awards at \"keyword\"" left users staring at empty cards
+// because Mo had no template to follow.
+
+// ISV/platform allowlist — recipients we suggest "who resells X" for.
+// These are vendors that genuinely sell through resellers in federal, so
+// "who resells <X>" is a meaningful question. Excludes integrators and
+// hardware OEMs where the question doesn't apply.
+const RESELLER_ISVS = new Set([
+  'amazon web services', 'amazon', 'aws',
+  'microsoft', 'microsoft corporation',
+  'google', 'google cloud', 'google public sector', 'alphabet',
+  'oracle', 'oracle america',
+  'salesforce',
+  'servicenow',
+  'splunk',
+  'datadog',
+  'snowflake',
+  'palantir',
+  'atlassian',
+  'crowdstrike',
+  'sentinelone',
+  'okta',
+  'cloudflare',
+  'fortinet',
+  'palo alto', 'palo alto networks',
+  'zscaler',
+  'tenable',
+  'rapid7',
+  'qualys',
+  'elastic',
+  'mongodb',
+  'jfrog',
+  'akamai', 'akamai technologies',
+  'workday',
+  'adobe',
+  'sap',
+  'ibm',  // sells software through resellers even though it's also a prime
+  'cisco', 'cisco systems',
+  'dell', 'dell technologies',
+  'vmware',
+  'red hat',
+  'tanium',
+  'nutanix',
+  'pure storage',
+  'netapp',
+]);
+
+function isResellerISV(vendorName) {
+  if (!vendorName) return false;
+  const lc = String(vendorName).toLowerCase()
+    .replace(/^the\s+/, '')
+    .replace(/\b(corp|corporation|inc|incorporated|llc|l\.l\.c\.|ltd|limited|plc|holdings?|company|co)\b\.?$/i, '')
+    .replace(/[,\.]\s*$/, '')
+    .trim();
+  if (RESELLER_ISVS.has(lc)) return true;
+  // Try first 1-3 tokens
+  const tokens = lc.split(/\s+/).filter(Boolean);
+  for (let n = Math.min(3, tokens.length); n >= 1; n--) {
+    if (RESELLER_ISVS.has(tokens.slice(0, n).join(' '))) return true;
+  }
+  return false;
+}
 
 function buildPillsForCard(rows, attrs, vendorEntries, agencyEntries, total, expiringCount) {
   if (!rows || rows.length === 0) return [];
@@ -3716,17 +3782,22 @@ function buildPillsForCard(rows, attrs, vendorEntries, agencyEntries, total, exp
   const shortV = (v) => v ? (VENDOR_SHORT_LABELS[v] || v.split(',')[0].trim().split(/\s+/).slice(0, 3).join(' ')) : '';
   const shortA = (a) => a ? (AGENCY_SHORT_LABELS[a] || a.split(/\s+/).slice(0, 3).join(' ')) : '';
 
-  const isVendorQuery = !!attrs.recipient;
-  const isAgencyQuery = !!attrs.agency;
-  const topVendor     = vendorEntries[0]?.[0];
-  const topAgency     = agencyEntries[0]?.[0];
-  const topVendorPct  = vendorEntries[0] && total > 0 ? vendorEntries[0][1] / total : 0;
-  const top3Sum       = vendorEntries.slice(0, 3).reduce((s, [, v]) => s + v, 0);
-  const top3Pct       = total > 0 ? top3Sum / total : 0;
+  // Card-type detection — pills are persona-aware so we dispatch by card type
+  const isSubawardCard = attrs.subawards === 'true';
+  const isVendorQuery  = !!attrs.recipient;
+  const isAgencyQuery  = !!attrs.agency;
+  const isCapability   = !isVendorQuery && !!attrs.keywords;  // keyword-led card (with or without agency)
+  const isVehicleCard  = isCapability && /\b(SEWP|JWCC|OASIS|CIO-SP|GSA MAS|SeaPort|ITES|NETCENTS|ENCORE|EAGLE|CHESS)\b/i.test(String(attrs.keywords));
+
+  const topVendor      = vendorEntries[0]?.[0];
+  const topAgency      = agencyEntries[0]?.[0];
+  const topVendorPct   = vendorEntries[0] && total > 0 ? vendorEntries[0][1] / total : 0;
+  const top3Sum        = vendorEntries.slice(0, 3).reduce((s, [, v]) => s + v, 0);
+  const top3Pct        = total > 0 ? top3Sum / total : 0;
   const isConcentrated = topVendorPct >= 0.50;
   const isFragmented   = vendorEntries.length >= 8 && top3Pct < 0.35;
 
-  // Detect dominant awarding office from rows — the most common non-empty office label
+  // Dominant office — used for office-drill pill on agency cards
   const officeCounts = {};
   for (const r of rows) {
     const office = lookupOffice ? lookupOffice(r['Award ID']) : null;
@@ -3735,105 +3806,125 @@ function buildPillsForCard(rows, attrs, vendorEntries, agencyEntries, total, exp
   const dominantOffice = Object.entries(officeCounts).sort((a, b) => b[1] - a[1])[0]?.[0];
   const dominantOfficePct = dominantOffice && rows.length > 0 ? officeCounts[dominantOffice] / rows.length : 0;
 
-  // Detect dominant vehicle
-  const vehicleCounts = {};
-  for (const r of rows) {
-    const v = detectVehicle ? detectVehicle(r) : null;
-    if (v) vehicleCounts[v] = (vehicleCounts[v] || 0) + 1;
-  }
-  const dominantVehicle = Object.entries(vehicleCounts).sort((a, b) => b[1] - a[1])[0]?.[0];
-
   const recipientForPill = isVendorQuery ? attrs.recipient.split(',')[0].trim() : '';
-  const keywordForPill = !isVendorQuery && !isAgencyQuery && attrs.keywords
-    ? `"${String(attrs.keywords).split(',')[0].trim()}"` : null;
-  const pillSubject = isVendorQuery ? recipientForPill
-    : isAgencyQuery ? shortA(attrs.agency)
-    : keywordForPill;
 
-  // ── PROGRESSION LOGIC ──────────────────────────────────────────────────────
-  // Pill 1: EXPIRY — always most actionable when present
-  if (expiringCount >= 2) {
-    if (isVendorQuery && isAgencyQuery) {
-      add(`${recipientForPill} expiring at ${shortA(attrs.agency)}`);
-    } else if (isAgencyQuery) {
-      add(`what's expiring at ${shortA(attrs.agency)} in 90 days`);
-    } else if (isVendorQuery) {
-      add(`${recipientForPill} expiring contracts`);
-    }
-  }
+  // Cross-agency follow-up: only fire when topAgency is genuinely DIFFERENT
+  // from the current agency, not just a subdivision (office/command). Check
+  // by string overlap — "Navy›NSWC DAHLGREN" contains "Navy" so skip it.
+  const isDifferentAgency = (topAgency, currentAgency) => {
+    if (!topAgency || !currentAgency) return !!topAgency;
+    const top = shortA(topAgency).toLowerCase();
+    const cur = shortA(currentAgency).toLowerCase();
+    if (!top || !cur) return true;
+    if (top.startsWith(cur) || top.includes(cur)) return false;
+    if (cur.includes(top.split(/[›\/]/)[0].trim())) return false;
+    return true;
+  };
 
-  // Pill 2: MARKET STRUCTURE — based on concentration shape
-  if (isAgencyQuery && !isVendorQuery) {
-    if (isConcentrated && topVendor) {
-      add(`who subs to ${shortV(topVendor)} at ${shortA(attrs.agency)}`);
-    } else if (isFragmented) {
-      add(`smallest contracts at ${shortA(attrs.agency)} past 12 months`);
-    } else if (topVendor) {
-      add(`competitors to ${shortV(topVendor)} at ${shortA(attrs.agency)}`);
-    }
-  }
+  // ── DISPATCH BY CARD TYPE ──────────────────────────────────────────────────
 
-  // Pill 3: OFFICE DRILL — when one office clearly dominates
-  if (dominantOffice && dominantOfficePct >= 0.50 && isAgencyQuery && !isVendorQuery) {
-    const officeShort = dominantOffice.split(/\s+/).slice(0, 3).join(' ');
-    add(`${pillSubject || ''} at ${officeShort}`.trim());
-  }
-
-  // Pill 4: VEHICLE — when a vehicle dominates, suggest getting on it
-  if (dominantVehicle && !isVendorQuery && pillSubject) {
-    add(`${dominantVehicle} awards at ${pillSubject}`);
-  }
-
-  // Pill 5: VENDOR → cross-agency follow
-  // Only fire when topAgency is genuinely a different agency, not just a
-  // subdivision (office/command) of the agency already being queried.
-  // Check: topAgency string must not START WITH or CONTAIN the current agency's
-  // short label — "Navy›NSWC DAHLGREN" contains "Navy" so skip it when querying Navy.
-  if (isVendorQuery && topAgency && agencyEntries.length >= 2) {
-    const currentShort = attrs.agency ? shortA(attrs.agency).toLowerCase() : '';
-    const topShort = shortA(topAgency).toLowerCase();
-    const isSameAgency = currentShort && (
-      topShort.startsWith(currentShort) ||
-      topShort.includes(currentShort) ||
-      currentShort.includes(topShort.split(/[›\/]/)[0].trim())
-    );
-    if (!isSameAgency) {
+  // SUBAWARD card: drill into the top sub, jump back to prime's own footprint
+  if (isSubawardCard) {
+    if (topVendor) add(`${shortV(topVendor)} contracts`);
+    if (recipientForPill) add(`${recipientForPill} contracts`);
+    if (recipientForPill && topAgency) {
       add(`${recipientForPill} at ${shortA(topAgency)}`);
     }
+    return pills.slice(0, 4);
   }
 
-  // Pill 6: SUBAWARD DRILL — useful for concentrated vendor queries
-  // (previously blocked for concentrated markets, but that's exactly when
-  // it's most useful — if one prime holds everything, who are their subs?)
-  if (isVendorQuery && attrs.subawards !== 'true') {
-    add(`who does ${recipientForPill} sub to`);
-  }
-
-  // Pill 7: AGENCY-ONLY → suggest top vendor angle
-  if (isAgencyQuery && !isVendorQuery && topVendor && !isConcentrated) {
-    add(`${shortV(topVendor)} contracts`);
-  }
-
-  // Pill 8: FALLBACK for concentrated vendor+agency dead-end
-  // When vendor+agency returns 100% concentration (one vendor holds all),
-  // pills 2/3/4 all skip. Without a fallback the user gets 1-2 pills and
-  // recurses. Give them useful escapes: widen scope or compare competitors.
-  if (isVendorQuery && isAgencyQuery && isConcentrated && pills.length < 3) {
-    // Widen to full vendor footprint
-    add(`${recipientForPill} lifetime`);
-    // Compare to peers
-    if (topVendor) add(`competitors to ${shortV(topVendor)} at ${shortA(attrs.agency)}`);
-  }
-
-  // Pill 9: TIME PIVOT — only if nothing better was generated
-  if (pills.length < 3 && pillSubject) {
-    if (attrs.since && attrs.until) {
-      add(`${pillSubject} lifetime`);
-    } else if (!attrs.since) {
-      add(`${pillSubject} lifetime`);
+  // VEHICLE card: top vendors on the vehicle, narrow to top agency, expiring on vehicle
+  if (isVehicleCard) {
+    const vehicleName = String(attrs.keywords).split(',')[0].trim();
+    if (topVendor) add(`${shortV(topVendor)} contracts`);
+    if (topAgency && isDifferentAgency(topAgency, null)) {
+      add(`${vehicleName} at ${shortA(topAgency)}`);
     }
+    if (expiringCount >= 2) add(`what's expiring on ${vehicleName}`);
+    return pills.slice(0, 4);
   }
 
+  // CAPABILITY card (keyword + maybe agency, no recipient): drill into leader,
+  // suggest reseller angle if leader is ISV, suggest expiring in capability,
+  // suggest cross-agency lateral.
+  if (isCapability) {
+    const capability = String(attrs.keywords).split(',')[0].trim();
+    if (topVendor) add(`${shortV(topVendor)} contracts`);
+    if (topVendor && isResellerISV(topVendor)) {
+      add(`who resells ${shortV(topVendor)}`);
+    }
+    if (expiringCount >= 2 && isAgencyQuery) {
+      add(`what's expiring at ${shortA(attrs.agency)} in 90 days`);
+    } else if (expiringCount >= 2) {
+      add(`${capability} expiring soon`);
+    }
+    // Office drill if one office dominates (pure agency+capability case)
+    if (dominantOffice && dominantOfficePct >= 0.50 && isAgencyQuery) {
+      const officeShort = dominantOffice.split(/\s+/).slice(0, 3).join(' ');
+      add(`${capability} at ${officeShort}`);
+    }
+    return pills.slice(0, 4);
+  }
+
+  // AGENCY card (agency only, no recipient/keyword): expiry, top vendor drill,
+  // top vendor takeout, smallest-contract net-new-logo hunt
+  if (isAgencyQuery && !isVendorQuery) {
+    if (expiringCount >= 2) {
+      add(`what's expiring at ${shortA(attrs.agency)} in 90 days`);
+    }
+    if (topVendor) {
+      add(`${shortV(topVendor)} at ${shortA(attrs.agency)}`);
+      // Competitive takeout — see what the leader has at risk
+      if (expiringCount >= 2) {
+        add(`${shortV(topVendor)} expiring at ${shortA(attrs.agency)}`);
+      }
+    }
+    if (isFragmented) {
+      add(`smallest contracts at ${shortA(attrs.agency)} under $5M`);
+    }
+    if (dominantOffice && dominantOfficePct >= 0.50) {
+      const officeShort = dominantOffice.split(/\s+/).slice(0, 3).join(' ');
+      add(`what's at ${officeShort}`);
+    }
+    return pills.slice(0, 4);
+  }
+
+  // VENDOR card (recipient, with or without agency): own pipeline, sub flow,
+  // cross-agency, "X and competitors" for the field, lifetime
+  if (isVendorQuery) {
+    // Own-pipeline / takeout
+    if (expiringCount >= 2) {
+      if (isAgencyQuery) {
+        add(`${recipientForPill} expiring at ${shortA(attrs.agency)}`);
+      } else {
+        add(`${recipientForPill} expiring contracts`);
+      }
+    }
+    // Sub flow — drill into who they teaming with
+    add(`who does ${recipientForPill} sub to`);
+
+    // Cross-agency follow if there's a meaningfully different topAgency
+    if (topAgency && agencyEntries.length >= 2 && isDifferentAgency(topAgency, attrs.agency)) {
+      add(`${recipientForPill} at ${shortA(topAgency)}`);
+    }
+
+    // "X and competitors" — drops the recipient filter, shows the field
+    if (isAgencyQuery) {
+      add(`${recipientForPill} and competitors at ${shortA(attrs.agency)}`);
+    } else {
+      add(`${recipientForPill} and competitors`);
+    }
+
+    // Lifetime widen if a date window was applied
+    if (attrs.since && attrs.since !== '2020-01-01' && pills.length < 4) {
+      add(`${recipientForPill} lifetime`);
+    }
+
+    return pills.slice(0, 4);
+  }
+
+  // Fallback (shouldn't normally hit) — the query had nothing recognizable
+  if (topVendor) add(`${shortV(topVendor)} contracts`);
   return pills.slice(0, 4);
 }
 
