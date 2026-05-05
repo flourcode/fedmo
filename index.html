@@ -1799,8 +1799,25 @@ const matchesAny = (haystacks, needles) =>
 // days, retry with since floored to 14 days ago. Surface a warn chip telling
 // the user we broadened the date range. Same pattern as the agency cascade.
 async function pull(attrs) {
+  // Hard override: vehicle queries with tight date floors return 0 rows
+  // because the vehicle post-filter is already narrow. USASpending's
+  // action_date floor combined with vehicle prefix matching almost always
+  // yields nothing if the floor is recent. Mo has been told repeatedly to
+  // use since='2020-01-01' for vehicle queries, and ignores the rule.
+  // Override at the boundary instead of trusting the prompt.
+  if (attrs.vehicle && attrs.since && attrs.since > '2020-01-01') {
+    const original = attrs.since;
+    attrs = { ...attrs, since: '2020-01-01' };
+    attrs.__vehicleDateFloorOverride = original;
+  }
+
   const first = await pullOnce(attrs);
-  if (first.rows.length > 0 || first.error) return first;
+  if (first.rows.length > 0 || first.error) {
+    if (attrs.__vehicleDateFloorOverride) {
+      first.resolved.vehicleDateFloorOverride = attrs.__vehicleDateFloorOverride;
+    }
+    return first;
+  }
 
   // No rows. Was Mo's `since` aggressively recent? If so, retry broader.
   const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -2095,13 +2112,11 @@ async function pullOnce(attrs) {
   const filters = { ...baseFilters };
   const kws = attrs.keywords ? CSV(attrs.keywords) : [];
 
-  // When a vehicle filter is requested, inject vehicle name aliases AND the
-  // Award ID prefix as API keywords. USASpending has no structured vehicle-id
-  // filter, so we have to narrow the fetch via description text. Vehicle names
-  // like "ITES-3S" rarely appear in descriptions, but the Award ID prefix
-  // (e.g., "W91RUS") often appears in task order references like "TASK ORDER
-  // UNDER W91RUS19D0040". Combined with the post-filter using detectVehicle()
-  // (which checks Award ID prefix structurally), this gets us real results.
+  // Vehicle queries: inject Award ID prefix as API keyword so the fetch
+  // narrows to descriptions/IDs that mention the vehicle. Vehicle names
+  // ("ITES-3S") rarely appear in description text, but the Award ID
+  // prefix often does ("TASK ORDER UNDER W91RUS19D0040"). The post-filter
+  // (detectVehicle) does the real validation by Award ID structure.
   const VEHICLE_ALIASES = {
     'SEWP V':            ['SEWP V', 'SEWP 5', 'NASA SEWP', 'NNG15S'],
     'GSA MAS':           ['GSA MAS', 'Multiple Award Schedule', 'GSA Schedule', 'GS35F', 'GS00F', '47QT'],
@@ -2121,6 +2136,7 @@ async function pullOnce(attrs) {
   const vehicleKw = attrs.vehicle ? (VEHICLE_ALIASES[attrs.vehicle] || [attrs.vehicle]) : [];
   const allKws = [...kws, ...vehicleKw];
   if (allKws.length) filters.keywords = allKws;
+
   const { rows: firstRows, error } = await searchAwards(filters, false);
   if (error) return { rows: [], resolved, error };
 
@@ -2143,8 +2159,6 @@ async function pullOnce(attrs) {
   // Happens with program-office terms like "NAVSEA, Naval Sea Systems" that appear
   // in awarding_office but not in contract description text. Better to show the
   // agency's full picture with a chip than a silent empty card.
-  // Note: only fires for explicit attrs.keywords, not vehicle aliases — vehicle
-  // failures get their own chip via the post-filter.
   if (firstRows.length === 0 && kws.length > 0 && agencyFilter) {
     const filtersNoKw = { ...baseFilters };
     delete filtersNoKw.keywords;
@@ -2961,9 +2975,10 @@ async function loadSecFilings(rows, attrs) {
 //   from generated_internal_id field 3. Safe to include HHS prefixes here
 //   because a parent ID of 75A50123D00005 unambiguously means a BARDA IDIQ.
 const VEHICLE_MAP = {
-  // SEWP V GWAC contracts are NNG15S* (FY2015 SEWP). Generic NNG is too broad —
-  // it would match NASA Goddard satellite procurement (NNG09HR00C, NNG10XA05C)
-  // which has nothing to do with the SEWP V IT vehicle.
+  // SEWP V GWAC contracts are NNG15S* (FY2015 SEWP). Generic NNG matches
+  // NASA Goddard satellite procurement (NNG09HR00C, NNG10XA05C, NNG12FD66C)
+  // which is NOT SEWP V — those are NASA's direct hardware contracts for
+  // GOES-R, JPSS, Hubble, etc.
   'NNG15S':    'SEWP V',
   'GS00Q':     'CIO-SP4',
   'HHSN':      'CIO-SP3',
@@ -3529,6 +3544,9 @@ function renderCard(rows, attrs, resolved) {
     } else if (after > 0) {
       chipParts.push(`<span class="mo-card-chip">${escapeHtml(resolved.vehicleFiltered)} contracts only</span>`);
     }
+  }
+  if (resolved.vehicleDateFloorOverride) {
+    chipParts.push(`<span class="mo-card-chip">Vehicle query — widened date floor from ${escapeHtml(resolved.vehicleDateFloorOverride)} to 2020-01-01</span>`);
   }
   if (resolved.dateBroadened) {
     if (resolved.dateBroadened.foundResults) {
