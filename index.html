@@ -1272,13 +1272,24 @@ function findDataTag(text) {
 // Detect a tag opening that NEVER closed — Mo started writing a tag but ran
 // off into prose without `/>`. We hide this fragment from displayed prose.
 function findBrokenTagStart(text) {
-  // <data appears, but no /> within 1000 chars and no clean close.
-  // Tolerate whitespace between '<' and 'data' since Mo sometimes emits '< data...'.
-  const open = /<\s*data\b/i.exec(text);
-  if (!open) return -1;
-  // Look for /> after it; if found, this is fine — the regular parser handles it
-  if (text.indexOf('/>', open.index) !== -1) return -1;
-  return open.index;
+  // Try the well-formed opener first: `<data ` or `< data ` (Mo sometimes
+  // adds whitespace between the bracket and the tag name).
+  const withBracket = /<\s*data\b/i.exec(text);
+  if (withBracket && text.indexOf('/>', withBracket.index) === -1) {
+    return withBracket.index;
+  }
+  if (withBracket) return -1; // had a close, regular parser handles it
+
+  // HEADLESS opener fallback. The leading '<' might have been stripped by
+  // an earlier sanitizer (or never emitted by Mo). Detect a bare `data `
+  // followed by an attribute pattern that's distinctive enough not to
+  // false-positive on prose: `data <word>="..."` or `data <word>=...`.
+  // Common attrs: form_type, recipient, agency, company, sector, since.
+  const headless = /\bdata\s+(form_type|recipient|agency|company|sector|since|naics|psc|keywords|vehicle|min_amount|max_amount|date_after|date_before|spv_only|federal_adjacent)\s*=/i.exec(text);
+  if (headless && text.indexOf('/>', headless.index) === -1) {
+    return headless.index;
+  }
+  return -1;
 }
 
 // =============================================================================
@@ -4834,17 +4845,26 @@ function renderMoTurn(question) {
   return {
     appendText: (t) => {
       // For the very first chunk only: strip leading whitespace AND any
-      // stray '<' characters. Mo's leading newlines become visible empty
-      // lines under white-space: pre-wrap, and Mo sometimes starts writing
-      // a '<data...' tag, aborts, and restarts with prose — leaving an
-      // orphan '<' that the tag-parser doesn't recognize as a broken tag
-      // (since it requires the literal '<data').
+      // stray '<' characters that AREN'T the start of a real `<data` opener.
+      // Mo's leading newlines become visible empty lines under white-space:
+      // pre-wrap, and Mo sometimes starts with a stray `>` from a model glitch.
+      //
+      // CRITICAL: do NOT strip a leading `<` if it's the start of `<data`.
+      // That `<` is needed by the broken-tag detector downstream so it can
+      // recognize a malformed opener (Mo started <data ... and drifted into
+      // prose mid-attribute) and scrub it. If we eat the `<`, the detector
+      // can't find the broken tag and the garbage leaks into the visible prose.
       //
       // Mid-prose '<' characters are preserved (they're meaningful for
       // expressions like "x < y" or rare quoted markup).
       let toAppend = t;
       if (proseEl.textContent.length === 0) {
-        toAppend = toAppend.replace(/^[\s<>]+/, '');
+        // Strip leading whitespace and `>` chars. Strip leading `<` ONLY
+        // when not followed by `data`.
+        toAppend = toAppend.replace(/^[\s>]+/, '');
+        if (toAppend.startsWith('<') && !/^<\s*data\b/i.test(toAppend)) {
+          toAppend = toAppend.replace(/^<+/, '');
+        }
         if (!toAppend) return;
       }
       proseEl.append(document.createTextNode(toAppend));
