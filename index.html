@@ -2094,7 +2094,34 @@ async function pullOnce(attrs) {
   // Default branch (agency-only, keyword, naics, or combinations thereof)
   const filters = { ...baseFilters };
   const kws = attrs.keywords ? CSV(attrs.keywords) : [];
-  if (kws.length) filters.keywords = kws;
+
+  // When a vehicle filter is requested, inject vehicle name aliases as API
+  // keywords. USASpending has no structured vehicle-id filter, so we have to
+  // narrow the fetch via description text. Without this, a query like
+  // vehicle="SEWP V" with no other filter pulls top-100-by-amount across the
+  // entire federal landscape — billion-dollar Energy/Navy contracts that
+  // aren't on SEWP V — and the post-filter drops all 100. The aliases catch
+  // contracts that mention the vehicle name in description; the post-filter
+  // (Award ID prefix) then trims to true matches.
+  const VEHICLE_ALIASES = {
+    'SEWP V':            ['SEWP V', 'SEWP 5', 'NASA SEWP'],
+    'GSA MAS':           ['GSA MAS', 'Multiple Award Schedule', 'GSA Schedule'],
+    'OASIS+':            ['OASIS+', 'OASIS Plus'],
+    'ITES-3S':           ['ITES-3S', 'ITES 3S'],
+    'ITES':              ['ITES'],
+    'CIO-SP4':           ['CIO-SP4', 'CIO SP4'],
+    'CIO-SP3':           ['CIO-SP3', 'CIO SP3'],
+    'JWCC':              ['JWCC', 'Joint Warfighting Cloud'],
+    'SeaPort-NxG':       ['SeaPort-NxG', 'SeaPort NxG'],
+    'NETCENTS-2':        ['NETCENTS-2', 'NETCENTS'],
+    'ENCORE III':        ['ENCORE III', 'ENCORE 3'],
+    'EAGLE II':          ['EAGLE II', 'EAGLE 2'],
+    'BARDA IDIQ':        ['BARDA'],
+    'NIH Research IDIQ': ['NIH Research IDIQ', 'NIH IDIQ'],
+  };
+  const vehicleKw = attrs.vehicle ? (VEHICLE_ALIASES[attrs.vehicle] || [attrs.vehicle]) : [];
+  const allKws = [...kws, ...vehicleKw];
+  if (allKws.length) filters.keywords = allKws;
   const { rows: firstRows, error } = await searchAwards(filters, false);
   if (error) return { rows: [], resolved, error };
 
@@ -2117,6 +2144,8 @@ async function pullOnce(attrs) {
   // Happens with program-office terms like "NAVSEA, Naval Sea Systems" that appear
   // in awarding_office but not in contract description text. Better to show the
   // agency's full picture with a chip than a silent empty card.
+  // Note: only fires for explicit attrs.keywords, not vehicle aliases — vehicle
+  // failures get their own chip via the post-filter.
   if (firstRows.length === 0 && kws.length > 0 && agencyFilter) {
     const filtersNoKw = { ...baseFilters };
     delete filtersNoKw.keywords;
