@@ -30,7 +30,7 @@
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 
 <!-- Warm Lambda TLS during HTML parse — saves ~1 RTT on first Mo call -->
-<link rel="preconnect" href="https://4gxuwrrugc4s6zqcxsos2exg5y0sjcrc.lambda-url.us-east-1.on.aws" crossorigin>
+<link rel="preconnect" href="https://llonymyskdiakyxhlxlex7ul640hbcke.lambda-url.us-east-1.on.aws" crossorigin>
 
 <!-- Font loads non-blocking via media=print + onload swap -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1094,7 +1094,7 @@ a:hover { text-decoration: underline; }
 // =============================================================================
 // CONFIG
 // =============================================================================
-const LAMBDA_URL = 'https://4gxuwrrugc4s6zqcxsos2exg5y0sjcrc.lambda-url.us-east-1.on.aws/';
+const LAMBDA_URL = 'https://llonymyskdiakyxhlxlex7ul640hbcke.lambda-url.us-east-1.on.aws/';
 const USASPENDING = 'https://api.usaspending.gov/api/v2';
 
 // Suggested prompts shown on the welcome screen. Edit this list to change
@@ -2075,6 +2075,19 @@ async function pullOnce(attrs) {
     rows.sort((a, b) => (Number(b['Award Amount']) || 0) - (Number(a['Award Amount']) || 0));
     if (rows.length > 100) rows = rows.slice(0, 100);
 
+    // Vehicle post-filter: if attrs.vehicle is set, keep only rows on that vehicle.
+    if (attrs.vehicle) {
+      const target = String(attrs.vehicle).trim().toUpperCase();
+      const before = rows.length;
+      rows = rows.filter(r => {
+        const v = detectVehicle(r);
+        return v && v.toUpperCase() === target;
+      });
+      resolved.vehicleFiltered = attrs.vehicle;
+      resolved.vehicleFilterRowsBefore = before;
+      resolved.vehicleFilterRowsAfter = rows.length;
+    }
+
     return { rows, resolved, error: null };
   }
 
@@ -2084,6 +2097,21 @@ async function pullOnce(attrs) {
   if (kws.length) filters.keywords = kws;
   const { rows: firstRows, error } = await searchAwards(filters, false);
   if (error) return { rows: [], resolved, error };
+
+  // Vehicle post-filter helper — applied to all return paths in default branch
+  const applyVehicleFilter = (rows) => {
+    if (!attrs.vehicle) return rows;
+    const target = String(attrs.vehicle).trim().toUpperCase();
+    const before = rows.length;
+    const filtered = rows.filter(r => {
+      const v = detectVehicle(r);
+      return v && v.toUpperCase() === target;
+    });
+    resolved.vehicleFiltered = attrs.vehicle;
+    resolved.vehicleFilterRowsBefore = before;
+    resolved.vehicleFilterRowsAfter = filtered.length;
+    return filtered;
+  };
 
   // Keyword-drop fallback: if agency + keywords returned 0, retry without keywords.
   // Happens with program-office terms like "NAVSEA, Naval Sea Systems" that appear
@@ -2096,10 +2124,10 @@ async function pullOnce(attrs) {
     if (!retryErr && retryRows.length > 0) {
       resolved.keywordsDropped = kws.join(', ');
     }
-    return { rows: retryRows, resolved, error: retryErr };
+    return { rows: applyVehicleFilter(retryRows), resolved, error: retryErr };
   }
 
-  return { rows: firstRows, resolved, error: null };
+  return { rows: applyVehicleFilter(firstRows), resolved, error: null };
 }
 
 // =============================================================================
@@ -3090,6 +3118,9 @@ function sortRows(rows, sortKey) {
   const sorted = [...rows];
   if (sortKey === 'amount') {
     sorted.sort((a, b) => (Number(b['Award Amount']) || 0) - (Number(a['Award Amount']) || 0));
+  } else if (sortKey === 'amount-asc') {
+    // Smallest first — "smallest contracts at <agency>" net-new-logo hunting
+    sorted.sort((a, b) => (Number(a['Award Amount']) || 0) - (Number(b['Award Amount']) || 0));
   } else if (sortKey === 'end-asc') {
     // Soonest end date first — useful for "what's expiring"
     sorted.sort((a, b) => {
@@ -3114,17 +3145,26 @@ function sortRows(rows, sortKey) {
   return sorted;
 }
 
-function renderContractRows(card, rows) {
+function renderContractRows(card, rows, attrs) {
   card.appendChild(compHead('Contracts', `${rows.length} rows`));
+
+  // Determine initial sort from attrs (Mo can request "amount-asc" for
+  // "smallest contracts" queries). Default to amount descending.
+  const validSorts = new Set(['amount', 'amount-asc', 'end-asc', 'end-desc', 'start-desc']);
+  const requestedSort = attrs && attrs.sort && validSorts.has(String(attrs.sort))
+    ? String(attrs.sort)
+    : 'amount';
 
   // Sort selector — client-side re-sort, no re-fetch
   const sortBar = $$('div', { class: 'mo-sort-bar' });
+  const isActive = (key) => key === requestedSort ? ' is-active' : '';
   sortBar.innerHTML = `
     <span class="mo-sort-label">Sort:</span>
-    <button class="mo-sort-btn is-active" data-sort="amount">Amount</button>
-    <button class="mo-sort-btn" data-sort="end-asc">Expiring soon</button>
-    <button class="mo-sort-btn" data-sort="end-desc">Latest end</button>
-    <button class="mo-sort-btn" data-sort="start-desc">Recently signed</button>
+    <button class="mo-sort-btn${isActive('amount')}" data-sort="amount">Amount</button>
+    <button class="mo-sort-btn${isActive('amount-asc')}" data-sort="amount-asc">Smallest</button>
+    <button class="mo-sort-btn${isActive('end-asc')}" data-sort="end-asc">Expiring soon</button>
+    <button class="mo-sort-btn${isActive('end-desc')}" data-sort="end-desc">Latest end</button>
+    <button class="mo-sort-btn${isActive('start-desc')}" data-sort="start-desc">Recently signed</button>
   `;
   card.appendChild(sortBar);
 
@@ -3217,8 +3257,8 @@ function renderContractRows(card, rows) {
     }
   };
 
-  // Initial render — by amount
-  renderForSort('amount');
+  // Initial render — honor attrs.sort if provided, else amount descending
+  renderForSort(requestedSort);
 
   // Wire up sort buttons
   sortBar.querySelectorAll('.mo-sort-btn').forEach(btn => {
@@ -3378,6 +3418,7 @@ function renderCard(rows, attrs, resolved) {
     else if (resolved.agencyAsked) titleBits.push(resolved.agencyAsked);
   }
   if (attrs.keywords && !attrs.recipient) titleBits.push(`"${attrs.keywords}"`);
+  if (attrs.vehicle) titleBits.push(`on ${attrs.vehicle}`);
   if (isSub) titleBits.push('outgoing subawards');
   if (titleBits.length === 0) titleBits.push('Federal contracts');
 
@@ -3446,6 +3487,17 @@ function renderCard(rows, attrs, resolved) {
   }
   if (resolved.keywordsDropped) {
     chipParts.push(`<span class="mo-card-chip mo-card-chip-warn">No keyword matches for "${escapeHtml(resolved.keywordsDropped)}" — showing all contracts at this agency</span>`);
+  }
+  if (resolved.vehicleFiltered) {
+    const after = resolved.vehicleFilterRowsAfter || 0;
+    const before = resolved.vehicleFilterRowsBefore || 0;
+    if (after === 0 && before > 0) {
+      chipParts.push(`<span class="mo-card-chip mo-card-chip-warn">No ${escapeHtml(resolved.vehicleFiltered)} contracts in this set — vehicle filter dropped all ${before} rows. The query may have matched task orders on other vehicles.</span>`);
+    } else if (after < before) {
+      chipParts.push(`<span class="mo-card-chip">Filtered to ${after} ${escapeHtml(resolved.vehicleFiltered)} contracts (from ${before})</span>`);
+    } else if (after > 0) {
+      chipParts.push(`<span class="mo-card-chip">${escapeHtml(resolved.vehicleFiltered)} contracts only</span>`);
+    }
   }
   if (resolved.dateBroadened) {
     if (resolved.dateBroadened.foundResults) {
@@ -3625,7 +3677,7 @@ function renderCard(rows, attrs, resolved) {
   if (isSub) {
     renderSubawardRows(card, rows, attrs, resolved);
   } else {
-    renderContractRows(card, rows);
+    renderContractRows(card, rows, attrs);
 
     // Cumulative-amount caveat (only for prime-award rows; subawards are
     // per-action so the caveat doesn't apply). Pagination already filtered
