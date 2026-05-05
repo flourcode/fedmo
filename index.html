@@ -2103,7 +2103,7 @@ async function pullOnce(attrs) {
   // UNDER W91RUS19D0040". Combined with the post-filter using detectVehicle()
   // (which checks Award ID prefix structurally), this gets us real results.
   const VEHICLE_ALIASES = {
-    'SEWP V':            ['SEWP V', 'SEWP 5', 'NASA SEWP', 'NNG'],
+    'SEWP V':            ['SEWP V', 'SEWP 5', 'NASA SEWP', 'NNG15S'],
     'GSA MAS':           ['GSA MAS', 'Multiple Award Schedule', 'GSA Schedule', 'GS35F', 'GS00F', '47QT'],
     'OASIS+':            ['OASIS+', 'OASIS Plus', '47QR', '47QF'],
     'ITES-3S':           ['ITES-3S', 'ITES 3S', 'W91RUS'],
@@ -2961,7 +2961,10 @@ async function loadSecFilings(rows, attrs) {
 //   from generated_internal_id field 3. Safe to include HHS prefixes here
 //   because a parent ID of 75A50123D00005 unambiguously means a BARDA IDIQ.
 const VEHICLE_MAP = {
-  'NNG':       'SEWP V',
+  // SEWP V GWAC contracts are NNG15S* (FY2015 SEWP). Generic NNG is too broad —
+  // it would match NASA Goddard satellite procurement (NNG09HR00C, NNG10XA05C)
+  // which has nothing to do with the SEWP V IT vehicle.
+  'NNG15S':    'SEWP V',
   'GS00Q':     'CIO-SP4',
   'HHSN':      'CIO-SP3',
   'GS35F':     'GSA MAS',
