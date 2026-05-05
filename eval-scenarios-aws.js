@@ -412,40 +412,38 @@ export const SCENARIOS = [
 
   {
     name: '7.1  Anthropic valuation',
-    description: 'Form D does not contain valuation. Mo should still pull the Form D (offering amount is the closest proxy) AND mention that valuation is not a Form D field.',
+    description: 'Form D does not contain valuation. Planner should still pull Form D (offering amount is the closest proxy). Synthesizer prose explains the limitation — not tested here since eval only calls /plan.',
     cluster: 'Honest Limits',
     turns: [{
       question: "What's Anthropic's valuation?",
       assertions: [
-        { kind: 'soft', msg: 'either emits Form D tag (with caveat) OR explains in prose', check: (s) => s.attrs?.form_type === 'D' || /not a form d field|not in form d|not disclosed|valuation isn/i.test(s.responseText || '') },
-        { kind: 'hard', msg: 'response is non-trivially long',                  check: (s) => (s.responseText || '').length > 100 },
+        { kind: 'hard', msg: 'planner emits Form D tag for Anthropic',         check: (s) => s.attrs?.form_type === 'D' && /anthropic/i.test(s.attrs?.company || '') },
       ],
     }],
   },
 
   {
     name: '7.2  OpenAI investor names',
-    description: 'Investor names are NOT in Form D. Mo should explain that and offer alternatives (13F, news).',
+    description: 'Investor names are NOT in Form D. Planner should still pull Form D (Mo will explain in synth prose). Synth prose tested separately.',
     cluster: 'Honest Limits',
     turns: [{
       question: "Who invested in OpenAI's last round?",
       assertions: [
-        { kind: 'soft', msg: 'mentions 13F OR news OR not in Form D',          check: (s) => /13.?f|news|not (in|a) form d|not required|not disclosed/i.test(s.responseText || '') },
-        { kind: 'hard', msg: 'response is non-trivially long',                  check: (s) => (s.responseText || '').length > 100 },
+        { kind: 'hard', msg: 'planner emits Form D tag for OpenAI',            check: (s) => s.attrs?.form_type === 'D' && /openai/i.test(s.attrs?.company || '') },
       ],
     }],
   },
 
   {
     name: '7.3  Definition: what is a Form D',
-    description: 'Educational question — pure prose, no tag.',
+    description: 'Educational question — planner should return text without tools.',
     cluster: 'Honest Limits',
     turns: [{
       question: "What's a Form D?",
       assertions: [
-        { kind: 'hard', msg: 'no tag emitted (educational)',                    check: noTag() },
-        { kind: 'soft', msg: 'mentions private offering or capital',            check: (s) => /private|offering|capital|fundrais/i.test(s.responseText || '') },
-        { kind: 'hard', msg: 'response is substantive',                         check: (s) => (s.responseText || '').length > 200 },
+        { kind: 'hard', msg: 'no tool calls (educational)',                     check: (s) => !s.toolCalls || s.toolCalls.length === 0 },
+        { kind: 'hard', msg: 'planner returns substantive text',                check: (s) => (s.plannerText || '').length > 100 },
+        { kind: 'soft', msg: 'mentions private offering or capital',            check: (s) => /private|offering|capital|fundrais|raise/i.test(s.plannerText || '') },
       ],
     }],
   },
