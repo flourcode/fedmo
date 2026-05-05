@@ -1271,6 +1271,8 @@ function findDataTag(text) {
 
 // Detect a tag opening that NEVER closed — Mo started writing a tag but ran
 // off into prose without `/>`. We hide this fragment from displayed prose.
+// Also hides partial tag PREFIXES (just `<` at the end of a chunk) to prevent
+// flashes during character-level streaming.
 function findBrokenTagStart(text) {
   // Try the well-formed opener first: `<data ` or `< data ` (Mo sometimes
   // adds whitespace between the bracket and the tag name).
@@ -1289,6 +1291,18 @@ function findBrokenTagStart(text) {
   if (headless && text.indexOf('/>', headless.index) === -1) {
     return headless.index;
   }
+
+  // PARTIAL OPENER PREFIX. fullText might end with characters that could
+  // be the start of a `<data` opener but we don't have enough yet to tell.
+  // Patterns: `<`, `<d`, `<da`, `<dat`, `<data` (without word boundary yet).
+  // Suppress from there to prevent a brief flash during character-level
+  // streaming. False positive risk: `<` at the end of a normal sentence
+  // ("x <"). Acceptable because the `<` would be suppressed for ONE chunk
+  // and either render correctly on next chunk (if not a tag) or get
+  // consumed (if it WAS the start of a tag).
+  const partial = /<\s*d?a?t?a?$/i.exec(text);
+  if (partial) return partial.index;
+
   return -1;
 }
 
@@ -5002,66 +5016,83 @@ async function askMo(question, opts = {}) {
       // Check for valid self-closing tags. Allow up to MAX_TAGS per turn so
       // compound questions ("X's federal contracts AND insider trading")
       // can fire both pulls. After MAX_TAGS, additional tags are stripped.
-      if (tagsFired < MAX_TAGS) {
+      // Wrap in a loop so we can fire multiple complete tags from a single
+      // chunk — Mo often emits both tags consecutively, and the network may
+      // deliver them in the same buffer.
+      while (tagsFired < MAX_TAGS) {
         const tag = findDataTag(fullText);
-        if (tag) {
-          tagsFired++;
-          suppressFrom = -1;  // valid tag found, don't suppress
-          // CRITICAL: before computing the "prose before this tag" slice,
-          // check if Mo had previously started a `<data` opener that never
-          // closed (a failed first attempt). That unclosed fragment is
-          // currently embedded in the prose-before-tag region. Strip it
-          // from the start of the broken opener up to the new valid tag.
-          // Without this, the failed attempt leaks into the visible prose.
-          const proseBeforeTag = fullText.slice(0, tag.start);
-          const brokenStart = findBrokenTagStart(proseBeforeTag);
-          let cleanedPrefix = proseBeforeTag;
-          if (brokenStart >= 0) {
-            // Cut from the broken opener forward — that's all garbage Mo
-            // started writing then abandoned mid-stream.
-            cleanedPrefix = proseBeforeTag.slice(0, brokenStart);
+        if (!tag) break;
+        tagsFired++;
+        suppressFrom = -1;  // valid tag found, don't suppress
+        // CRITICAL: before computing the "prose before this tag" slice,
+        // check if Mo had previously started a `<data` opener that never
+        // closed (a failed first attempt). That unclosed fragment is
+        // currently embedded in the prose-before-tag region. Strip it
+        // from the start of the broken opener up to the new valid tag.
+        // Without this, the failed attempt leaks into the visible prose.
+        const proseBeforeTag = fullText.slice(0, tag.start);
+        const brokenStart = findBrokenTagStart(proseBeforeTag);
+        let cleanedPrefix = proseBeforeTag;
+        if (brokenStart >= 0) {
+          // Cut from the broken opener forward — that's all garbage Mo
+          // started writing then abandoned mid-stream.
+          cleanedPrefix = proseBeforeTag.slice(0, brokenStart);
+        }
+        // ALWAYS repaint if _shown is ahead of cleanedPrefix.
+        // This handles two cases:
+        //   1) brokenStart >= 0: we cut the prefix, _shown is now stale
+        //   2) brokenStart === -1 BUT a partial unclosed tag was previously
+        //      streamed via the render-tail before the next chunk arrived
+        //      with the closing `/>`. The previously-streamed partial is
+        //      now garbage in the prose div, even though it's no longer
+        //      part of fullText (we're about to slice the now-complete tag
+        //      out). Roll _shown back and repaint cleanly.
+        if (moTurn._shown > cleanedPrefix.length) {
+          moTurn._shown = cleanedPrefix.length;
+          if (typeof moTurn.replaceText === 'function') {
+            moTurn.replaceText(cleanedPrefix);
           }
-          // ALWAYS repaint if _shown is ahead of cleanedPrefix.
-          // This handles two cases:
-          //   1) brokenStart >= 0: we cut the prefix, _shown is now stale
-          //   2) brokenStart === -1 BUT a partial unclosed tag was previously
-          //      streamed via the render-tail before the next chunk arrived
-          //      with the closing `/>`. The previously-streamed partial is
-          //      now garbage in the prose div, even though it's no longer
-          //      part of fullText (we're about to slice the now-complete tag
-          //      out). Roll _shown back and repaint cleanly.
-          if (moTurn._shown > cleanedPrefix.length) {
-            moTurn._shown = cleanedPrefix.length;
-            if (typeof moTurn.replaceText === 'function') {
-              moTurn.replaceText(cleanedPrefix);
-            }
-          }
-          if (cleanedPrefix.length > moTurn._shown) {
-            moTurn.appendText(cleanedPrefix.slice(moTurn._shown));
-            moTurn._shown = cleanedPrefix.length;
-          }
-          // Rebuild fullText: cleaned prefix + post-tag remainder
-          fullText = cleanedPrefix + fullText.slice(tag.end);
-          // Remember where the most recent tag ended (after collapse) so we
-          // can detect any malformed FOLLOWING tag attempt that comes after.
-          moTurn._firedTagEnd = cleanedPrefix.length;
+        }
+        if (cleanedPrefix.length > moTurn._shown) {
+          moTurn.appendText(cleanedPrefix.slice(moTurn._shown));
+          moTurn._shown = cleanedPrefix.length;
+        }
+        // Rebuild fullText: cleaned prefix + post-tag remainder
+        fullText = cleanedPrefix + fullText.slice(tag.end);
+        // Remember where the most recent tag ended (after collapse) so we
+        // can detect any malformed FOLLOWING tag attempt that comes after.
+        moTurn._firedTagEnd = cleanedPrefix.length;
 
-          fireTag(tag, tagsFired === 2);
-        } else {
-          // No valid tag found in this iteration. Did Mo start a broken
-          // tag we should hide? This applies regardless of tagsFired —
-          // even after tag1 fires, an unclosed partial tag2 could be
-          // streaming and we want to hold it back from rendering until
-          // either it completes or the stream ends.
-          if (suppressFrom < 0) {
-            // Only scan from where the most recent tag ended (or 0 if no
-            // tag has fired yet). This avoids re-suppressing prose that
-            // was correctly emitted between tags.
-            const scanFrom = moTurn._firedTagEnd || 0;
-            const tail = fullText.slice(scanFrom);
-            const broken = findBrokenTagStart(tail);
-            if (broken >= 0) suppressFrom = scanFrom + broken;
-          }
+        // After firing a tag, immediately check the remaining fullText
+        // for a partial unclosed tag. If chunk-1 contained tag1 plus the
+        // start of tag2 (split mid-attribute by network chunking), the
+        // remainder is a broken-tag fragment we must NOT render until
+        // the closing `/>` arrives. Without this scan, the render tail
+        // below would stream the partial fragment to the prose div,
+        // causing a brief flash of `<data form_type=...` garbage that
+        // gets cleaned up only when the next chunk completes the tag.
+        if (tagsFired < MAX_TAGS) {
+          const tail = fullText.slice(cleanedPrefix.length);
+          const broken = findBrokenTagStart(tail);
+          if (broken >= 0) suppressFrom = cleanedPrefix.length + broken;
+        }
+
+        fireTag(tag, tagsFired === 2);
+        // Loop continues — if another complete tag is in fullText, we
+        // process it. Otherwise the while loop exits via the break above.
+      }
+
+      // After the while loop finishes (no more complete tags found):
+      if (tagsFired < MAX_TAGS) {
+        // Did Mo start a broken/partial tag we should hide?
+        if (suppressFrom < 0) {
+          // Only scan from where the most recent tag ended (or 0 if no
+          // tag has fired yet). This avoids re-suppressing prose that
+          // was correctly emitted between tags.
+          const scanFrom = moTurn._firedTagEnd || 0;
+          const tail = fullText.slice(scanFrom);
+          const broken = findBrokenTagStart(tail);
+          if (broken >= 0) suppressFrom = scanFrom + broken;
         }
       } else {
         // Hit MAX_TAGS. Strip any subsequent tags so they don't bleed into
