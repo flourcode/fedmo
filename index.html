@@ -4850,6 +4850,14 @@ function renderMoTurn(question) {
       proseEl.append(document.createTextNode(toAppend));
       scrollBottom();
     },
+    // Wipe the prose div and rewrite from scratch. Called when the stream
+    // parser discovers that already-streamed text was actually garbage from
+    // a malformed-tag attempt that Mo abandoned mid-stream.
+    replaceText: (t) => {
+      proseEl.textContent = '';
+      const cleaned = (t || '').replace(/^[\s<>]+/, '');
+      if (cleaned) proseEl.append(document.createTextNode(cleaned));
+    },
     insertEl: (el) => { turn.appendChild(el); scrollBottom(); },
     setError: (msg) => { turn.appendChild($$('div', { class: 'mo-err', text: msg })); },
     done: () => {},
@@ -4979,17 +4987,41 @@ async function askMo(question, opts = {}) {
         if (tag) {
           tagsFired++;
           suppressFrom = -1;  // valid tag found, don't suppress
-          // Show prose up to the tag start
-          const upToTag = fullText.slice(0, tag.start);
-          if (upToTag.length > moTurn._shown) {
-            moTurn.appendText(upToTag.slice(moTurn._shown));
-            moTurn._shown = upToTag.length;
+          // CRITICAL: before computing the "prose before this tag" slice,
+          // check if Mo had previously started a `<data` opener that never
+          // closed (a failed first attempt). That unclosed fragment is
+          // currently embedded in the prose-before-tag region. Strip it
+          // from the start of the broken opener up to the new valid tag.
+          // Without this, the failed attempt leaks into the visible prose.
+          const proseBeforeTag = fullText.slice(0, tag.start);
+          const brokenStart = findBrokenTagStart(proseBeforeTag);
+          let cleanedPrefix = proseBeforeTag;
+          if (brokenStart >= 0) {
+            // Cut from the broken opener forward — that's all garbage Mo
+            // started writing then abandoned mid-stream.
+            cleanedPrefix = proseBeforeTag.slice(0, brokenStart);
+            // Adjust _shown so we don't try to slice into garbage we've
+            // already streamed out. If we'd shown text past the broken
+            // opener, roll back to brokenStart so the visible text is
+            // re-rendered cleanly.
+            if (moTurn._shown > cleanedPrefix.length) {
+              moTurn._shown = cleanedPrefix.length;
+              // Repaint the visible-prose div so previously-streamed
+              // garbage is removed. moTurn.replaceText handles this.
+              if (typeof moTurn.replaceText === 'function') {
+                moTurn.replaceText(cleanedPrefix);
+              }
+            }
           }
-          // Collapse the tag out of fullText so post-tag prose continues seamlessly
-          fullText = upToTag + fullText.slice(tag.end);
+          if (cleanedPrefix.length > moTurn._shown) {
+            moTurn.appendText(cleanedPrefix.slice(moTurn._shown));
+            moTurn._shown = cleanedPrefix.length;
+          }
+          // Rebuild fullText: cleaned prefix + post-tag remainder
+          fullText = cleanedPrefix + fullText.slice(tag.end);
           // Remember where the most recent tag ended (after collapse) so we
           // can detect any malformed FOLLOWING tag attempt that comes after.
-          moTurn._firedTagEnd = upToTag.length;
+          moTurn._firedTagEnd = cleanedPrefix.length;
 
           fireTag(tag, tagsFired === 2);
         } else if (tagsFired === 0) {

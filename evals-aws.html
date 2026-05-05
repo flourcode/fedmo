@@ -487,6 +487,10 @@ async function edgarFollowUp(attrs) {
     const text = await r.text();
     let data = null;
     try { data = JSON.parse(text); } catch {}
+    // EDGAR (or our proxy) sometimes returns a JSON error blob instead of
+    // a hits response. Detect that and surface it instead of pretending
+    // the query returned 0 hits — they're very different signals.
+    const isError = data && data.error && !data.hits;
     return {
       status: r.status,
       latencyMs: Math.round(performance.now() - t0),
@@ -494,6 +498,7 @@ async function edgarFollowUp(attrs) {
       returned: data?.hits?.hits?.length || 0,
       firstHit: data?.hits?.hits?.[0]?._source || null,
       queryString: params.toString(),
+      edgarError: isError ? data.error : null,
     };
   } catch (e) {
     return { error: e.message, latencyMs: Math.round(performance.now() - t0) };
@@ -675,11 +680,17 @@ function renderScenarioResult(idx, result) {
     const followUp = t.snapshot.edgarResult || t.snapshot.usaSpendingResult;
     let followUpHtml = '';
     if (followUp) {
-      const isEmpty = followUp.total === 0 || (followUp.results && followUp.results.length === 0);
-      const summary = t.snapshot.edgarResult
-        ? `EDGAR: ${followUp.total || 0} matches, ${followUp.returned || 0} returned (${followUp.latencyMs}ms)`
-        : `USASpending: ${(followUp.results || []).length} rows (${followUp.latencyMs}ms)`;
-      followUpHtml = `<div class="followup-result ${isEmpty ? 'empty' : ''}">${escapeHtml(summary)}</div>`;
+      const isError = !!followUp.edgarError;
+      const isEmpty = !isError && (followUp.total === 0 || (followUp.results && followUp.results.length === 0));
+      let summary;
+      if (isError) {
+        summary = `EDGAR ERROR: ${followUp.edgarError} (${followUp.latencyMs}ms) — query: ${followUp.queryString}`;
+      } else if (t.snapshot.edgarResult) {
+        summary = `EDGAR: ${followUp.total || 0} matches, ${followUp.returned || 0} returned (${followUp.latencyMs}ms)`;
+      } else {
+        summary = `USASpending: ${(followUp.results || []).length} rows (${followUp.latencyMs}ms)`;
+      }
+      followUpHtml = `<div class="followup-result ${isError || isEmpty ? 'empty' : ''}">${escapeHtml(summary)}</div>`;
     }
 
     return `
