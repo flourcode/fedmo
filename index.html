@@ -2095,29 +2095,28 @@ async function pullOnce(attrs) {
   const filters = { ...baseFilters };
   const kws = attrs.keywords ? CSV(attrs.keywords) : [];
 
-  // When a vehicle filter is requested, inject vehicle name aliases as API
-  // keywords. USASpending has no structured vehicle-id filter, so we have to
-  // narrow the fetch via description text. Without this, a query like
-  // vehicle="SEWP V" with no other filter pulls top-100-by-amount across the
-  // entire federal landscape — billion-dollar Energy/Navy contracts that
-  // aren't on SEWP V — and the post-filter drops all 100. The aliases catch
-  // contracts that mention the vehicle name in description; the post-filter
-  // (Award ID prefix) then trims to true matches.
+  // When a vehicle filter is requested, inject vehicle name aliases AND the
+  // Award ID prefix as API keywords. USASpending has no structured vehicle-id
+  // filter, so we have to narrow the fetch via description text. Vehicle names
+  // like "ITES-3S" rarely appear in descriptions, but the Award ID prefix
+  // (e.g., "W91RUS") often appears in task order references like "TASK ORDER
+  // UNDER W91RUS19D0040". Combined with the post-filter using detectVehicle()
+  // (which checks Award ID prefix structurally), this gets us real results.
   const VEHICLE_ALIASES = {
-    'SEWP V':            ['SEWP V', 'SEWP 5', 'NASA SEWP'],
-    'GSA MAS':           ['GSA MAS', 'Multiple Award Schedule', 'GSA Schedule'],
-    'OASIS+':            ['OASIS+', 'OASIS Plus'],
-    'ITES-3S':           ['ITES-3S', 'ITES 3S'],
-    'ITES':              ['ITES'],
-    'CIO-SP4':           ['CIO-SP4', 'CIO SP4'],
-    'CIO-SP3':           ['CIO-SP3', 'CIO SP3'],
-    'JWCC':              ['JWCC', 'Joint Warfighting Cloud'],
-    'SeaPort-NxG':       ['SeaPort-NxG', 'SeaPort NxG'],
-    'NETCENTS-2':        ['NETCENTS-2', 'NETCENTS'],
-    'ENCORE III':        ['ENCORE III', 'ENCORE 3'],
-    'EAGLE II':          ['EAGLE II', 'EAGLE 2'],
-    'BARDA IDIQ':        ['BARDA'],
-    'NIH Research IDIQ': ['NIH Research IDIQ', 'NIH IDIQ'],
+    'SEWP V':            ['SEWP V', 'SEWP 5', 'NASA SEWP', 'NNG'],
+    'GSA MAS':           ['GSA MAS', 'Multiple Award Schedule', 'GSA Schedule', 'GS35F', 'GS00F', '47QT'],
+    'OASIS+':            ['OASIS+', 'OASIS Plus', '47QR', '47QF'],
+    'ITES-3S':           ['ITES-3S', 'ITES 3S', 'W91RUS'],
+    'ITES':              ['ITES', 'W52P1J'],
+    'CIO-SP4':           ['CIO-SP4', 'CIO SP4', 'GS00Q'],
+    'CIO-SP3':           ['CIO-SP3', 'CIO SP3', 'HHSN'],
+    'JWCC':              ['JWCC', 'Joint Warfighting Cloud', 'HC1047'],
+    'SeaPort-NxG':       ['SeaPort-NxG', 'SeaPort NxG', 'N0017'],
+    'NETCENTS-2':        ['NETCENTS-2', 'NETCENTS', 'FA8771'],
+    'ENCORE III':        ['ENCORE III', 'ENCORE 3', 'HC1028'],
+    'EAGLE II':          ['EAGLE II', 'EAGLE 2', 'HSHQDC'],
+    'BARDA IDIQ':        ['BARDA', '75A501'],
+    'NIH Research IDIQ': ['NIH Research IDIQ', 'NIH IDIQ', '75N910'],
   };
   const vehicleKw = attrs.vehicle ? (VEHICLE_ALIASES[attrs.vehicle] || [attrs.vehicle]) : [];
   const allKws = [...kws, ...vehicleKw];
