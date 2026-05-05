@@ -4908,9 +4908,52 @@ async function askMo(question, opts = {}) {
 
   const moTurn = renderMoTurn(question);
   let fullText = '';
-  let tagFired = false;
-  let loadingEl = null;
+  let tagsFired = 0;
+  const MAX_TAGS = 2;  // Mo can emit up to two tags per turn for compound questions
+  let loadingEl = null;       // most recent loading card (for replacement)
+  let secondLoadingEl = null; // when both tags fire, second card has its own loading
   let suppressFrom = -1;  // index in fullText to start hiding from (broken tag opener)
+
+  // Helper: fire a single tag through the pull pipeline and render its card.
+  // Used for both the first tag and any subsequent tags.
+  const fireTag = (tag, isSecond) => {
+    console.log('[mo:tag]', JSON.stringify(tag.attrs));
+    const myLoadingEl = renderLoadingCard();
+    moTurn.insertEl(myLoadingEl);
+    if (isSecond) secondLoadingEl = myLoadingEl;
+    else loadingEl = myLoadingEl;
+
+    pull(tag.attrs)
+      .then(({ rows, resolved, error }) => {
+        console.log('[mo:result]', {
+          rows: rows.length,
+          total: rows.reduce((s, r) => s + (Number(r['Award Amount']) || 0), 0),
+          resolved,
+          error,
+        });
+        const cardEl = renderCard(rows, tag.attrs, resolved);
+        if (autoSort && !isSecond) {
+          requestAnimationFrame(() => {
+            const btn = cardEl.querySelector(`.mo-sort-btn[data-sort="${autoSort}"]`);
+            if (btn) btn.click();
+          });
+        }
+        if (myLoadingEl && myLoadingEl.parentNode) {
+          myLoadingEl.parentNode.replaceChild(cardEl, myLoadingEl);
+        } else {
+          moTurn.insertEl(cardEl);
+        }
+        if (cardEl._pendingPills && cardEl.parentNode) {
+          cardEl.parentNode.insertBefore(cardEl._pendingPills, cardEl.nextSibling);
+          delete cardEl._pendingPills;
+        }
+        if (error) moTurn.setError(error);
+      })
+      .catch(err => {
+        if (myLoadingEl && myLoadingEl.parentNode) myLoadingEl.remove();
+        moTurn.setError(`Couldn't pull data: ${err.message}`);
+      });
+  };
 
   try {
     const res = await fetch(LAMBDA_URL, {
@@ -4928,11 +4971,13 @@ async function askMo(question, opts = {}) {
       if (done) break;
       fullText += decoder.decode(value, { stream: true });
 
-      // Check for a valid self-closing tag first
-      if (!tagFired) {
+      // Check for valid self-closing tags. Allow up to MAX_TAGS per turn so
+      // compound questions ("X's federal contracts AND insider trading")
+      // can fire both pulls. After MAX_TAGS, additional tags are stripped.
+      if (tagsFired < MAX_TAGS) {
         const tag = findDataTag(fullText);
         if (tag) {
-          tagFired = true;
+          tagsFired++;
           suppressFrom = -1;  // valid tag found, don't suppress
           // Show prose up to the tag start
           const upToTag = fullText.slice(0, tag.start);
@@ -4942,74 +4987,30 @@ async function askMo(question, opts = {}) {
           }
           // Collapse the tag out of fullText so post-tag prose continues seamlessly
           fullText = upToTag + fullText.slice(tag.end);
-          // Remember where the tag ended (after collapse) so we can detect
-          // any malformed second-tag attempt that comes after this point.
+          // Remember where the most recent tag ended (after collapse) so we
+          // can detect any malformed FOLLOWING tag attempt that comes after.
           moTurn._firedTagEnd = upToTag.length;
 
-          // Diagnostic: log what Mo emitted and what came back. F12 console
-          // can compare these across turns to spot Gemini carrying filters
-          // forward from earlier turns or emitting unexpected attrs.
-          console.log('[mo:tag]', JSON.stringify(tag.attrs));
-
-          loadingEl = renderLoadingCard();
-          moTurn.insertEl(loadingEl);
-
-          pull(tag.attrs)
-            .then(({ rows, resolved, error }) => {
-              console.log('[mo:result]', {
-                rows: rows.length,
-                total: rows.reduce((s, r) => s + (Number(r['Award Amount']) || 0), 0),
-                resolved,
-                error,
-              });
-              const cardEl = renderCard(rows, tag.attrs, resolved);
-              if (autoSort) {
-                // After card mounts, click the matching sort button so expiry
-                // pills auto-sort without the user having to do it manually.
-                requestAnimationFrame(() => {
-                  const btn = cardEl.querySelector(`.mo-sort-btn[data-sort="${autoSort}"]`);
-                  if (btn) btn.click();
-                });
-              }
-              if (loadingEl && loadingEl.parentNode) {
-                loadingEl.parentNode.replaceChild(cardEl, loadingEl);
-              } else {
-                moTurn.insertEl(cardEl);
-              }
-              // Drain pending pills (stashed when card wasn't mounted yet)
-              if (cardEl._pendingPills && cardEl.parentNode) {
-                cardEl.parentNode.insertBefore(cardEl._pendingPills, cardEl.nextSibling);
-                delete cardEl._pendingPills;
-              }
-              if (error) moTurn.setError(error);
-            })
-            .catch(err => {
-              if (loadingEl && loadingEl.parentNode) loadingEl.remove();
-              moTurn.setError(`Couldn't pull data: ${err.message}`);
-            });
-        } else {
-          // No valid tag yet — but did Mo start a broken tag we should hide?
+          fireTag(tag, tagsFired === 2);
+        } else if (tagsFired === 0) {
+          // No valid tag yet AND nothing has fired — but did Mo start a
+          // broken tag we should hide?
           if (suppressFrom < 0) {
             const broken = findBrokenTagStart(fullText);
             if (broken >= 0) suppressFrom = broken;
           }
         }
       } else {
-        // First tag already fired. Strip any subsequent tags so they don't
-        // bleed into prose as raw text.
+        // Hit MAX_TAGS. Strip any subsequent tags so they don't bleed into
+        // prose as raw text.
         const extraTag = findDataTag(fullText);
         if (extraTag) {
           fullText = fullText.slice(0, extraTag.start) + fullText.slice(extraTag.end);
         } else if (suppressFrom < 0) {
-          // Also handle MALFORMED second-tag attempts. Mo sometimes tries to
-          // emit two tags by jamming the second into the first, like:
-          //   <data form_type="4" company="CrowdStriket pattern of selling...
-          // The first tag already fired, but Mo then started writing another
-          // < data ... that never closed. Suppress everything after that point.
+          // Handle MALFORMED extra-tag attempts (Mo started <data ... but
+          // never closed). Suppress everything after the broken-tag opener.
           const tagAfterFire = fullText.indexOf('<', moTurn._firedTagEnd || 0);
           if (tagAfterFire >= 0 && /<\s*data\b/i.test(fullText.slice(tagAfterFire, tagAfterFire + 20))) {
-            // Confirm there's no `/>` after this point (otherwise the regular
-            // extraTag stripper would have caught it)
             if (fullText.indexOf('/>', tagAfterFire) === -1) {
               suppressFrom = tagAfterFire;
             }

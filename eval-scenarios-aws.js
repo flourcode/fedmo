@@ -509,26 +509,30 @@ export const SCENARIOS = [
   },
 
   {
-    name: '8.5  Compound question: federal + insider',
-    description: 'CRITICAL regression — compound questions must emit ONE well-formed tag, not jam two together. The CrowdStrike compound question previously broke the tag parser by leaking prose into the tag attribute.',
+    name: '8.5  Compound question: federal + insider (TWO tags)',
+    description: 'Compound question must emit TWO well-formed tags so the user gets both data pulls. Regression for the CrowdStrike compound case where Mo previously broke the parser by jamming tags together.',
     cluster: 'Classic Regression',
     turns: [{
       question: "What's CrowdStrike's federal footprint and recent insider activity?",
       assertions: [
-        { kind: 'hard', msg: 'emits exactly one well-formed tag',              check: (s) => {
-          const all = (s.responseText || '').match(/<\s*data\b[^>]*>/gi) || [];
+        { kind: 'hard', msg: 'emits TWO well-formed tags', check: (s) => {
           const closed = (s.responseText || '').match(/<\s*data\b[^>]{1,800}?\/>/gi) || [];
-          // Every tag opener must have a matching `/>` close
-          return all.length > 0 && all.length === closed.length;
+          return closed.length === 2;
         }},
-        { kind: 'hard', msg: 'tag is parseable',                                check: hasTag() },
-        { kind: 'hard', msg: 'response does NOT contain raw "<data" text after the first tag', check: (s) => {
+        { kind: 'hard', msg: 'all data tag openers have matching closes (no malformed tags)', check: (s) => {
           const txt = s.responseText || '';
-          const firstClose = txt.indexOf('/>');
-          if (firstClose < 0) return true; // no tag at all, separate failure
-          return !/<\s*data\b/i.test(txt.slice(firstClose));
+          const openers = txt.match(/<\s*data\b/gi) || [];
+          const closes = txt.match(/<\s*data\b[^>]{1,800}?\/>/gi) || [];
+          return openers.length === closes.length;
         }},
-        { kind: 'soft', msg: 'mentions the user can ask the other question separately', check: (s) => /ask|follow.?up|separately|next question/i.test(s.responseText || '') },
+        { kind: 'hard', msg: 'one tag is USASpending (recipient=CrowdStrike)', check: (s) => {
+          const tags = (s.responseText || '').match(/<\s*data\b[^>]{1,800}?\/>/gi) || [];
+          return tags.some(t => /recipient\s*=\s*["']?[^"']*crowdstrike/i.test(t));
+        }},
+        { kind: 'hard', msg: 'one tag is EDGAR Form 4 (form_type=4 + company=CrowdStrike)', check: (s) => {
+          const tags = (s.responseText || '').match(/<\s*data\b[^>]{1,800}?\/>/gi) || [];
+          return tags.some(t => /form_type\s*=\s*["']?4/i.test(t) && /company\s*=\s*["']?[^"']*crowdstrike/i.test(t));
+        }},
       ],
     }],
   },
