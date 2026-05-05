@@ -289,6 +289,21 @@ a:hover { text-decoration: underline; }
   margin-bottom: 12px;
   padding: 0 4px;
 }
+/* v2 tool-calling: cards container sits ABOVE the prose. Each tool call adds
+   a card slot here. Slot starts as a loading skeleton, gets swapped for the
+   real card when pull resolves. Slots stack vertically with breathing room. */
+.mo-turn-mo .mo-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.mo-turn-mo .mo-cards:empty {
+  display: none;
+}
+.mo-card-slot {
+  display: contents;
+}
 .mo-turn-mo .mo-err {
   margin-top: 8px;
   padding: 8px 12px;
@@ -1241,70 +1256,6 @@ const compHead = (title, meta) =>
     $$('div', { class: 'mo-comp-title', text: title }),
     $$('div', { class: 'mo-comp-meta', text: meta }),
   );
-
-// =============================================================================
-// TAG PARSER (hardened)
-// =============================================================================
-//
-// Self-closing <data ... /> only. Strict on purpose: if Mo writes commentary
-// inside an attribute value, the tag becomes structurally broken and we must
-// fail to fire rather than fire with garbage attributes that the API will
-// 422 on.
-//
-// Rules:
-//   - tag content (between <data and />) is at most 600 chars
-//   - attribute values cannot contain newlines or > characters
-//   - attribute values are quote-balanced
-const TAG_RE = /<\s*data\b([^>]{1,600}?)\/>/i;
-
-function findDataTag(text) {
-  const m = TAG_RE.exec(text);
-  if (!m) return null;
-  const inside = m[1];
-  if (/\n/.test(inside)) return null;  // commentary leaked into attributes
-  const attrs = {};
-  const attrRe = /(\w+)\s*=\s*("([^">\n]*)"|'([^'>\n]*)')/g;
-  let am;
-  while ((am = attrRe.exec(inside))) attrs[am[1]] = am[3] !== undefined ? am[3] : am[4];
-  return { match: m[0], start: m.index, end: m.index + m[0].length, attrs };
-}
-
-// Detect a tag opening that NEVER closed — Mo started writing a tag but ran
-// off into prose without `/>`. We hide this fragment from displayed prose.
-// Also hides partial tag PREFIXES (just `<` at the end of a chunk) to prevent
-// flashes during character-level streaming.
-function findBrokenTagStart(text) {
-  // Try the well-formed opener first: `<data ` or `< data ` (Mo sometimes
-  // adds whitespace between the bracket and the tag name).
-  const withBracket = /<\s*data\b/i.exec(text);
-  if (withBracket && text.indexOf('/>', withBracket.index) === -1) {
-    return withBracket.index;
-  }
-  if (withBracket) return -1; // had a close, regular parser handles it
-
-  // HEADLESS opener fallback. The leading '<' might have been stripped by
-  // an earlier sanitizer (or never emitted by Mo). Detect a bare `data `
-  // followed by an attribute pattern that's distinctive enough not to
-  // false-positive on prose: `data <word>="..."` or `data <word>=...`.
-  // Common attrs: form_type, recipient, agency, company, sector, since.
-  const headless = /\bdata\s+(form_type|recipient|agency|company|sector|since|naics|psc|keywords|vehicle|min_amount|max_amount|date_after|date_before|spv_only|federal_adjacent)\s*=/i.exec(text);
-  if (headless && text.indexOf('/>', headless.index) === -1) {
-    return headless.index;
-  }
-
-  // PARTIAL OPENER PREFIX. fullText might end with characters that could
-  // be the start of a `<data` opener but we don't have enough yet to tell.
-  // Patterns: `<`, `<d`, `<da`, `<dat`, `<data` (without word boundary yet).
-  // Suppress from there to prevent a brief flash during character-level
-  // streaming. False positive risk: `<` at the end of a normal sentence
-  // ("x <"). Acceptable because the `<` would be suppressed for ONE chunk
-  // and either render correctly on next chunk (if not a tag) or get
-  // consumed (if it WAS the start of a tag).
-  const partial = /<\s*d?a?t?a?$/i.exec(text);
-  if (partial) return partial.index;
-
-  return -1;
-}
 
 // =============================================================================
 // STATIC DATA BOOTSTRAP
@@ -4831,13 +4782,11 @@ function renderUserTurn(text) {
 }
 
 function renderMoTurn(question) {
-  // Face sits in a HEADER row above the prose, not beside. This gives the
-  // prose full width and a calm centered look. Face is static — always
-  // smiling, no state transitions during stream
-  // or on error. The loading card and progressive prose are enough to signal
-  // activity; an animated face was redundant.
-  // The user's query is stamped on the turn via data-q so the per-card
-  // "Copy link" button can build a ?q= permalink without walking history.
+  // Layout: header (Mo's face), cards container, prose container.
+  // Cards live ABOVE prose because the user came for the data; prose is
+  // qualitative read on the data they're already looking at. The user's
+  // query is stamped on the turn via data-q so the per-card "Copy link"
+  // button can build a ?q= permalink without walking history.
   const turn = $$('div', { class: 'mo-turn mo-turn-mo' });
   if (question) turn.setAttribute('data-q', question);
 
@@ -4850,6 +4799,9 @@ function renderMoTurn(question) {
   header.appendChild($$('span', { class: 'mo-turn-mo-meta', text: 'Mo · just now' }));
   turn.appendChild(header);
 
+  const cardsContainer = $$('div', { class: 'mo-cards' });
+  turn.appendChild(cardsContainer);
+
   const proseEl = $$('div', { class: 'mo-prose' });
   turn.appendChild(proseEl);
 
@@ -4857,45 +4809,32 @@ function renderMoTurn(question) {
   scrollBottom();
 
   return {
-    appendText: (t) => {
-      // For the very first chunk only: strip leading whitespace AND any
-      // stray '<' characters that AREN'T the start of a real `<data` opener.
-      // Mo's leading newlines become visible empty lines under white-space:
-      // pre-wrap, and Mo sometimes starts with a stray `>` from a model glitch.
-      //
-      // CRITICAL: do NOT strip a leading `<` if it's the start of `<data`.
-      // That `<` is needed by the broken-tag detector downstream so it can
-      // recognize a malformed opener (Mo started <data ... and drifted into
-      // prose mid-attribute) and scrub it. If we eat the `<`, the detector
-      // can't find the broken tag and the garbage leaks into the visible prose.
-      //
-      // Mid-prose '<' characters are preserved (they're meaningful for
-      // expressions like "x < y" or rare quoted markup).
-      let toAppend = t;
+    // Append a card slot at the end of the cards container. Returns the
+    // slot element so the caller can swap a loading card for a real card
+    // when tool results come back.
+    addCardSlot: () => {
+      const slot = $$('div', { class: 'mo-card-slot' });
+      cardsContainer.appendChild(slot);
+      scrollBottom();
+      return slot;
+    },
+    // Stream text into the prose div. Each call appends a text node.
+    appendProse: (text) => {
+      if (!text) return;
+      // Strip leading whitespace on the very first chunk so Mo's opening
+      // newline doesn't show as a blank line under white-space: pre-wrap.
+      let toAppend = text;
       if (proseEl.textContent.length === 0) {
-        // Strip leading whitespace and `>` chars. Strip leading `<` ONLY
-        // when not followed by `data`.
-        toAppend = toAppend.replace(/^[\s>]+/, '');
-        if (toAppend.startsWith('<') && !/^<\s*data\b/i.test(toAppend)) {
-          toAppend = toAppend.replace(/^<+/, '');
-        }
+        toAppend = toAppend.replace(/^\s+/, '');
         if (!toAppend) return;
       }
       proseEl.append(document.createTextNode(toAppend));
       scrollBottom();
     },
-    // Wipe the prose div and rewrite from scratch. Called when the stream
-    // parser discovers that already-streamed text was actually garbage from
-    // a malformed-tag attempt that Mo abandoned mid-stream.
-    replaceText: (t) => {
-      proseEl.textContent = '';
-      const cleaned = (t || '').replace(/^[\s<>]+/, '');
-      if (cleaned) proseEl.append(document.createTextNode(cleaned));
-    },
+    // Append a sibling element (pills, chip rows, etc.) at the end of the
+    // turn — used by buildPillsForCard.
     insertEl: (el) => { turn.appendChild(el); scrollBottom(); },
     setError: (msg) => { turn.appendChild($$('div', { class: 'mo-err', text: msg })); },
-    done: () => {},
-    _shown: 0,
   };
 }
 
@@ -4923,22 +4862,27 @@ function scrollBottom() {
 }
 
 // =============================================================================
-// CORE LOOP — askMo
+// CORE LOOP — askMo (v2 tool-calling)
 // =============================================================================
 //
-// Streaming flow:
-//   1. POST chat history to Lambda
-//   2. As tokens stream, watch for the first valid <data .../>
-//   3. When it appears: extract attrs, hide the tag from displayed prose,
-//      render a loading card, fire pull() in background
-//   4. When pull() resolves: replace loading card with real card
-//   5. Continue streaming Mo's post-tag prose
+// Two-call orchestration per user turn:
+//   1) PLAN call: POST {mode: 'plan', history} → returns {toolCalls, text}
+//      - toolCalls:   array of {name, args} — the planner's decision
+//      - text:        prose answer when no tools are needed (greetings,
+//                     definitions, off-topic) — saves a synth roundtrip
 //
-// If Mo emits a broken tag (e.g. prose inside `until="..."` with no `/>`),
-// the parser doesn't fire, but we still need to clean the displayed prose
-// so the broken fragment doesn't render as visible garbage. We track whether
-// Mo started a tag (`<data`) and suppress all subsequent text until either
-// `/>` arrives or the stream ends.
+//   2) Tool execution: for each tool call, render a loading card slot,
+//      fire the pull in parallel via the existing pull() / pullEdgar()
+//      pipeline, and replace the slot with a real card when results arrive.
+//
+//   3) SYNTH call: POST {mode: 'synth', history, tool_calls, tool_results}
+//      → server streams SSE events (event: prose, event: error, event: done)
+//      We append prose chunks into the prose div underneath the cards.
+//
+// The shape of tool args mirrors the old `<data />` attribute schema
+// almost 1:1, which means pull() and pullEdgar() can be called directly
+// with the args dict — no translation layer needed.
+
 async function askMo(question, opts = {}) {
   if (busy) return;
   busy = true;
@@ -4947,197 +4891,228 @@ async function askMo(question, opts = {}) {
 
   renderUserTurn(question);
   history.push({ role: 'user', parts: [{ text: question }] });
-
   const moTurn = renderMoTurn(question);
-  let fullText = '';
-  let tagsFired = 0;
-  const MAX_TAGS = 2;  // Mo can emit up to two tags per turn for compound questions
-  let loadingEl = null;       // most recent loading card (for replacement)
-  let secondLoadingEl = null; // when both tags fire, second card has its own loading
-  let suppressFrom = -1;  // index in fullText to start hiding from (broken tag opener)
 
-  // Helper: fire a single tag through the pull pipeline and render its card.
-  // Used for both the first tag and any subsequent tags.
-  const fireTag = (tag, isSecond) => {
-    console.log('[mo:tag]', JSON.stringify(tag.attrs));
-    const myLoadingEl = renderLoadingCard();
-    moTurn.insertEl(myLoadingEl);
-    if (isSecond) secondLoadingEl = myLoadingEl;
-    else loadingEl = myLoadingEl;
+  try {
+    // ─── 1) PLAN ─────────────────────────────────────────────────────
+    const planRes = await fetch(LAMBDA_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: 'plan', history }),
+    });
+    if (!planRes.ok) throw new Error(`plan ${planRes.status}`);
+    const plan = await planRes.json();
 
-    pull(tag.attrs)
-      .then(({ rows, resolved, error }) => {
-        console.log('[mo:result]', {
-          rows: rows.length,
-          total: rows.reduce((s, r) => s + (Number(r['Award Amount']) || 0), 0),
-          resolved,
+    if (plan.error) throw new Error(plan.error);
+    const toolCalls = Array.isArray(plan.toolCalls) ? plan.toolCalls : [];
+    console.log('[mo:plan]', { toolCalls: toolCalls.map(tc => tc.name), hasText: !!plan.text });
+
+    // No tools and no text → planner had nothing to say. Treat as error.
+    if (toolCalls.length === 0 && !plan.text) {
+      moTurn.setError("Mo couldn't figure out what to do with that. Try rephrasing?");
+      return;
+    }
+
+    // No tools but text present → greeting / definition / off-topic.
+    // Show the planner text as prose directly. Skip synth call.
+    if (toolCalls.length === 0 && plan.text) {
+      moTurn.appendProse(plan.text);
+      // Add to history for context in future turns
+      history.push({ role: 'model', parts: [{ text: plan.text }] });
+      return;
+    }
+
+    // ─── 2) Tool execution (in parallel) ─────────────────────────────
+    // For each tool call: render a loading card slot, fire the pull,
+    // replace slot with real card when done.
+    const toolResults = await Promise.all(toolCalls.map(async (tc, idx) => {
+      const slot = moTurn.addCardSlot();
+      const loadingEl = renderLoadingCard();
+      slot.appendChild(loadingEl);
+
+      // Normalize tool args at the boundary. The new tool schema declares
+      // booleans as type:boolean (so Gemini sends true/false), but the
+      // existing pull/pullEdgar resolvers expect string 'true'/'false' from
+      // the legacy <data /> string-attribute world. Stringify booleans to
+      // keep the resolver code unchanged.
+      const args = { ...tc.args };
+      for (const k of ['subawards', 'federal_adjacent', 'spv_only']) {
+        if (typeof args[k] === 'boolean') args[k] = args[k] ? 'true' : 'false';
+      }
+
+      try {
+        let rows, resolved, error, isEdgar;
+        if (tc.name === 'query_usaspending') {
+          isEdgar = false;
+          const result = await pull(args);
+          rows = result.rows;
+          resolved = result.resolved;
+          error = result.error;
+        } else if (tc.name === 'query_edgar') {
+          isEdgar = true;
+          const result = await pullEdgar(args);
+          rows = result.rows;
+          resolved = result.resolved;
+          error = result.error;
+        } else {
+          throw new Error(`unknown tool: ${tc.name}`);
+        }
+
+        console.log('[mo:tool_result]', {
+          tool: tc.name,
+          args,
+          rows: rows?.length || 0,
           error,
         });
-        const cardEl = renderCard(rows, tag.attrs, resolved);
-        if (autoSort && !isSecond) {
+
+        // Render real card and swap into the slot
+        const cardEl = isEdgar
+          ? renderEdgarCard(rows, resolved)
+          : renderCard(rows, args, resolved);
+
+        slot.replaceChild(cardEl, loadingEl);
+        if (cardEl._pendingPills && cardEl.parentNode) {
+          cardEl.parentNode.insertBefore(cardEl._pendingPills, cardEl.nextSibling);
+          delete cardEl._pendingPills;
+        }
+        // Apply autoSort only to the first card (smart pills target headline data)
+        if (autoSort && idx === 0 && !isEdgar) {
           requestAnimationFrame(() => {
             const btn = cardEl.querySelector(`.mo-sort-btn[data-sort="${autoSort}"]`);
             if (btn) btn.click();
           });
         }
-        if (myLoadingEl && myLoadingEl.parentNode) {
-          myLoadingEl.parentNode.replaceChild(cardEl, myLoadingEl);
-        } else {
-          moTurn.insertEl(cardEl);
-        }
-        if (cardEl._pendingPills && cardEl.parentNode) {
-          cardEl.parentNode.insertBefore(cardEl._pendingPills, cardEl.nextSibling);
-          delete cardEl._pendingPills;
-        }
-        if (error) moTurn.setError(error);
-      })
-      .catch(err => {
-        if (myLoadingEl && myLoadingEl.parentNode) myLoadingEl.remove();
-        moTurn.setError(`Couldn't pull data: ${err.message}`);
-      });
-  };
 
-  try {
-    const res = await fetch(LAMBDA_URL, {
+        // Build the tool_result payload for the synthesizer.
+        return summarizeToolResult(tc.name, args, rows, resolved, error);
+
+      } catch (err) {
+        console.error('[mo:tool_error]', tc.name, err);
+        moTurn.setError(`Couldn't pull ${tc.name === 'query_edgar' ? 'EDGAR' : 'USASpending'}: ${err.message}`);
+        if (loadingEl.parentNode) loadingEl.remove();
+        return { error: err.message };
+      }
+    }));
+
+    // ─── 3) SYNTH ────────────────────────────────────────────────────
+    // Stream the prose underneath the cards. SSE event protocol:
+    //   event:prose  data:{"text":"..."}    → append to prose div
+    //   event:error  data:{"message":"..."} → show error chip
+    //   event:done   data:{}                → close turn
+    const synthRes = await fetch(LAMBDA_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ history }),
+      body: JSON.stringify({
+        mode: 'synth',
+        history,
+        tool_calls: toolCalls,
+        tool_results: toolResults,
+      }),
     });
-    if (!res.ok || !res.body) throw new Error(`Lambda ${res.status}`);
+    if (!synthRes.ok || !synthRes.body) throw new Error(`synth ${synthRes.status}`);
 
-    const reader = res.body.getReader();
+    const reader = synthRes.body.getReader();
     const decoder = new TextDecoder();
+    let buf = '';
+    let proseAccumulated = '';
 
     while (true) {
       const { value, done } = await reader.read();
       if (done) break;
-      fullText += decoder.decode(value, { stream: true });
+      buf += decoder.decode(value, { stream: true });
 
-      // Check for valid self-closing tags. Allow up to MAX_TAGS per turn so
-      // compound questions ("X's federal contracts AND insider trading")
-      // can fire both pulls. After MAX_TAGS, additional tags are stripped.
-      // Wrap in a loop so we can fire multiple complete tags from a single
-      // chunk — Mo often emits both tags consecutively, and the network may
-      // deliver them in the same buffer.
-      while (tagsFired < MAX_TAGS) {
-        const tag = findDataTag(fullText);
-        if (!tag) break;
-        tagsFired++;
-        suppressFrom = -1;  // valid tag found, don't suppress
-        // CRITICAL: before computing the "prose before this tag" slice,
-        // check if Mo had previously started a `<data` opener that never
-        // closed (a failed first attempt). That unclosed fragment is
-        // currently embedded in the prose-before-tag region. Strip it
-        // from the start of the broken opener up to the new valid tag.
-        // Without this, the failed attempt leaks into the visible prose.
-        const proseBeforeTag = fullText.slice(0, tag.start);
-        const brokenStart = findBrokenTagStart(proseBeforeTag);
-        let cleanedPrefix = proseBeforeTag;
-        if (brokenStart >= 0) {
-          // Cut from the broken opener forward — that's all garbage Mo
-          // started writing then abandoned mid-stream.
-          cleanedPrefix = proseBeforeTag.slice(0, brokenStart);
-        }
-        // ALWAYS repaint if _shown is ahead of cleanedPrefix.
-        // This handles two cases:
-        //   1) brokenStart >= 0: we cut the prefix, _shown is now stale
-        //   2) brokenStart === -1 BUT a partial unclosed tag was previously
-        //      streamed via the render-tail before the next chunk arrived
-        //      with the closing `/>`. The previously-streamed partial is
-        //      now garbage in the prose div, even though it's no longer
-        //      part of fullText (we're about to slice the now-complete tag
-        //      out). Roll _shown back and repaint cleanly.
-        if (moTurn._shown > cleanedPrefix.length) {
-          moTurn._shown = cleanedPrefix.length;
-          if (typeof moTurn.replaceText === 'function') {
-            moTurn.replaceText(cleanedPrefix);
-          }
-        }
-        if (cleanedPrefix.length > moTurn._shown) {
-          moTurn.appendText(cleanedPrefix.slice(moTurn._shown));
-          moTurn._shown = cleanedPrefix.length;
-        }
-        // Rebuild fullText: cleaned prefix + post-tag remainder
-        fullText = cleanedPrefix + fullText.slice(tag.end);
-        // Remember where the most recent tag ended (after collapse) so we
-        // can detect any malformed FOLLOWING tag attempt that comes after.
-        moTurn._firedTagEnd = cleanedPrefix.length;
+      // Parse complete SSE event frames. Each frame is "event:<type>\ndata:<json>\n\n".
+      let frameEnd;
+      while ((frameEnd = buf.indexOf('\n\n')) !== -1) {
+        const frame = buf.slice(0, frameEnd);
+        buf = buf.slice(frameEnd + 2);
+        const eventLine = frame.match(/^event:\s*(\S+)/m);
+        const dataLine  = frame.match(/^data:\s*(.+)$/m);
+        if (!eventLine || !dataLine) continue;
+        const eventType = eventLine[1];
+        let payload;
+        try { payload = JSON.parse(dataLine[1]); } catch { continue; }
 
-        // After firing a tag, immediately check the remaining fullText
-        // for a partial unclosed tag. If chunk-1 contained tag1 plus the
-        // start of tag2 (split mid-attribute by network chunking), the
-        // remainder is a broken-tag fragment we must NOT render until
-        // the closing `/>` arrives. Without this scan, the render tail
-        // below would stream the partial fragment to the prose div,
-        // causing a brief flash of `<data form_type=...` garbage that
-        // gets cleaned up only when the next chunk completes the tag.
-        if (tagsFired < MAX_TAGS) {
-          const tail = fullText.slice(cleanedPrefix.length);
-          const broken = findBrokenTagStart(tail);
-          if (broken >= 0) suppressFrom = cleanedPrefix.length + broken;
+        if (eventType === 'prose') {
+          moTurn.appendProse(payload.text || '');
+          proseAccumulated += payload.text || '';
+        } else if (eventType === 'error') {
+          moTurn.setError(payload.message || 'synth error');
+        } else if (eventType === 'done') {
+          // Will exit loop naturally
         }
-
-        fireTag(tag, tagsFired === 2);
-        // Loop continues — if another complete tag is in fullText, we
-        // process it. Otherwise the while loop exits via the break above.
-      }
-
-      // After the while loop finishes (no more complete tags found):
-      if (tagsFired < MAX_TAGS) {
-        // Did Mo start a broken/partial tag we should hide?
-        if (suppressFrom < 0) {
-          // Only scan from where the most recent tag ended (or 0 if no
-          // tag has fired yet). This avoids re-suppressing prose that
-          // was correctly emitted between tags.
-          const scanFrom = moTurn._firedTagEnd || 0;
-          const tail = fullText.slice(scanFrom);
-          const broken = findBrokenTagStart(tail);
-          if (broken >= 0) suppressFrom = scanFrom + broken;
-        }
-      } else {
-        // Hit MAX_TAGS. Strip any subsequent tags so they don't bleed into
-        // prose as raw text.
-        const extraTag = findDataTag(fullText);
-        if (extraTag) {
-          fullText = fullText.slice(0, extraTag.start) + fullText.slice(extraTag.end);
-        } else if (suppressFrom < 0) {
-          // Handle MALFORMED extra-tag attempts (Mo started <data ... but
-          // never closed). Suppress everything after the broken-tag opener.
-          const tagAfterFire = fullText.indexOf('<', moTurn._firedTagEnd || 0);
-          if (tagAfterFire >= 0 && /<\s*data\b/i.test(fullText.slice(tagAfterFire, tagAfterFire + 20))) {
-            if (fullText.indexOf('/>', tagAfterFire) === -1) {
-              suppressFrom = tagAfterFire;
-            }
-          }
-        }
-      }
-
-      // Stream prose tail, respecting suppression of broken-tag fragment
-      const visibleEnd = suppressFrom >= 0 ? suppressFrom : fullText.length;
-      if (visibleEnd > moTurn._shown) {
-        moTurn.appendText(fullText.slice(moTurn._shown, visibleEnd));
-        moTurn._shown = visibleEnd;
       }
     }
 
-    // Stream done. If we suppressed prose because of a broken tag, leave it
-    // suppressed — it's garbage.
-    history.push({ role: 'model', parts: [{ text: fullText }] });
-    // Cap history at last 4 turns (2 user + 2 model pairs). Long histories
-    // anchor Mo to old topics when the user pivots — "AWS at DoD" then
-    // "textile suppliers at NASA" should not still carry AWS context.
-    // Genuine refinements ("what about VA", "just Navy") still work because
-    // the previous turn is preserved.
-    if (history.length > 4) history.splice(0, history.length - 4);
-    moTurn.done();
+    // Add Mo's complete turn to history for follow-ups
+    if (proseAccumulated) {
+      history.push({ role: 'model', parts: [{ text: proseAccumulated }] });
+    }
+
   } catch (err) {
-    if (loadingEl && loadingEl.parentNode) loadingEl.remove();
-    moTurn.setError(err.message);
+    console.error('[mo:askMo error]', err);
+    moTurn.setError(err.message || 'Something went wrong');
   } finally {
     busy = false;
     $send.disabled = false;
     $input.focus();
   }
+}
+
+// Build a compact tool_result payload to send to the synthesizer. We don't
+// need to ship every row — the synthesizer just needs enough to write
+// good prose: top vendors, top agencies, totals, sample contracts, and the
+// shape signal (concentration, expiry count). Card has the full data.
+function summarizeToolResult(toolName, args, rows, resolved, error) {
+  if (error) return { error };
+  if (!rows || rows.length === 0) return { rows: 0, summary: 'no matches' };
+
+  if (toolName === 'query_usaspending') {
+    const total = rows.reduce((s, r) => s + (Number(r['Award Amount']) || 0), 0);
+    const byRecipient = aggregateRowsBy(rows, !!args.subawards, 'recipient');
+    const byAgency = aggregateRowsBy(rows, !!args.subawards, 'agency');
+    const top3RecipientShare = byRecipient.slice(0, 3).reduce((s, e) => s + e[1], 0) / total;
+    const top1RecipientShare = (byRecipient[0]?.[1] || 0) / total;
+    const expiringCount = rows.filter(r => {
+      const end = r['Period of Performance Current End Date'];
+      if (!end) return false;
+      const days = (new Date(end) - new Date()) / (1000 * 60 * 60 * 24);
+      return days >= 0 && days <= 90;
+    }).length;
+    return {
+      rows: rows.length,
+      total,
+      top_recipients: byRecipient.slice(0, 8).map(([name, amt]) => ({ name, amount: amt, share: amt / total })),
+      top_agencies: byAgency.slice(0, 8).map(([name, amt]) => ({ name, amount: amt, share: amt / total })),
+      top1_share: top1RecipientShare,
+      top3_share: top3RecipientShare,
+      expiring_within_90d: expiringCount,
+      sample_contracts: rows.slice(0, 5).map(r => ({
+        recipient: r['Recipient Name'],
+        agency: r['Awarding Agency'],
+        amount: Number(r['Award Amount']) || 0,
+        award_id: r['Award ID'],
+        description: (r['Description'] || '').slice(0, 200),
+      })),
+    };
+  }
+
+  if (toolName === 'query_edgar') {
+    return {
+      rows: rows.length,
+      sample_filings: rows.slice(0, 8).map(r => ({
+        entity: r.entity || r.company || r.issuer,
+        form_type: r.form_type || args.form_type,
+        date: r.fileDate || r.date,
+        amount_offered: r.totalOfferingAmount,
+        amount_sold: r.totalAmountSold,
+        is_spv: !!r.isSpv,
+        is_federal_adjacent: !!r.federalAdjacent,
+      })),
+    };
+  }
+
+  return { rows: rows.length };
 }
 
 // =============================================================================
