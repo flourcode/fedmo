@@ -4965,10 +4965,9 @@ async function askMo(question, opts = {}) {
           error,
         });
 
-        // Render real card and swap into the slot
-        const cardEl = isEdgar
-          ? renderEdgarCard(rows, resolved)
-          : renderCard(rows, args, resolved);
+        // Render real card and swap into the slot. renderCard() handles
+        // both USASpending and EDGAR modes via resolved.edgarMode flag.
+        const cardEl = renderCard(rows, args, resolved);
 
         slot.replaceChild(cardEl, loadingEl);
         if (cardEl._pendingPills && cardEl.parentNode) {
