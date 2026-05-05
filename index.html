@@ -568,6 +568,147 @@ a:hover { text-decoration: underline; }
   font-size: 14px;
 }
 
+/* ── EDGAR card (capital markets) ─────────────────────── */
+.mo-card-edgar {
+  /* Slightly different left-edge accent so it visually identifies as
+     capital-markets data without breaking the unified look. */
+  border-left: 3px solid #6b46c1;
+  padding: var(--s-4) var(--s-5);
+}
+.mo-card-edgar .mo-card-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-title);
+  margin-bottom: 4px;
+}
+.mo-card-edgar .mo-card-subtitle {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: var(--s-3);
+}
+.mo-card-edgar .mo-card-chips {
+  margin-bottom: var(--s-3);
+}
+.mo-stats-strip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--s-3);
+  margin: var(--s-2) 0 var(--s-4);
+  padding: var(--s-3);
+  background: var(--surface-alt, rgba(0,0,0,0.02));
+  border-radius: 8px;
+}
+.mo-stats-strip .mo-stat {
+  text-align: center;
+}
+.mo-stats-strip .mo-stat-num {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-title);
+  line-height: 1.1;
+}
+.mo-stats-strip .mo-stat-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.mo-edgar-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.mo-edgar-row {
+  padding: var(--s-3);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 8px;
+  background: var(--surface, #fff);
+}
+.mo-edgar-row-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--s-3);
+  margin-bottom: 2px;
+}
+.mo-edgar-row-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-title);
+  line-height: 1.3;
+}
+.mo-edgar-row-amt {
+  font-weight: 700;
+  font-size: 15px;
+  color: #047857;
+  white-space: nowrap;
+}
+.mo-edgar-row-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+.mo-edgar-row-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+.mo-edgar-badge {
+  display: inline-block;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: rgba(107, 70, 193, 0.08);
+  color: #6b46c1;
+  border: 1px solid rgba(107, 70, 193, 0.25);
+}
+.mo-edgar-badge-spv {
+  background: rgba(217, 119, 6, 0.08);
+  color: #b45309;
+  border-color: rgba(217, 119, 6, 0.25);
+}
+.mo-edgar-badge-fed {
+  background: rgba(4, 120, 87, 0.08);
+  color: #047857;
+  border-color: rgba(4, 120, 87, 0.3);
+  font-weight: 600;
+}
+.mo-edgar-badge-amend {
+  background: rgba(75, 85, 99, 0.08);
+  color: #4b5563;
+}
+.mo-edgar-row-persons {
+  font-size: 12px;
+  color: var(--text-body, #374151);
+  margin-top: 4px;
+  line-height: 1.4;
+}
+.mo-edgar-label {
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.mo-edgar-row-link {
+  font-size: 12px;
+  margin-top: 6px;
+}
+.mo-edgar-row-link a {
+  color: #6b46c1;
+  text-decoration: none;
+}
+.mo-edgar-row-link a:hover {
+  text-decoration: underline;
+}
+.mo-card-footnote {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: var(--s-3);
+  padding-top: var(--s-2);
+  border-top: 1px dashed var(--border, #e5e7eb);
+  line-height: 1.4;
+}
+
 /* ── Treemap ──────────────────────────────────────────── */
 /* Production treemap. Host has explicit width/height, NO side margins —
    the SVG inside uses preserveAspectRatio="none" with viewBox set to the
@@ -1799,12 +1940,19 @@ const matchesAny = (haystacks, needles) =>
 // days, retry with since floored to 14 days ago. Surface a warn chip telling
 // the user we broadened the date range. Same pattern as the agency cascade.
 async function pull(attrs) {
+  // EDGAR branch: any tag with form_type set goes to capital-markets path.
+  // Recognized form types: D (private raises), 4 (insider trades), 13F
+  // (institutional positions), 13D, 13G, S-1 (IPO), 10-K, 10-Q, 8-K.
+  // Federal contract queries do NOT use form_type, so this branch never
+  // fires for them.
+  if (attrs.form_type) {
+    return await pullEdgar(attrs);
+  }
+
   // Hard override: vehicle queries with tight date floors return 0 rows
-  // because the vehicle post-filter is already narrow. USASpending's
-  // action_date floor combined with vehicle prefix matching almost always
-  // yields nothing if the floor is recent. Mo has been told repeatedly to
-  // use since='2020-01-01' for vehicle queries, and ignores the rule.
-  // Override at the boundary instead of trusting the prompt.
+  // because the vehicle post-filter is already narrow. Mo has been told
+  // repeatedly to use since='2020-01-01' for vehicle queries, and ignores
+  // the rule. Override at the boundary instead of trusting the prompt.
   if (attrs.vehicle && attrs.since && attrs.since > '2020-01-01') {
     const original = attrs.since;
     attrs = { ...attrs, since: '2020-01-01' };
@@ -2113,10 +2261,7 @@ async function pullOnce(attrs) {
   const kws = attrs.keywords ? CSV(attrs.keywords) : [];
 
   // Vehicle queries: inject Award ID prefix as API keyword so the fetch
-  // narrows to descriptions/IDs that mention the vehicle. Vehicle names
-  // ("ITES-3S") rarely appear in description text, but the Award ID
-  // prefix often does ("TASK ORDER UNDER W91RUS19D0040"). The post-filter
-  // (detectVehicle) does the real validation by Award ID structure.
+  // narrows to descriptions/IDs that mention the vehicle.
   const VEHICLE_ALIASES = {
     'SEWP V':            ['SEWP V', 'SEWP 5', 'NASA SEWP', 'NNG15S'],
     'GSA MAS':           ['GSA MAS', 'Multiple Award Schedule', 'GSA Schedule', 'GS35F', 'GS00F', '47QT'],
@@ -2170,6 +2315,573 @@ async function pullOnce(attrs) {
   }
 
   return { rows: applyVehicleFilter(firstRows), resolved, error: null };
+}
+
+// =============================================================================
+// EDGAR — capital markets data (Form D raises, Form 4 insider, 13F, 13D/G, S-1)
+// =============================================================================
+//
+// Sibling system to USASpending. When Mo's <data /> tag has `form_type=`,
+// pullEdgar() is the entry. It uses the same Lambda's edgar_proxy to relay to
+// SEC EDGAR, then post-processes (Form D XML enrichment, SPV pattern match,
+// federal-adjacent cross-reference).
+//
+// What's unique vs Crunchbase/PitchBook: federal_adjacent="true" filters Form
+// D issuers down to companies that ALSO appear in fedmo's federal contract
+// data — startups raising AND selling to fed, surfaced 30-90 days before any
+// commercial database catches the story.
+
+// ─────────────────────────────────────────────────────────────────────
+// Sector → SIC + keywords
+// ─────────────────────────────────────────────────────────────────────
+const EDGAR_SECTORS = {
+  'ai': {
+    sicCodes: ['7372', '7371', '7389', '8742'],
+    keywords: ['artificial intelligence', 'machine learning', 'LLM', 'foundation model', 'generative AI', 'neural network'],
+    display: 'Artificial Intelligence',
+  },
+  'cybersecurity': {
+    sicCodes: ['7372', '7371', '7389'],
+    keywords: ['cybersecurity', 'cyber security', 'information security', 'endpoint security', 'cloud security', 'zero trust', 'SIEM'],
+    display: 'Cybersecurity',
+  },
+  'fintech': {
+    sicCodes: ['6199', '6020', '6029', '7372', '6770'],
+    keywords: ['fintech', 'financial technology', 'payments', 'neobank', 'embedded finance', 'lending platform'],
+    display: 'Financial Technology',
+  },
+  'climate': {
+    sicCodes: ['4911', '4961', '3612', '3674', '2899'],
+    keywords: ['climate', 'carbon capture', 'clean energy', 'renewable energy', 'battery storage', 'decarbonization'],
+    display: 'Climate / Clean Energy',
+  },
+  'biotech': {
+    sicCodes: ['2836', '8731', '3841'],
+    keywords: ['biotech', 'biotechnology', 'drug discovery', 'therapeutics', 'oncology', 'gene therapy', 'mRNA', 'pharmaceutical'],
+    display: 'Biotechnology',
+  },
+  'hardware': {
+    sicCodes: ['3674', '3827', '3829', '3825', '3669'],
+    keywords: ['semiconductor', 'chip', 'custom silicon', 'robotics', 'edge device'],
+    display: 'Hardware / Semiconductors',
+  },
+  'saas': {
+    sicCodes: ['7372', '7371', '7389'],
+    keywords: ['SaaS', 'software-as-a-service', 'cloud software', 'enterprise software', 'workflow automation'],
+    display: 'SaaS',
+  },
+  'crypto': {
+    sicCodes: ['7372', '6199', '6770'],
+    keywords: ['blockchain', 'cryptocurrency', 'digital assets', 'Web3', 'DeFi', 'stablecoin'],
+    display: 'Crypto / Web3',
+  },
+  'real estate': {
+    sicCodes: ['6798', '6500', '6552'],
+    keywords: ['real estate', 'proptech', 'REIT', 'commercial real estate'],
+    display: 'Real Estate',
+  },
+  'consumer': {
+    sicCodes: ['5812', '5912', '5651', '2844', '3944'],
+    keywords: ['consumer brand', 'DTC', 'direct to consumer', 'e-commerce', 'marketplace'],
+    display: 'Consumer',
+  },
+};
+const EDGAR_SECTOR_ALIASES = {
+  'artificial intelligence': 'ai', 'ml': 'ai', 'machine learning': 'ai', 'llm': 'ai',
+  'cyber': 'cybersecurity', 'cyber security': 'cybersecurity', 'security': 'cybersecurity',
+  'financial technology': 'fintech', 'payments': 'fintech',
+  'climatetech': 'climate', 'cleantech': 'climate', 'clean energy': 'climate',
+  'bio': 'biotech', 'biotechnology': 'biotech', 'pharma': 'biotech',
+  'semiconductors': 'hardware', 'chips': 'hardware', 'semis': 'hardware',
+  'software': 'saas', 'enterprise saas': 'saas',
+  'blockchain': 'crypto', 'web3': 'crypto',
+  'proptech': 'real estate',
+  'ecommerce': 'consumer', 'dtc': 'consumer',
+};
+function expandEdgarSector(input) {
+  if (!input) return null;
+  const key = String(input).trim().toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+  const canonical = EDGAR_SECTOR_ALIASES[key] || (EDGAR_SECTORS[key] ? key : null);
+  return canonical ? { key: canonical, ...EDGAR_SECTORS[canonical] } : null;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Form-type normalization
+// ─────────────────────────────────────────────────────────────────────
+function normalizeFormType(input) {
+  if (!input) return 'D';
+  const s = String(input).trim().toUpperCase();
+  if (s === 'FORM D' || s === 'D' || s === 'D/A') return 'D';
+  if (s === '10K' || s === '10-K') return '10-K';
+  if (s === '10Q' || s === '10-Q') return '10-Q';
+  if (s === '8K' || s === '8-K') return '8-K';
+  if (s === 'S1' || s === 'S-1' || s === 'S-1/A') return 'S-1';
+  if (s === '13F' || s === '13-F' || s === '13F-HR') return '13F-HR';
+  if (s === '13D' || s === '13-D' || s === 'SC 13D') return 'SC 13D';
+  if (s === '13G' || s === '13-G' || s === 'SC 13G') return 'SC 13G';
+  if (s === '4' || s === 'FORM 4') return '4';
+  return s;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// EDGAR full-text search
+// ─────────────────────────────────────────────────────────────────────
+async function edgarSearch(query) {
+  const params = new URLSearchParams();
+  if (query.q) params.set('q', query.q);
+  if (query.forms) params.set('forms', query.forms.join(','));
+  if (query.dateRange?.startdt || query.dateRange?.enddt) {
+    params.set('dateRange', 'custom');
+    if (query.dateRange.startdt) params.set('startdt', query.dateRange.startdt);
+    if (query.dateRange.enddt) params.set('enddt', query.dateRange.enddt);
+  }
+  if (query.locationCode) params.set('locationCode', query.locationCode);
+
+  const res = await fetch(LAMBDA_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      request_type: 'edgar_proxy',
+      host: 'efts.sec.gov',
+      path: '/LATEST/search-index',
+      queryString: params.toString(),
+    }),
+  });
+  if (!res.ok) throw new Error(`EDGAR search ${res.status}`);
+  const body = await res.json();
+  const hits = body?.hits?.hits || [];
+  return {
+    total: body?.hits?.total?.value || 0,
+    rows: hits.map(h => {
+      const src = h._source || {};
+      const cik = (src.ciks && src.ciks[0]) || '';
+      const displayName = (src.display_names && src.display_names[0]) || '';
+      const entityName = displayName.replace(/\s*\(CIK\s+\d+\)\s*$/i, '').trim();
+      return {
+        id: h._id,
+        accession: src.adsh,
+        cik,
+        entityName,
+        form: src.form,
+        fileDate: src.file_date,
+        incStates: src.inc_states || [],
+        bizLocations: src.biz_locations || [],
+        sics: src.sics || [],
+        items: src.items || [],
+        offeringAmount: null,
+        totalSold: null,
+        relatedPersons: [],
+        exemptions: [],
+      };
+    }),
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Form D XML enrichment
+// ─────────────────────────────────────────────────────────────────────
+function xmlGet(xml, tag) {
+  const re = new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`, 'i');
+  const m = re.exec(xml);
+  return m ? m[1].trim() : null;
+}
+function xmlGetAll(xml, tag) {
+  const re = new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`, 'gi');
+  const out = [];
+  let m;
+  while ((m = re.exec(xml)) !== null) out.push(m[1].trim());
+  return out;
+}
+function parseFormD(xml) {
+  if (!xml || typeof xml !== 'string') return {};
+  const num = (s) => { const n = parseFloat(s); return Number.isFinite(n) ? n : null; };
+  const personBlocks = xmlGetAll(xml, 'relatedPersonInfo');
+  const relatedPersons = personBlocks.map(block => {
+    const first = xmlGet(block, 'firstName') || '';
+    const middle = xmlGet(block, 'middleName') || '';
+    const last = xmlGet(block, 'lastName') || '';
+    const name = [first, middle, last].filter(Boolean).join(' ');
+    const rels = xmlGetAll(block, 'relationship');
+    return { name, relationships: rels };
+  }).filter(p => p.name.length > 0);
+  const exemptions = xmlGetAll(xml, 'item').filter(x => /^[0-9]/.test(x));
+  let dateOfFirstSale = null;
+  const dosBlock = xmlGet(xml, 'dateOfFirstSale');
+  if (dosBlock) dateOfFirstSale = xmlGet(`<x>${dosBlock}</x>`, 'value');
+  return {
+    offeringAmount: num(xmlGet(xml, 'totalOfferingAmount')),
+    totalSold: num(xmlGet(xml, 'totalAmountSold')),
+    industryGroup: xmlGet(xml, 'industryGroupType'),
+    investmentFundType: xmlGet(xml, 'investmentFundType'),
+    investorCount: num(xmlGet(xml, 'totalNumberAlreadyInvested')),
+    dateOfFirstSale,
+    minInvestment: num(xmlGet(xml, 'minimumInvestmentAccepted')),
+    isAmendment: xmlGet(xml, 'isAmendment') === 'true',
+    entityType: xmlGet(xml, 'entityType'),
+    jurisdiction: xmlGet(xml, 'jurisdictionOfInc'),
+    exemptions,
+    relatedPersons,
+  };
+}
+async function fetchAndParseFormD(row) {
+  const cikNum = String(parseInt(row.cik, 10));
+  const accNoDash = (row.accession || '').replace(/-/g, '');
+  const path = `/Archives/edgar/data/${cikNum}/${accNoDash}/primary_doc.xml`;
+  try {
+    const res = await fetch(LAMBDA_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ request_type: 'edgar_proxy', host: 'www.sec.gov', path, raw: true }),
+    });
+    if (!res.ok) return null;
+    const xml = await res.text();
+    if (!xml || !xml.includes('<edgarSubmission')) return null;
+    return parseFormD(xml);
+  } catch { return null; }
+}
+async function enrichFormDsParallel(rows, concurrency = 5) {
+  const out = [...rows];
+  let cursor = 0;
+  const worker = async () => {
+    while (cursor < out.length) {
+      const i = cursor++;
+      if (out[i].form !== 'D' && out[i].form !== 'D/A') continue;
+      const enrichment = await fetchAndParseFormD(out[i]);
+      if (enrichment) out[i] = { ...out[i], ...enrichment };
+    }
+  };
+  await Promise.all(Array(concurrency).fill(0).map(() => worker()));
+  return out;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// SPV pattern detection
+// ─────────────────────────────────────────────────────────────────────
+// SPVs typically have names like "Anthropic Investors LLC", "Stripe SPV II
+// LLC", "OpenAI Opportunity Fund III LLC". The standard form is:
+//    [Target Company] [Investors|Partners|Opportunity|Fund|SPV] [optional roman numeral or arabic] LLC
+// Operating companies don't follow this pattern. We anchor on the trailing
+// entity-type word (LLC/LP/Inc) and walk backwards to find the suffix word.
+function detectSpv(entityName) {
+  if (!entityName) return null;
+  const trimmed = entityName.trim();
+  const m = /^(.+?)\s+(LLC|LP|L\.P\.|Inc\.?)$/i.exec(trimmed);
+  if (!m) return null;
+  const body = m[1].trim();
+  const entityType = m[2];
+
+  // Two tiers of suffix patterns:
+  //   STRONG  — name structure that's almost always an SPV (no series needed)
+  //   WEAK    — ambiguous; only counts as SPV if there's a Roman/Arabic series
+  const STRONG = [
+    'Special Opportunities Fund',
+    'Special Opportunities',
+    'Opportunity Fund',
+    'Opportunities Fund',
+    'Investment Fund',
+    'Co-Investment',
+    'SPV',
+    'Investors',
+    'Investor',
+  ];
+  const WEAK = [
+    'Partners',
+    'Opportunity',
+    'Opportunities',
+    'Fund',
+    'Holdings',
+  ];
+
+  const tryMatch = (phrases, requireSeries) => {
+    for (const phrase of phrases) {
+      const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const re = new RegExp(`\\s+${escaped}(?:\\s+([IVXLCDM]+|\\d+))?,?$`, 'i');
+      const sm = re.exec(body);
+      if (!sm) continue;
+      if (requireSeries && !sm[1]) continue;
+      const target = body.slice(0, sm.index).trim();
+      if (!target) continue;
+      if (/^(special|opportunity|opportunities|partners|investors|fund|holdings|the)$/i.test(target)) continue;
+      return { target, vehicleType: phrase, series: sm[1] || null, entityType };
+    }
+    return null;
+  };
+
+  return tryMatch(STRONG, false) || tryMatch(WEAK, true);
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Federal-adjacent cross-reference (the killer feature)
+// ─────────────────────────────────────────────────────────────────────
+// Given Form D issuers, flag any whose company name fuzzy-matches a known
+// federal contract recipient. PUBLIC_VENDORS is loaded at startup; we
+// also live-check exec names against fedmo's recipient autocomplete.
+const FEDERAL_NAME_NORMALIZE = (s) => String(s || '').toLowerCase()
+  .replace(/[.,'"`]/g, '')
+  .replace(/\b(inc|incorporated|corp|corporation|llc|ltd|limited|co|company|holdings|group|plc|the)\b/g, '')
+  .replace(/\s+/g, ' ')
+  .trim();
+async function checkFederalAdjacent(entityName) {
+  // Light check: query USASpending for the recipient. If we get any
+  // contracts, the company has a federal footprint.
+  try {
+    const res = await fetch('https://api.usaspending.gov/api/v2/search/spending_by_award/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        filters: {
+          recipient_search_text: [entityName],
+          time_period: [{ start_date: '2020-01-01', end_date: new Date().toISOString().slice(0, 10) }],
+          award_type_codes: ['A','B','C','D'],
+        },
+        fields: ['Award ID', 'Award Amount', 'Recipient Name'],
+        page: 1, limit: 5, sort: 'Award Amount', order: 'desc',
+      }),
+    });
+    if (!res.ok) return null;
+    const body = await res.json();
+    const results = body?.results || [];
+    if (results.length === 0) return null;
+    const totalDollars = results.reduce((s, r) => s + (r['Award Amount'] || 0), 0);
+    return {
+      contractCount: results.length,
+      topAmount: results[0]?.['Award Amount'] || 0,
+      totalDollars,
+    };
+  } catch { return null; }
+}
+async function enrichFederalAdjacent(rows, concurrency = 4) {
+  const out = [...rows];
+  let cursor = 0;
+  const worker = async () => {
+    while (cursor < out.length) {
+      const i = cursor++;
+      const adj = await checkFederalAdjacent(out[i].entityName);
+      if (adj) out[i] = { ...out[i], federalAdjacent: adj };
+    }
+  };
+  await Promise.all(Array(concurrency).fill(0).map(() => worker()));
+  return out;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Main EDGAR pull
+// ─────────────────────────────────────────────────────────────────────
+async function pullEdgar(attrs) {
+  const formType = normalizeFormType(attrs.form_type);
+  const sectorInfo = attrs.sector ? expandEdgarSector(attrs.sector) : null;
+  const company = attrs.company ? String(attrs.company).trim() : null;
+  const dateAfter = attrs.date_after && /^\d{4}-\d{2}-\d{2}$/.test(attrs.date_after) ? attrs.date_after : null;
+  const dateBefore = attrs.date_before && /^\d{4}-\d{2}-\d{2}$/.test(attrs.date_before) ? attrs.date_before : null;
+  const state = attrs.state ? String(attrs.state).trim().toUpperCase() : null;
+  const minAmount = attrs.min_amount ? Number(attrs.min_amount) : null;
+  const maxAmount = attrs.max_amount ? Number(attrs.max_amount) : null;
+  const federalAdjacent = String(attrs.federal_adjacent || '').toLowerCase() === 'true';
+  const spvOnly = String(attrs.spv_only || '').toLowerCase() === 'true';
+  const execName = attrs.exec_name ? String(attrs.exec_name).trim() : null;
+
+  const resolved = {
+    formType,
+    sectorInfo,
+    company,
+    dateAfter, dateBefore, state,
+    minAmount, maxAmount,
+    federalAdjacent, spvOnly, execName,
+    edgarMode: true,
+  };
+
+  // Build query
+  const query = { forms: [formType], dateRange: {} };
+  if (dateAfter) query.dateRange.startdt = dateAfter;
+  if (dateBefore) query.dateRange.enddt = dateBefore;
+  if (state) query.locationCode = state;
+
+  const qParts = [];
+  if (company) qParts.push(`"${company}"`);
+  if (sectorInfo && sectorInfo.keywords.length) {
+    const phrases = sectorInfo.keywords.slice(0, 6).map(k => k.includes(' ') ? `"${k}"` : k);
+    qParts.push(phrases.join(' '));
+  }
+  if (execName) qParts.push(`"${execName}"`);
+  if (qParts.length) query.q = qParts.join(' ');
+
+  // Fetch
+  let rows, total;
+  try {
+    const res = await edgarSearch(query);
+    rows = res.rows;
+    total = res.total;
+  } catch (e) {
+    return { rows: [], resolved, error: e.message };
+  }
+
+  // Enrich Form Ds with XML (top 20 for latency)
+  if (formType === 'D' && rows.length > 0) {
+    const enrichedTop = await enrichFormDsParallel(rows.slice(0, 20));
+    rows = [...enrichedTop, ...rows.slice(20)];
+  }
+
+  // SPV detection — apply to all Form D rows
+  if (formType === 'D') {
+    rows = rows.map(r => {
+      const spv = detectSpv(r.entityName);
+      return spv ? { ...r, spv } : r;
+    });
+    if (spvOnly) {
+      const before = rows.length;
+      rows = rows.filter(r => r.spv);
+      resolved.spvFiltered = { before, after: rows.length };
+    }
+  }
+
+  // Amount post-filter
+  if (minAmount || maxAmount) {
+    const before = rows.length;
+    rows = rows.filter(r => {
+      const amt = r.offeringAmount || 0;
+      if (minAmount && amt < minAmount) return false;
+      if (maxAmount && amt > maxAmount) return false;
+      return true;
+    });
+    if (rows.length < before) {
+      resolved.amountFiltered = { before, after: rows.length };
+    }
+  }
+
+  // Federal-adjacent cross-reference (the killer)
+  if (federalAdjacent && rows.length > 0) {
+    const top = rows.slice(0, 15);
+    const checked = await enrichFederalAdjacent(top);
+    rows = [...checked, ...rows.slice(15)];
+    const adjRows = rows.filter(r => r.federalAdjacent);
+    resolved.federalAdjacentResults = {
+      checked: top.length,
+      hits: adjRows.length,
+    };
+    rows = adjRows.length > 0 ? adjRows : rows;
+  }
+
+  resolved.totalFromEdgar = total;
+  return { rows, resolved, error: null };
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// EDGAR card renderer
+// ─────────────────────────────────────────────────────────────────────
+function renderEdgarCard(rows, resolved) {
+  const parts = [];
+
+  // Title
+  const formLabels = { 'D': 'Form D — private offerings', '4': 'Form 4 — insider trades', '13F-HR': '13F — institutional positions', 'SC 13D': '13D — activist >5% stakes', 'SC 13G': '13G — passive >5% stakes', 'S-1': 'S-1 — IPO registrations', '10-K': '10-K — annual reports', '10-Q': '10-Q — quarterly reports', '8-K': '8-K — material events' };
+  const formLabel = formLabels[resolved.formType] || resolved.formType;
+  let titleParts = [formLabel];
+  if (resolved.company) titleParts.push(`for "${resolved.company}"`);
+  if (resolved.sectorInfo) titleParts.push(`in ${resolved.sectorInfo.display}`);
+  if (resolved.state) titleParts.push(`incorporated in ${resolved.state}`);
+  if (resolved.spvOnly) titleParts.unshift('SPVs only —');
+  if (resolved.federalAdjacent) titleParts.push(`(federal-adjacent only)`);
+
+  parts.push(`<div class="mo-card-title">${escapeHtml(titleParts.join(' '))}</div>`);
+
+  // Subtitle / date range
+  const subParts = [];
+  if (resolved.dateAfter) subParts.push(`filed since ${resolved.dateAfter}`);
+  if (resolved.dateBefore) subParts.push(`through ${resolved.dateBefore}`);
+  if (resolved.minAmount) subParts.push(`min $${(resolved.minAmount / 1e6).toFixed(1)}M`);
+  if (resolved.maxAmount) subParts.push(`max $${(resolved.maxAmount / 1e6).toFixed(1)}M`);
+  if (subParts.length) parts.push(`<div class="mo-card-subtitle">${escapeHtml(subParts.join(' · '))}</div>`);
+
+  // Chips for filters / overrides
+  const chips = [];
+  if (resolved.totalFromEdgar) chips.push(`<span class="mo-card-chip">${resolved.totalFromEdgar.toLocaleString()} total matches in EDGAR</span>`);
+  if (resolved.amountFiltered) chips.push(`<span class="mo-card-chip">Filtered to ${resolved.amountFiltered.after} by amount (from ${resolved.amountFiltered.before})</span>`);
+  if (resolved.spvFiltered) chips.push(`<span class="mo-card-chip">SPVs only — ${resolved.spvFiltered.after} of ${resolved.spvFiltered.before} rows</span>`);
+  if (resolved.federalAdjacentResults) {
+    if (resolved.federalAdjacentResults.hits > 0) {
+      chips.push(`<span class="mo-card-chip">${resolved.federalAdjacentResults.hits} of ${resolved.federalAdjacentResults.checked} checked are federal-adjacent</span>`);
+    } else {
+      chips.push(`<span class="mo-card-chip mo-card-chip-warn">No federal contract footprint found in top ${resolved.federalAdjacentResults.checked} rows</span>`);
+    }
+  }
+  if (chips.length) parts.push(`<div class="mo-card-chips">${chips.join('')}</div>`);
+
+  // No rows
+  if (!rows.length) {
+    parts.push(`<div class="mo-card-empty">No matching filings. EDGAR is the SEC's primary source — if it's not here, it hasn't been filed yet, or your filters are too tight. Try widening the date range or dropping a filter.</div>`);
+    return parts.join('');
+  }
+
+  // Stats strip — total raised, hottest sector, etc.
+  if (resolved.formType === 'D') {
+    const withAmount = rows.filter(r => r.offeringAmount > 0);
+    const totalRaised = withAmount.reduce((s, r) => s + r.offeringAmount, 0);
+    const avgRaised = withAmount.length ? totalRaised / withAmount.length : 0;
+    const stats = [
+      `<div class="mo-stat"><div class="mo-stat-num">${rows.length}</div><div class="mo-stat-label">Filings</div></div>`,
+      `<div class="mo-stat"><div class="mo-stat-num">$${(totalRaised / 1e9).toFixed(2)}B</div><div class="mo-stat-label">Total Offered</div></div>`,
+      `<div class="mo-stat"><div class="mo-stat-num">$${(avgRaised / 1e6).toFixed(1)}M</div><div class="mo-stat-label">Avg Raise</div></div>`,
+    ];
+    parts.push(`<div class="mo-stats-strip">${stats.join('')}</div>`);
+  }
+
+  // Row list
+  parts.push(`<div class="mo-edgar-rows">`);
+  rows.slice(0, 30).forEach(r => {
+    parts.push(renderEdgarRow(r, resolved));
+  });
+  parts.push(`</div>`);
+  if (rows.length > 30) {
+    parts.push(`<div class="mo-card-footnote">Showing top 30 of ${rows.length}. Refine the query for a tighter set.</div>`);
+  }
+
+  parts.push(`<div class="mo-card-footnote">Source: SEC EDGAR. ${resolved.formType === 'D' ? 'Form D filings are required within 15 days of the first sale — they often surface rounds 30-90 days before press coverage.' : ''}</div>`);
+
+  return parts.join('');
+}
+
+function renderEdgarRow(r, resolved) {
+  const amt = r.offeringAmount > 0
+    ? `$${(r.offeringAmount / 1e6).toFixed(r.offeringAmount >= 1e9 ? 2 : 1)}${r.offeringAmount >= 1e9 ? 'B' : 'M'}`
+    : null;
+
+  const accUrl = r.cik && r.accession
+    ? `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${parseInt(r.cik, 10)}&type=${encodeURIComponent(r.form || resolved.formType)}&dateb=&owner=include&count=40`
+    : null;
+
+  const badges = [];
+  if (r.spv) badges.push(`<span class="mo-edgar-badge mo-edgar-badge-spv">SPV → ${escapeHtml(r.spv.target)}${r.spv.series ? ' ' + escapeHtml(r.spv.series) : ''}</span>`);
+  if (r.federalAdjacent) {
+    const totalM = (r.federalAdjacent.totalDollars / 1e6).toFixed(1);
+    badges.push(`<span class="mo-edgar-badge mo-edgar-badge-fed">Federal contracts: ${r.federalAdjacent.contractCount} · $${totalM}M</span>`);
+  }
+  if (r.isAmendment) badges.push(`<span class="mo-edgar-badge mo-edgar-badge-amend">Amendment</span>`);
+  if (r.exemptions && r.exemptions.length) {
+    badges.push(`<span class="mo-edgar-badge">Rule ${escapeHtml(r.exemptions.join(', '))}</span>`);
+  }
+
+  const persons = (r.relatedPersons || []).slice(0, 4)
+    .map(p => `${escapeHtml(p.name)}${p.relationships && p.relationships.length ? ' (' + escapeHtml(p.relationships[0]) + ')' : ''}`)
+    .join(', ');
+
+  const stateBlurb = r.incStates && r.incStates.length ? `Inc. ${escapeHtml(r.incStates[0])}` : '';
+  const sicBlurb = r.sics && r.sics.length ? `SIC ${escapeHtml(r.sics[0])}` : '';
+  const meta = [stateBlurb, sicBlurb, r.entityType ? escapeHtml(r.entityType) : ''].filter(Boolean).join(' · ');
+
+  return `
+    <div class="mo-edgar-row">
+      <div class="mo-edgar-row-head">
+        <div class="mo-edgar-row-name">${escapeHtml(r.entityName || 'Unnamed entity')}</div>
+        ${amt ? `<div class="mo-edgar-row-amt">${amt}</div>` : ''}
+      </div>
+      <div class="mo-edgar-row-meta">
+        ${escapeHtml(r.form || resolved.formType)} · filed ${escapeHtml(r.fileDate || 'unknown')}${r.dateOfFirstSale ? ` · first sale ${escapeHtml(r.dateOfFirstSale)}` : ''}
+        ${meta ? ' · ' + meta : ''}
+      </div>
+      ${badges.length ? `<div class="mo-edgar-row-badges">${badges.join('')}</div>` : ''}
+      ${persons ? `<div class="mo-edgar-row-persons"><span class="mo-edgar-label">Execs:</span> ${persons}</div>` : ''}
+      ${accUrl ? `<div class="mo-edgar-row-link"><a href="${accUrl}" target="_blank" rel="noopener">View on EDGAR ↗</a></div>` : ''}
+    </div>
+  `;
 }
 
 // =============================================================================
@@ -2976,9 +3688,8 @@ async function loadSecFilings(rows, attrs) {
 //   because a parent ID of 75A50123D00005 unambiguously means a BARDA IDIQ.
 const VEHICLE_MAP = {
   // SEWP V GWAC contracts are NNG15S* (FY2015 SEWP). Generic NNG matches
-  // NASA Goddard satellite procurement (NNG09HR00C, NNG10XA05C, NNG12FD66C)
-  // which is NOT SEWP V — those are NASA's direct hardware contracts for
-  // GOES-R, JPSS, Hubble, etc.
+  // NASA Goddard satellite procurement (NNG09HR00C, NNG10XA05C) which is
+  // NOT SEWP V — those are NASA's direct hardware contracts.
   'NNG15S':    'SEWP V',
   'GS00Q':     'CIO-SP4',
   'HHSN':      'CIO-SP3',
@@ -3438,6 +4149,13 @@ function renderSubawardRows(card, rows, attrs, resolved) {
 // CARD RENDER
 // =============================================================================
 function renderCard(rows, attrs, resolved) {
+  // EDGAR branch — capital-markets cards (Form D, Form 4, 13F, etc.)
+  if (resolved && resolved.edgarMode) {
+    const card = $$('div', { class: 'mo-card mo-card-edgar' });
+    card.innerHTML = renderEdgarCard(rows, resolved);
+    return card;
+  }
+
   const card = $$('div', { class: 'mo-card' });
   const isSub = attrs.subawards === 'true';
 
