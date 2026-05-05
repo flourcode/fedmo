@@ -5020,17 +5020,20 @@ async function askMo(question, opts = {}) {
             // Cut from the broken opener forward — that's all garbage Mo
             // started writing then abandoned mid-stream.
             cleanedPrefix = proseBeforeTag.slice(0, brokenStart);
-            // Adjust _shown so we don't try to slice into garbage we've
-            // already streamed out. If we'd shown text past the broken
-            // opener, roll back to brokenStart so the visible text is
-            // re-rendered cleanly.
-            if (moTurn._shown > cleanedPrefix.length) {
-              moTurn._shown = cleanedPrefix.length;
-              // Repaint the visible-prose div so previously-streamed
-              // garbage is removed. moTurn.replaceText handles this.
-              if (typeof moTurn.replaceText === 'function') {
-                moTurn.replaceText(cleanedPrefix);
-              }
+          }
+          // ALWAYS repaint if _shown is ahead of cleanedPrefix.
+          // This handles two cases:
+          //   1) brokenStart >= 0: we cut the prefix, _shown is now stale
+          //   2) brokenStart === -1 BUT a partial unclosed tag was previously
+          //      streamed via the render-tail before the next chunk arrived
+          //      with the closing `/>`. The previously-streamed partial is
+          //      now garbage in the prose div, even though it's no longer
+          //      part of fullText (we're about to slice the now-complete tag
+          //      out). Roll _shown back and repaint cleanly.
+          if (moTurn._shown > cleanedPrefix.length) {
+            moTurn._shown = cleanedPrefix.length;
+            if (typeof moTurn.replaceText === 'function') {
+              moTurn.replaceText(cleanedPrefix);
             }
           }
           if (cleanedPrefix.length > moTurn._shown) {
@@ -5044,12 +5047,20 @@ async function askMo(question, opts = {}) {
           moTurn._firedTagEnd = cleanedPrefix.length;
 
           fireTag(tag, tagsFired === 2);
-        } else if (tagsFired === 0) {
-          // No valid tag yet AND nothing has fired — but did Mo start a
-          // broken tag we should hide?
+        } else {
+          // No valid tag found in this iteration. Did Mo start a broken
+          // tag we should hide? This applies regardless of tagsFired —
+          // even after tag1 fires, an unclosed partial tag2 could be
+          // streaming and we want to hold it back from rendering until
+          // either it completes or the stream ends.
           if (suppressFrom < 0) {
-            const broken = findBrokenTagStart(fullText);
-            if (broken >= 0) suppressFrom = broken;
+            // Only scan from where the most recent tag ended (or 0 if no
+            // tag has fired yet). This avoids re-suppressing prose that
+            // was correctly emitted between tags.
+            const scanFrom = moTurn._firedTagEnd || 0;
+            const tail = fullText.slice(scanFrom);
+            const broken = findBrokenTagStart(tail);
+            if (broken >= 0) suppressFrom = scanFrom + broken;
           }
         }
       } else {
