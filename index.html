@@ -2697,6 +2697,36 @@ const FEDERAL_PUBLIC_VENDORS = {
   'verizon': { cik: '0000732712', display: 'Verizon', ticker: 'VZ' },
   'workday': { cik: '0001327811', display: 'Workday', ticker: 'WDAY' },
   'zscaler': { cik: '0001713683', display: 'Zscaler', ticker: 'ZS' },
+
+  // Product-name aliases — point at the parent company CIK so SEC injection
+  // surfaces public filers when Mo emits keyword product names (Azure, M365,
+  // Jira, etc.) instead of company names. Without these, the SEC card silently
+  // drops public ISVs because the keyword tokens don't match the company-name
+  // keys in the lookup. See WHAT TO EMIT examples in the prompt for the full
+  // set of product keywords Mo emits.
+  //
+  // Microsoft products
+  'm365':                 { cik: '0000789019', display: 'Microsoft', ticker: 'MSFT' },
+  'microsoft 365':        { cik: '0000789019', display: 'Microsoft', ticker: 'MSFT' },
+  'office 365':           { cik: '0000789019', display: 'Microsoft', ticker: 'MSFT' },
+  'azure':                { cik: '0000789019', display: 'Microsoft', ticker: 'MSFT' },
+  'microsoft azure':      { cik: '0000789019', display: 'Microsoft', ticker: 'MSFT' },
+  'defender':             { cik: '0000789019', display: 'Microsoft', ticker: 'MSFT' },
+  'microsoft defender':   { cik: '0000789019', display: 'Microsoft', ticker: 'MSFT' },
+  'microsoft sentinel':   { cik: '0000789019', display: 'Microsoft', ticker: 'MSFT' },
+  'sentinel siem':        { cik: '0000789019', display: 'Microsoft', ticker: 'MSFT' },
+  // Palantir products
+  'gotham':               { cik: '0001321655', display: 'Palantir', ticker: 'PLTR' },
+  'foundry':              { cik: '0001321655', display: 'Palantir', ticker: 'PLTR' },
+  // Atlassian (was missing entirely) + product aliases
+  'atlassian':            { cik: '0001650372', display: 'Atlassian', ticker: 'TEAM' },
+  'jira':                 { cik: '0001650372', display: 'Atlassian', ticker: 'TEAM' },
+  'confluence':           { cik: '0001650372', display: 'Atlassian', ticker: 'TEAM' },
+  // Splunk (was missing) — keep its own CIK; EDGAR continues to serve historical
+  // filings under it even after the Cisco acquisition closed in 2024.
+  'splunk':               { cik: '0001353283', display: 'Splunk', ticker: 'SPLK' },
+  // Akamai's Guardicore acquisition — keyword often appears as Guardicore standalone
+  'guardicore':           { cik: '0001086222', display: 'Akamai', ticker: 'AKAM' },
 };
 
 const SEC_FILING_TYPES_KEEP = new Set(['10-K', '10-Q', '8-K', 'DEF 14A', '425', 'S-1', 'S-4']);
@@ -2788,7 +2818,12 @@ async function loadSecFilings(rows, attrs) {
     if (!name) continue;
     byPrime[name] = (byPrime[name] || 0) + (Number(r['Award Amount']) || 0);
   }
-  const topPrimes = Object.entries(byPrime).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([n]) => n);
+  // Take top 7 unique recipients by amount. Bumped from top-5 to top-7 to
+  // catch public ISVs sitting just outside the headline list — common when
+  // the top primes on a keyword query are private integrators/resellers
+  // (Carahsoft, GDIT, WWT, Booz Allen) and the public ISV is at #6 or #7
+  // by amount.
+  const topPrimes = Object.entries(byPrime).sort((a, b) => b[1] - a[1]).slice(0, 7).map(([n]) => n);
 
   // For keyword queries and integrator+ISV queries, inject any keyword-matched
   // public vendor into the SEC check. This covers two patterns:
