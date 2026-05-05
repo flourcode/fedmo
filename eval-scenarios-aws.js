@@ -38,9 +38,9 @@ const modeIs       = (m)          => (s) => s.mode === m;
 const proseIncludes = (needle)    => (s) => (s.responseText || '').toLowerCase().includes(String(needle).toLowerCase());
 const proseLacks   = (needle)     => (s) => !(s.responseText || '').toLowerCase().includes(String(needle).toLowerCase());
 const dateAfterIsRecent = (maxDaysOld) => (s) => {
-  // Asserts date_after is within N days of today, OR no date_after at all
+  // Asserts date_after is present AND within N days of today
   const v = s.attrs?.date_after;
-  if (!v) return true; // no date filter is fine for some queries
+  if (!v) return false;
   const target = new Date(v + 'T00:00:00Z');
   const now = new Date();
   const diff = (now - target) / (1000 * 60 * 60 * 24);
@@ -504,6 +504,31 @@ export const SCENARIOS = [
         { kind: 'hard', msg: 'agency=HHS',                                     check: tagAttrLike('agency', /health|hhs/i) },
         { kind: 'soft', msg: 'has cloud-relevant naics or keywords',            check: (s) => s.attrs?.naics || /cloud/i.test(JSON.stringify(s.attrs || {})) },
         { kind: 'soft', msg: 'date_after=2025-10-01 (FY26 start)',             check: tagAttr('since', '2025-10-01') },
+      ],
+    }],
+  },
+
+  {
+    name: '8.5  Compound question: federal + insider',
+    description: 'CRITICAL regression — compound questions must emit ONE well-formed tag, not jam two together. The CrowdStrike compound question previously broke the tag parser by leaking prose into the tag attribute.',
+    cluster: 'Classic Regression',
+    turns: [{
+      question: "What's CrowdStrike's federal footprint and recent insider activity?",
+      assertions: [
+        { kind: 'hard', msg: 'emits exactly one well-formed tag',              check: (s) => {
+          const all = (s.responseText || '').match(/<\s*data\b[^>]*>/gi) || [];
+          const closed = (s.responseText || '').match(/<\s*data\b[^>]{1,800}?\/>/gi) || [];
+          // Every tag opener must have a matching `/>` close
+          return all.length > 0 && all.length === closed.length;
+        }},
+        { kind: 'hard', msg: 'tag is parseable',                                check: hasTag() },
+        { kind: 'hard', msg: 'response does NOT contain raw "<data" text after the first tag', check: (s) => {
+          const txt = s.responseText || '';
+          const firstClose = txt.indexOf('/>');
+          if (firstClose < 0) return true; // no tag at all, separate failure
+          return !/<\s*data\b/i.test(txt.slice(firstClose));
+        }},
+        { kind: 'soft', msg: 'mentions the user can ask the other question separately', check: (s) => /ask|follow.?up|separately|next question/i.test(s.responseText || '') },
       ],
     }],
   },

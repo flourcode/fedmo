@@ -4942,6 +4942,9 @@ async function askMo(question, opts = {}) {
           }
           // Collapse the tag out of fullText so post-tag prose continues seamlessly
           fullText = upToTag + fullText.slice(tag.end);
+          // Remember where the tag ended (after collapse) so we can detect
+          // any malformed second-tag attempt that comes after this point.
+          moTurn._firedTagEnd = upToTag.length;
 
           // Diagnostic: log what Mo emitted and what came back. F12 console
           // can compare these across turns to spot Gemini carrying filters
@@ -4997,6 +5000,20 @@ async function askMo(question, opts = {}) {
         const extraTag = findDataTag(fullText);
         if (extraTag) {
           fullText = fullText.slice(0, extraTag.start) + fullText.slice(extraTag.end);
+        } else if (suppressFrom < 0) {
+          // Also handle MALFORMED second-tag attempts. Mo sometimes tries to
+          // emit two tags by jamming the second into the first, like:
+          //   <data form_type="4" company="CrowdStriket pattern of selling...
+          // The first tag already fired, but Mo then started writing another
+          // < data ... that never closed. Suppress everything after that point.
+          const tagAfterFire = fullText.indexOf('<', moTurn._firedTagEnd || 0);
+          if (tagAfterFire >= 0 && /<\s*data\b/i.test(fullText.slice(tagAfterFire, tagAfterFire + 20))) {
+            // Confirm there's no `/>` after this point (otherwise the regular
+            // extraTag stripper would have caught it)
+            if (fullText.indexOf('/>', tagAfterFire) === -1) {
+              suppressFrom = tagAfterFire;
+            }
+          }
         }
       }
 
