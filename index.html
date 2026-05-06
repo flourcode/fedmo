@@ -317,6 +317,7 @@ a:hover { text-decoration: underline; }
   max-width: 720px;
   margin: 0 auto;
   padding: 16px 12px 24px;
+  overflow-anchor: none;
 }
 
 .mo-turn { margin-bottom: 20px; }
@@ -5083,7 +5084,11 @@ function injectPills(card, rows, attrs, vendorEntries, agencyEntries, total, exp
   // conversation flow between this turn's card and whatever comes next,
   // matching the greeting examples' floating-in-page treatment.
   if (card.parentNode) {
+    // Pin scroll position — inserting content below viewport causes browser
+    // to shift the page. Save and restore scrollY to prevent the jump.
+    const scrollY = window.scrollY;
     card.parentNode.insertBefore(wrap, card.nextSibling);
+    window.scrollTo({ top: scrollY, behavior: 'instant' });
   } else {
     // Card hasn't been mounted yet (shouldn't happen given current call
     // sites, but be defensive). Stash for later mount.
@@ -5167,7 +5172,7 @@ function renderMoTurn(question) {
       const cleaned = (t || '').replace(/^[\s<>]+/, '');
       if (cleaned) proseEl.append(document.createTextNode(cleaned));
     },
-    insertEl: (el) => { turn.appendChild(el); scrollIfNearBottom(); },
+    insertEl: (el) => { turn.appendChild(el); },
     setError: (msg) => { turn.appendChild($$('div', { class: 'mo-err', text: msg })); },
     done: () => {},
     _shown: 0,
