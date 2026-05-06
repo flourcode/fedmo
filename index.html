@@ -2309,6 +2309,7 @@ function expandEdgarSector(input) {
 function normalizeFormType(input) {
   if (!input) return 'D';
   const s = String(input).trim().toUpperCase();
+  if (s === 'ANY' || s === 'ALL') return 'ANY';
   if (s === 'FORM D' || s === 'D' || s === 'D/A') return 'D';
   if (s === '10K' || s === '10-K') return '10-K';
   if (s === '10Q' || s === '10-Q') return '10-Q';
@@ -2608,8 +2609,13 @@ async function pullEdgar(attrs) {
     edgarMode: true,
   };
 
-  // Build query
-  const query = { forms: [formType], dateRange: {} };
+  // Build query. If formType is ANY, omit the forms filter so EDGAR returns
+  // all filing types — used for generic "X filings" queries on mature public
+  // companies where we don't know which form the user wants.
+  const query = { dateRange: {} };
+  if (formType !== 'ANY') {
+    query.forms = [formType];
+  }
   if (dateAfter) query.dateRange.startdt = dateAfter;
   if (dateBefore) query.dateRange.enddt = dateBefore;
   if (state) query.locationCode = state;
@@ -2739,7 +2745,7 @@ function renderEdgarCard(rows, resolved) {
   // ── HEAD ─────────────────────────────────────────────────
   parts.push(`<div class="mo-card-head">`);
 
-  const formLabels = { 'D': 'Form D — private offerings', '4': 'Form 4 — insider trades', '13F-HR': '13F — institutional positions', 'SC 13D': '13D — activist >5% stakes', 'SC 13G': '13G — passive >5% stakes', 'S-1': 'S-1 — IPO registrations', '10-K': '10-K — annual reports', '10-Q': '10-Q — quarterly reports', '8-K': '8-K — material events' };
+  const formLabels = { 'D': 'Form D — private offerings', '4': 'Form 4 — insider trades', '13F-HR': '13F — institutional positions', 'SC 13D': '13D — activist >5% stakes', 'SC 13G': '13G — passive >5% stakes', 'S-1': 'S-1 — IPO registrations', '10-K': '10-K — annual reports', '10-Q': '10-Q — quarterly reports', '8-K': '8-K — material events', 'ANY': 'Recent SEC filings' };
   const formLabel = formLabels[resolved.formType] || resolved.formType;
   let titleParts = [formLabel];
   if (resolved.company) titleParts.push(`for ${resolved.company}`);
@@ -2848,6 +2854,11 @@ function renderEdgarRow(r, resolved) {
   // Meta line
   const metaBits = [];
   metaBits.push(`Filed ${escapeHtml(r.fileDate || 'unknown')}`);
+  // For ANY queries, surface the form type in the meta line so the user can
+  // tell 10-K from 8-K from Form 4 at a glance.
+  if (resolved.formType === 'ANY' && r.form) {
+    metaBits.push(`Form ${escapeHtml(r.form)}`);
+  }
   if (r.dateOfFirstSale) metaBits.push(`first sale ${escapeHtml(r.dateOfFirstSale)}`);
   if (r.incStates && r.incStates.length) metaBits.push(`Inc. ${escapeHtml(r.incStates[0])}`);
   if (r.sics && r.sics.length) metaBits.push(`SIC ${escapeHtml(r.sics[0])}`);
@@ -4140,6 +4151,25 @@ function renderCard(rows, attrs, resolved) {
   if (resolved && resolved.edgarMode) {
     const card = $$('div', { class: 'mo-card' });
     card.innerHTML = renderEdgarCard(rows, resolved);
+    // Build EDGAR follow-up pills and stash them on _pendingPills. The askMo
+    // orchestrator drains _pendingPills into the DOM as siblings of the card
+    // after the card is mounted into its slot.
+    const edgarPills = buildEdgarPills(rows, resolved);
+    if (edgarPills.length > 0) {
+      const wrap = $$('div', { class: 'mo-pills' });
+      let html = '<span class="mo-pills-label">Try</span>';
+      for (const p of edgarPills) {
+        html += `<button class="mo-pill" type="button" data-q="${escapeHtml(p)}">${escapeHtml(p)}</button>`;
+      }
+      wrap.innerHTML = html;
+      wrap.addEventListener('click', (e) => {
+        const btn = e.target.closest('.mo-pill');
+        if (!btn) return;
+        const q = btn.getAttribute('data-q');
+        if (q) { $input.value = q; $input.focus(); }
+      });
+      card._pendingPills = wrap;
+    }
     return card;
   }
 
@@ -4732,6 +4762,76 @@ function buildPillsForCard(rows, attrs, vendorEntries, agencyEntries, total, exp
   // Fallback (shouldn't normally hit) — the query had nothing recognizable
   if (topVendor) add(`${shortV(topVendor)} contracts`);
   return pills.slice(0, 4);
+}
+
+// Follow-up pills for EDGAR cards. Reads the resolved query shape (form type,
+// company, sector) and suggests the next logical EDGAR or USASpending query.
+// Same UX as USASpending pills (clicking populates composer).
+function buildEdgarPills(rows, resolved) {
+  if (!rows || rows.length === 0) return [];
+  const pills = [];
+  const seen = new Set();
+  const add = (q) => {
+    const norm = q.toLowerCase().trim();
+    if (!seen.has(norm)) { seen.add(norm); pills.push(q); }
+  };
+
+  const company = resolved.company;
+  const sector  = resolved.sectorInfo?.display;
+  const formType = resolved.formType;
+
+  // ── Single-company query — pivot to other forms or to federal contracts ──
+  if (company) {
+    if (formType === 'D') {
+      add(`${company} insider trading`);                    // Form 4 pivot
+      add(`${company} federal contracts`);                  // USASpending pivot
+      add(`SPVs targeting ${company}`);                     // SPV filter
+      add(`recent ${company} amendments`);                  // refine
+    } else if (formType === '4') {
+      add(`${company} recent SEC filings`);                 // ANY pivot
+      add(`${company} federal contracts`);                  // USASpending pivot
+      add(`13F filings holding ${company}`);                // institutional
+      add(`Has ${company} raised lately`);                  // Form D pivot
+    } else if (formType === '13F' || formType === 'SC 13D' || formType === 'SC 13G') {
+      add(`${company} recent SEC filings`);                 // ANY pivot
+      add(`${company} insider trading`);                    // Form 4 pivot
+      add(`${company} federal contracts`);                  // USASpending pivot
+    } else if (formType === 'S-1') {
+      add(`${company} recent SEC filings`);
+      add(`${company} federal contracts`);
+    } else if (formType === '10-K' || formType === '10-Q' || formType === '8-K') {
+      add(`${company} insider trading`);
+      add(`${company} federal contracts`);
+      add(`${company} recent SEC filings`);
+    } else if (formType === 'ANY') {
+      add(`${company} insider trading`);
+      add(`${company} federal contracts`);
+      add(`SPVs targeting ${company}`);
+    }
+    return pills.slice(0, 4);
+  }
+
+  // ── Sector-wide query — cross-reference to federal, refine date, swap form ──
+  if (sector) {
+    if (formType === 'D') {
+      // Suggest the cross-reference if not already on
+      if (!resolved.federalAdjacent) {
+        add(`${sector} startups that raised AND have federal contracts`);
+      }
+      add(`Recent S-1 filings in ${sector}`);             // IPO watch
+      add(`Insider trading in ${sector} this quarter`);   // Form 4 sector
+      add(`Largest ${sector} raises in the last 90 days`);// refine
+    } else if (formType === 'S-1') {
+      add(`${sector} startups that raised this quarter`); // Form D pivot
+      add(`Insider trading in ${sector} this quarter`);
+    } else if (formType === '4') {
+      add(`${sector} startups that raised this quarter`);
+      add(`Recent S-1 filings in ${sector}`);
+    }
+    return pills.slice(0, 4);
+  }
+
+  return pills;
 }
 
 function injectPills(card, rows, attrs, vendorEntries, agencyEntries, total, expiringCount) {
