@@ -1894,21 +1894,23 @@ async function searchAwards(filters, isSub) {
   let pagesHit = 0;
   const today = new Date().toISOString().slice(0, 10);
 
+  let allFetched = [];
   for (let page = 1; page <= MAX_PAGES; page++) {
     const { rows, error } = await searchAwardsPage(filters, false, page);
     pagesHit = page;
     if (error) { lastError = error; break; }
-    if (rows.length === 0) break;  // exhausted
-
-    // Server-side filter for expired (End Date in the past). Rows without
-    // an End Date get kept — usually placeholder or recently signed.
+    if (rows.length === 0) break;
+    allFetched.push(...rows);
     const liveRows = rows.filter(r => !r['End Date'] || r['End Date'] >= today);
     active.push(...liveRows);
-
-    // Stop early if we have enough OR if this page came back short
-    // (last page indicator)
     if (active.length >= MIN_ACTIVE) break;
     if (rows.length < PAGE_SIZE) break;
+  }
+
+  // Fallback: if expiry filter wiped everything (small vendor with only
+  // historical contracts), show expired rows so user isn't left with empty card.
+  if (active.length === 0 && allFetched.length > 0) {
+    return { rows: allFetched.slice(0, PAGE_SIZE), error: lastError, pagesHit, allExpired: true };
   }
 
   return { rows: active.slice(0, PAGE_SIZE), error: lastError, pagesHit };
@@ -2305,7 +2307,8 @@ async function pullOnce(attrs) {
   const allKws = [...kws, ...vehicleKw];
   if (allKws.length) filters.keywords = allKws;
 
-  const { rows: firstRows, error } = await searchAwards(filters, false);
+  const { rows: firstRows, error, allExpired } = await searchAwards(filters, false);
+  if (allExpired) resolved.allExpired = true;
   if (error) return { rows: [], resolved, error };
 
   // Vehicle post-filter helper — applied to all return paths in default branch
@@ -4556,6 +4559,9 @@ function renderCard(rows, attrs, resolved) {
     } else if (after > 0) {
       chipParts.push(`<span class="mo-card-chip">${escapeHtml(resolved.vehicleFiltered)} contracts only</span>`);
     }
+  }
+  if (resolved.allExpired) {
+    chipParts.push(`<span class="mo-card-chip mo-card-chip-warn">All contracts are expired — showing historical footprint</span>`);
   }
   if (resolved.vehicleDateFloorOverride) {
     chipParts.push(`<span class="mo-card-chip">Vehicle query — widened date floor from ${escapeHtml(resolved.vehicleDateFloorOverride)} to 2020-01-01</span>`);
