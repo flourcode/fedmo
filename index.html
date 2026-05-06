@@ -178,13 +178,20 @@ a:hover { text-decoration: underline; }
     right: 0;
     width: 100%;
     max-width: 100%;
-    max-height: 88vh;
+    max-height: 72vh;
     border-radius: var(--radius) var(--radius) 0 0;
     transform: translateY(12px) scale(0.99);
     box-shadow: 0 -4px 32px rgba(10,10,20,0.14);
   }
   .mo-modal.open {
     transform: translateY(0) scale(1);
+  }
+  /* Header stays fixed at top so X is always reachable */
+  .mo-modal-header {
+    position: sticky;
+    top: 0;
+    background: var(--bg-card);
+    z-index: 1;
   }
 }
 .mo-modal-handle {
@@ -1242,9 +1249,9 @@ a:hover { text-decoration: underline; }
     </button>
   </div>
   <div class="mo-modal-body">
-    <p>Mo is not a search engine. You don't need Boolean operators or exact contract numbers. Describe what you're trying to understand and Mo figures out the query.</p>
+    <p>Describe what you're trying to understand. Mo figures out the query.</p>
 
-    <div class="mo-modal-section-head">Follow the contract money</div>
+    <div class="mo-modal-section-head">Contracts</div>
     <div class="mo-modal-tips">
       <div class="mo-modal-tip">
         <span class="mo-modal-tip-q">Palantir at DoD</span>
@@ -1252,54 +1259,66 @@ a:hover { text-decoration: underline; }
       </div>
       <div class="mo-modal-tip">
         <span class="mo-modal-tip-q">Who resells Splunk at the Air Force</span>
-        <span class="mo-modal-tip-d">ISVs don't prime — Mo finds the reseller holding the paper</span>
+        <span class="mo-modal-tip-d">ISVs don't prime — Mo finds who holds the paper</span>
       </div>
       <div class="mo-modal-tip">
         <span class="mo-modal-tip-q">SAIC expiring contracts at Army</span>
-        <span class="mo-modal-tip-d">Re-compete opportunities in the next 90 days</span>
+        <span class="mo-modal-tip-d">Sort by Expiring Soon — that's your call list</span>
       </div>
       <div class="mo-modal-tip">
         <span class="mo-modal-tip-q">Who does Leidos sub to</span>
-        <span class="mo-modal-tip-d">Subcontractor relationships from USASpending subaward data</span>
-      </div>
-      <div class="mo-modal-tip">
-        <span class="mo-modal-tip-q">Cyber awards at HHS this year</span>
-        <span class="mo-modal-tip-d">Keyword search across contract descriptions</span>
+        <span class="mo-modal-tip-d">200 subs ranked by dollar volume, People link on every row</span>
       </div>
       <div class="mo-modal-tip">
         <span class="mo-modal-tip-q">CrowdStrike and competitors at DISA</span>
         <span class="mo-modal-tip-d">Full competitive landscape at a specific office</span>
       </div>
+      <div class="mo-modal-tip">
+        <span class="mo-modal-tip-q">Who's winning on SEWP V</span>
+        <span class="mo-modal-tip-d">Mo knows SEWP V, JWCC, OASIS+, CIO-SP4, GSA MAS and more</span>
+      </div>
     </div>
 
-    <div class="mo-modal-section-head">Follow the capital markets</div>
+    <div class="mo-modal-section-head">Capital markets</div>
     <div class="mo-modal-tips">
       <div class="mo-modal-tip">
-        <span class="mo-modal-tip-q">Anthropic filings</span>
-        <span class="mo-modal-tip-d">Annual reports, 10-Qs, 8-Ks — the public company picture</span>
-      </div>
-      <div class="mo-modal-tip">
-        <span class="mo-modal-tip-q">AI startups that raised in FY26</span>
-        <span class="mo-modal-tip-d">Form D filings from SEC EDGAR — private fundraising rounds</span>
+        <span class="mo-modal-tip-q">Leidos filings</span>
+        <span class="mo-modal-tip-d">Direct links to 10-K, 10-Q, 8-K, proxy — not a search result</span>
       </div>
       <div class="mo-modal-tip">
         <span class="mo-modal-tip-q">Booz Allen insider trades</span>
-        <span class="mo-modal-tip-d">Form 4 filings — executives buying or selling stock</span>
+        <span class="mo-modal-tip-d">Form 4 — who filed, how many times, when</span>
+      </div>
+      <div class="mo-modal-tip">
+        <span class="mo-modal-tip-q">AI startups that raised in FY26</span>
+        <span class="mo-modal-tip-d">Form D filings — private fundraising rounds with exec contacts</span>
       </div>
       <div class="mo-modal-tip">
         <span class="mo-modal-tip-q">CrowdStrike federal footprint and recent insider activity</span>
-        <span class="mo-modal-tip-d">Two cards at once — contracts and capital markets side by side</span>
+        <span class="mo-modal-tip-d">Two cards — contracts left, insider trades right</span>
+      </div>
+      <div class="mo-modal-tip">
+        <span class="mo-modal-tip-q">Anthropic filings</span>
+        <span class="mo-modal-tip-d">Private company — Mo shows fundraising history and what she knows</span>
       </div>
     </div>
 
-    <div class="mo-modal-section-head">How Mo handles context</div>
-    <p style="font-size:13px;color:var(--text-muted);margin-bottom:8px;">Each question is treated independently. Mo doesn't carry context unless you explicitly reference something back — "what about VA" or "just Navy" will refine the previous result. Otherwise, start fresh with each question.</p>
-    <p style="font-size:13px;color:var(--text-muted);margin-bottom:0;">Every number Mo cites comes from USASpending or SEC EDGAR. Click any contract row to verify it directly on usaspending.gov.</p>
+    <div class="mo-modal-section-head">One tip</div>
+    <div class="mo-modal-tips">
+      <div class="mo-modal-tip">
+        <span class="mo-modal-tip-q" style="color:var(--text-muted);text-decoration:line-through;">SEWP V cybersecurity</span>
+        <span class="mo-modal-tip-d">Keywords alone don't work</span>
+      </div>
+      <div class="mo-modal-tip">
+        <span class="mo-modal-tip-q">Who's winning cybersecurity on SEWP V</span>
+        <span class="mo-modal-tip-d">Describe what you're trying to understand</span>
+      </div>
+    </div>
 
     <div class="mo-modal-actions">
       <a class="mo-modal-btn" href="https://calendly.com/markflournoy/chat-with-mark" target="_blank" rel="noopener" id="btnAboutCalendly">Chat with Mark</a>
     </div>
-    <div class="mo-modal-foot">Feedback or just want to talk federal sales? Book time with Mark.</div>
+    <div class="mo-modal-foot">Feedback or want to talk federal sales? Book time with Mark.</div>
   </div>
 </div>
 
