@@ -324,6 +324,8 @@ a:hover { text-decoration: underline; }
   max-width: 720px;
   margin: 0 auto;
   padding: 16px 12px 24px;
+  /* Account for iOS toolbar / safe area on mobile */
+  padding-top: calc(16px + env(safe-area-inset-top, 0px));
   overflow-anchor: none;
 }
 
@@ -394,7 +396,12 @@ a:hover { text-decoration: underline; }
   display: flex;
   align-items: flex-start;
   gap: 16px;
-  padding: 32px 4px 16px;
+  padding: 48px 4px 16px;
+}
+@media (max-width: 600px) {
+  .mo-greeting {
+    padding-top: 56px;
+  }
 }
 .mo-greeting-face {
   flex-shrink: 0;
@@ -1356,8 +1363,9 @@ const USASPENDING = 'https://api.usaspending.gov/api/v2';
 const GREETING_PROMPTS = [
   'Who resells AWS',
   'Cyber awards at HHS this year',
-  'Who does SAIC sub to',
   'AI startups that raised in FY26',
+  'Who does SAIC sub to',
+  'Cyber awards at HHS this year',
 ];
 
 // =============================================================================
