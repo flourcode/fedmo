@@ -3049,7 +3049,7 @@ function renderEdgarRow(r, resolved) {
           <span class="mo-row-name">${escapeHtml(r.entityName || 'Unknown')}</span>
           <span class="mo-row-amount" style="font-weight:400;color:var(--text-muted);font-size:13px;">${escapeHtml(metaBits[0] || '')}</span>
         </div>
-        ${accUrl ? `<div class="mo-row-actions"><a class="mo-row-view" href="${accUrl}" target="_blank" rel="noopener">View on EDGAR →</a></div>` : ''}
+        ${accUrl ? `<div class="mo-row-actions"><a class="mo-row-view" href="${accUrl}" target="_blank" rel="noopener">View on EDGAR ↗</a></div>` : ''}
       </div>
     `;
   }
@@ -3063,7 +3063,7 @@ function renderEdgarRow(r, resolved) {
       <div class="mo-row-meta">${metaBits.join(' · ')}</div>
       ${badges.filter(b => !b.includes('mo-edgar-badge">')).length ? `<div class="mo-edgar-badges">${badges.filter(b => !b.includes('>Rule ')).join('')}</div>` : ''}
       ${persons ? `<div class="mo-edgar-row-persons">${persons}</div>` : ''}
-      ${accUrl ? `<div class="mo-row-actions"><a class="mo-row-view" href="${accUrl}" target="_blank" rel="noopener">View on EDGAR</a></div>` : ''}
+      ${accUrl ? `<div class="mo-row-actions"><a class="mo-row-view" href="${accUrl}" target="_blank" rel="noopener">View on EDGAR ↗</a></div>` : ''}
     </div>
   `;
 }
@@ -4227,7 +4227,8 @@ function renderSubawardRows(card, rows, attrs, resolved) {
       .replace(/[,.]?\s*(inc\.?|incorporated|corp\.?|corporation|llc|l\.l\.c\.?|ltd\.?|limited|plc|holdings?|company|co\.?)\.?\s*$/i, '')
       .replace(/[,.]?\s*(federal|government|services|solutions|technologies|systems)\.?\s*$/i, '')
       .trim();
-    const subLiUrl = `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(subLiName)}`;
+    const subLiQuery = `site:linkedin.com/in "${subLiName}"`;
+    const subLiUrl = `https://www.google.com/search?q=${encodeURIComponent(subLiQuery)}`;
 
     return `<div class="${cls}"${rankAttr}>
       <div class="mo-row-2line-top">
@@ -4236,7 +4237,7 @@ function renderSubawardRows(card, rows, attrs, resolved) {
       </div>
       <div class="mo-row-meta">${sub.count} subaward ${pluralize(sub.count, 'action')} on ${awards.length} prime ${pluralize(awards.length, 'award')}</div>
       <div class="mo-sub-detail">${detailHtml}</div>
-      <div class="mo-row-actions"><a class="mo-row-view" href="${subLiUrl}" target="_blank" rel="noopener">LinkedIn →</a></div>
+      <div class="mo-row-actions"><a class="mo-row-view" href="${subLiUrl}" target="_blank" rel="noopener">LinkedIn ↗</a></div>
     </div>`;
   };
 
@@ -4571,7 +4572,8 @@ function renderCard(rows, attrs, resolved) {
     // LinkedIn prospecting section — same grammar as SEC filings section.
     // Only on single-vendor cards, not keyword/competitor/subaward views.
     if (liCompanyName && !attrs.keywords) {
-      const liUrl = `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(liCompanyName)}`;
+      const liQuery = `site:linkedin.com/in "${liCompanyName}"`;
+      const liUrl = `https://www.google.com/search?q=${encodeURIComponent(liQuery)}`;
       card.appendChild(compHead('Prospecting', ''));
       const liRow = $$('div', { class: 'mo-list' });
       liRow.innerHTML = `
@@ -4580,7 +4582,7 @@ function renderCard(rows, attrs, resolved) {
             <span class="mo-row-name">People at ${escapeHtml(liCompanyName)}</span>
           </div>
           <div class="mo-row-actions">
-            <a class="mo-row-view" href="${escapeHtml(liUrl)}" target="_blank" rel="noopener">LinkedIn →</a>
+            <a class="mo-row-view" href="${escapeHtml(liUrl)}" target="_blank" rel="noopener">LinkedIn ↗</a>
           </div>
         </div>`;
       card.appendChild(liRow);
@@ -4631,7 +4633,7 @@ function renderCard(rows, attrs, resolved) {
           listHtml += `<a class="mo-sec-filing-chip" href="${url}" target="_blank" rel="noopener">${escapeHtml(f.form)} <span class="mo-sec-chip-date">${formatFilingDate(f.filedDate)}</span></a>`;
         }
         listHtml += `</div>
-          <div class="mo-row-actions"><a class="mo-row-view" href="${buildEdgarBrowseUrl(v.cik)}" target="_blank" rel="noopener">View all on EDGAR →</a></div>
+          <div class="mo-row-actions"><a class="mo-row-view" href="${buildEdgarBrowseUrl(v.cik)}" target="_blank" rel="noopener">View all on EDGAR ↗</a></div>
         </div>`;
       }
       list.innerHTML = listHtml;
