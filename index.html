@@ -408,6 +408,23 @@ a:hover { text-decoration: underline; }
   border-bottom: 1px solid var(--border-soft);
   position: relative;
 }
+.mo-linkedin-btn {
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--primary-80);
+  background: var(--primary-20);
+  border-radius: 999px;
+  padding: 3px 10px;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 120ms;
+  margin-left: var(--s-2);
+  flex-shrink: 0;
+}
+.mo-linkedin-btn:hover { background: var(--primary-40); color: var(--primary-100); }
+
 .mo-card-share {
   position: absolute;
   top: var(--s-3);
@@ -577,6 +594,34 @@ a:hover { text-decoration: underline; }
   /* No padding/gap — rows use .mo-row-2line which has its own bottom-border
      separator. Same layout as the contract row list. */
 }
+
+.mo-edgar-context {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  padding: var(--s-3) var(--s-4);
+  background: var(--bg-tint);
+  border-radius: var(--radius-sm);
+  margin: 0 var(--s-5) var(--s-3);
+}
+
+.mo-edgar-overview {
+  /* Overview mode: one row per form type, dates as inline links */
+}
+.mo-overview-dates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 3px;
+}
+.mo-overview-date-link {
+  font-size: 12px;
+  color: var(--primary-60);
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.mo-overview-date-link:hover { color: var(--primary-100); text-decoration: underline; }
 
 .mo-edgar-group-label {
   font-size: 11px;
@@ -945,49 +990,38 @@ a:hover { text-decoration: underline; }
 }
 .mo-statemap { display: block; width: 100%; height: auto; }
 
-/* ── SEC filings ──────────────────────────────────────── */
-.mo-sec-list {
-  margin: 0 var(--s-5) var(--s-4);
-  display: grid; gap: var(--s-3);
-}
-.mo-sec-vendor {
-  border: 1px solid var(--border-soft);
-  border-radius: var(--radius-sm);
-  padding: var(--s-3) var(--s-4);
-  background: var(--bg-card);
-}
-.mo-sec-vendor-head {
-  display: flex; justify-content: space-between; align-items: baseline;
-  margin-bottom: var(--s-2);
-}
-.mo-sec-vendor-name {
-  font-weight: 600; color: var(--text-title);
-  font-size: 14px;
-}
-.mo-sec-vendor-ticker {
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  font-size: 11px; color: var(--text-faint);
-  background: var(--bg-tint);
-  padding: 1px 6px; border-radius: 4px;
-}
-.mo-sec-filing {
-  display: flex; justify-content: space-between;
-  padding: var(--s-1) 0;
-  font-size: 13px;
-  border-bottom: 1px dashed var(--border-soft);
-  text-decoration: none; color: inherit;
-}
-.mo-sec-filing:last-of-type { border-bottom: none; }
-.mo-sec-filing:hover { background: var(--bg-tint); }
-.mo-sec-form {
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  color: var(--primary-80); font-weight: 600;
-}
-.mo-sec-date { color: var(--text-faint); }
-.mo-sec-all {
-  display: inline-block; margin-top: var(--s-2);
-  font-size: 12px; color: var(--primary-60);
+/* ── SEC filings footer (in contract cards) ──────────── */
+/* Uses mo-row-2line grammar — no separate box, no border chrome.
+   Filing chips sit on the meta line, same visual weight as agency/PoP. */
+.mo-sec-ticker {
+  font-size: 12px;
   font-weight: 500;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+.mo-sec-filings-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+.mo-sec-filing-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--primary-80);
+  background: var(--primary-20);
+  padding: 2px 8px;
+  border-radius: 999px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.mo-sec-filing-chip:hover { background: var(--primary-40); }
+.mo-sec-chip-date {
+  font-weight: 400;
+  color: var(--text-muted);
 }
 
 /* ── Cumulative-amount note ───────────────────────────── */
@@ -1152,7 +1186,7 @@ a:hover { text-decoration: underline; }
       <div class="mo-greeting-hello">Hi, I'm Mo.</div>
       <div class="mo-greeting-tagline">Ask me anything about federal contracts or private capital. I pull live data from USASpending and SEC EDGAR so you can follow the money.</div>
       <div class="mo-greeting-examples" id="greeting-examples"></div>
-      <div class="mo-greeting-hint">Ask me anything about a vendor, agency, or keyword.</div>
+
     </div>
   </div>
 </main>
@@ -2645,6 +2679,8 @@ async function pullEdgar(attrs) {
     return { rows: [], resolved, error: e.message };
   }
 
+  // Sort most recent first — EDGAR full-text search returns by relevance,
+  // not date, so we always enforce recency ordering ourselves.
   rows.sort((a, b) => (b.fileDate || '').localeCompare(a.fileDate || ''));
 
   // Enrich Form Ds with XML (top 20 for latency — now top 20 by date)
@@ -2731,11 +2767,23 @@ function renderEdgarCard(rows, resolved) {
     parts.push(`<div class="mo-card-subtitle">${escapeHtml(subBits.join(' · '))}</div>`);
   }
 
-  // Chips: filter outcomes
-  const chips = [];
-  if (typeof resolved.totalFromEdgar === 'number') {
-    chips.push(`<span class="mo-card-chip">${resolved.totalFromEdgar.toLocaleString()} matches in EDGAR</span>`);
+  // Context blurb: one sentence explaining what this form type means,
+  // so users who aren't SEC experts immediately understand what they're looking at.
+  const FORM_CONTEXT = {
+    'D':     'Form D is filed when a private company raises money from investors. Each row is one fundraising round — the entity name is often an SPV set up specifically for that raise.',
+    '4':     'Form 4 is filed within 2 days when a corporate insider buys or sells company stock. The name shown is the executive or director who made the trade.',
+    '13F-HR':'13F is a quarterly snapshot of what a large institutional investor owns. Each row shows one fund\'s reported position.',
+    'SC 13D': '13D is filed when an investor crosses 5% ownership and intends to influence the company. Often signals activist interest.',
+    'SC 13G': '13G is filed when an investor crosses 5% ownership passively — usually an index fund or long-term holder.',
+    'S-1':   'S-1 is the IPO registration statement. A company files this when it plans to go public.',
+  };
+  const ctxBlurb = resolved.formType && FORM_CONTEXT[resolved.formType];
+  if (ctxBlurb) {
+    parts.push(`<div class="mo-edgar-context">${escapeHtml(ctxBlurb)}</div>`);
   }
+
+  // Filter outcome chips
+  const chips = [];
   if (resolved.amountFiltered) {
     chips.push(`<span class="mo-card-chip">${resolved.amountFiltered.after} of ${resolved.amountFiltered.before} match amount filter</span>`);
   }
@@ -2746,7 +2794,7 @@ function renderEdgarCard(rows, resolved) {
     if (resolved.federalAdjacentResults.hits > 0) {
       chips.push(`<span class="mo-card-chip">${resolved.federalAdjacentResults.hits} of ${resolved.federalAdjacentResults.checked} have federal contracts</span>`);
     } else {
-      chips.push(`<span class="mo-card-chip mo-card-chip-warn">No federal footprint in top ${resolved.federalAdjacentResults.checked}</span>`);
+      chips.push(`<span class="mo-card-chip">Federal footprint check ran — none of the top ${resolved.federalAdjacentResults.checked} filers matched USASpending records</span>`);
     }
   }
   if (chips.length) parts.push(`<div class="mo-card-chips">${chips.join('')}</div>`);
@@ -2759,37 +2807,91 @@ function renderEdgarCard(rows, resolved) {
     return parts.join('');
   }
 
-  // ── STATS (Form D only — three-stat grid like fedmo's contract card) ──
+  // ── STATS — three-stat grid, form-type aware ──
+  const fmtBig = (n) => n >= 1e9 ? `$${(n/1e9).toFixed(2)}B` : `$${(n/1e6).toFixed(1)}M`;
+
   if (resolved.formType === 'D') {
     const withAmount = rows.filter(r => r.offeringAmount > 0);
     const totalRaised = withAmount.reduce((s, r) => s + r.offeringAmount, 0);
     const avgRaised = withAmount.length ? totalRaised / withAmount.length : 0;
-    const fmtBig = (n) => n >= 1e9 ? `$${(n/1e9).toFixed(2)}B` : `$${(n/1e6).toFixed(1)}M`;
     parts.push(`<div class="mo-edgar-stats">
-      <div class="mo-stat"><div class="mo-stat-num">${rows.length}</div><div class="mo-stat-label">Filings</div></div>
-      <div class="mo-stat"><div class="mo-stat-num">${fmtBig(totalRaised)}</div><div class="mo-stat-label">Total offered</div></div>
-      <div class="mo-stat"><div class="mo-stat-num">${withAmount.length ? fmtBig(avgRaised) : '—'}</div><div class="mo-stat-label">Avg raise</div></div>
+      <div class="mo-stat"><div class="mo-stat-num">${rows.length}</div><div class="mo-stat-label">Filings shown</div></div>
+      <div class="mo-stat"><div class="mo-stat-num">${fmtBig(totalRaised)}</div><div class="mo-stat-label">Total raised</div></div>
+      <div class="mo-stat"><div class="mo-stat-num">${withAmount.length ? fmtBig(avgRaised) : '—'}</div><div class="mo-stat-label">Avg round size</div></div>
+    </div>`);
+  } else if (resolved.formType === '4') {
+    const uniqueInsiders = new Set(rows.map(r => r.entityName).filter(Boolean)).size;
+    const dates = rows.map(r => r.fileDate).filter(Boolean).sort();
+    const dateRange = dates.length >= 2
+      ? `${dates[dates.length-1].slice(0,7)} ← ${dates[0].slice(0,7)}`
+      : (dates[0] || '—');
+    parts.push(`<div class="mo-edgar-stats">
+      <div class="mo-stat"><div class="mo-stat-num">${rows.length}</div><div class="mo-stat-label">Trade filings shown</div></div>
+      <div class="mo-stat"><div class="mo-stat-num">${uniqueInsiders}</div><div class="mo-stat-label">Unique insiders</div></div>
+      <div class="mo-stat"><div class="mo-stat-num" style="font-size:13px;">${escapeHtml(dateRange)}</div><div class="mo-stat-label">Date range</div></div>
     </div>`);
   }
 
   // ── ROW LIST ────────────────────────────────────────────
   // Overview mode: group by form type so user sees 10-K, 10-Q, 8-K sections
   if (resolved.formType === 'overview') {
-    const groups = {};
+    // Overview: one row per form type. The company name is the same on every
+    // row — it adds nothing. Show what matters: type, most recent date, link.
+    // Client-side date guard: EDGAR relevance ranking can surface old filings
+    // even when startdt is set. Filter to last 24 months to be safe.
+    const overviewCutoff = (() => {
+      const d = new Date();
+      d.setFullYear(d.getFullYear() - 2);
+      return d.toISOString().slice(0, 10);
+    })();
+    const overviewRows = rows.filter(r => !r.fileDate || r.fileDate >= overviewCutoff);
+    const rowsForOverview = overviewRows.length >= 3 ? overviewRows : rows;
+
     const ORDER = ['10-K', 'DEF 14A', '10-Q', '8-K', 'S-1'];
-    for (const r of rows.slice(0, 50)) {
+    const formDesc = {
+      '10-K':    'Annual report',
+      'DEF 14A': 'Proxy statement',
+      '10-Q':    'Quarterly report',
+      '8-K':     'Material event',
+      'S-1':     'IPO registration',
+    };
+    const groups = {};
+    for (const r of rowsForOverview) {
       const f = r.form || '?';
       if (!groups[f]) groups[f] = [];
       groups[f].push(r);
     }
-    const groupOrder = [...ORDER.filter(f => groups[f]), ...Object.keys(groups).filter(f => !ORDER.includes(f))];
-    const formDesc = { '10-K': 'Annual report', 'DEF 14A': 'Proxy statement', '10-Q': 'Quarterly report', '8-K': 'Material event', 'S-1': 'IPO registration' };
-    parts.push(`<div class="mo-edgar-rows">`);
+    const groupOrder = [
+      ...ORDER.filter(f => groups[f]),
+      ...Object.keys(groups).filter(f => !ORDER.includes(f) && groups[f]),
+    ];
+
+    const cikForBrowse = rows[0]?.cik;
+    parts.push(`<div class="mo-edgar-overview">`);
     for (const form of groupOrder) {
-      const group = groups[form];
-      if (!group || !group.length) continue;
-      parts.push(`<div class="mo-edgar-group-label">${escapeHtml(formDesc[form] || form)} <span class="mo-edgar-group-form">${escapeHtml(form)}</span></div>`);
-      group.slice(0, 6).forEach(r => parts.push(renderEdgarRow(r, resolved)));
+      const group = groups[form].sort((a, b) => (b.fileDate || '').localeCompare(a.fileDate || ''));
+      const latest = group[0];
+      const filingUrl = latest.accession
+        ? `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${parseInt(latest.cik || cikForBrowse, 10)}&type=${encodeURIComponent(form)}&dateb=&owner=include&count=10`
+        : null;
+      const desc = formDesc[form] || form;
+      const allDates = group.slice(0, 4).map(r => {
+        const rowUrl = r.accession
+          ? `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${parseInt(r.cik || cikForBrowse, 10)}&type=${encodeURIComponent(form)}&dateb=&owner=include&count=10`
+          : null;
+        return rowUrl
+          ? `<a class="mo-overview-date-link" href="${rowUrl}" target="_blank" rel="noopener">${escapeHtml(r.fileDate || '')}</a>`
+          : `<span class="mo-overview-date-link">${escapeHtml(r.fileDate || '')}</span>`;
+      }).join('');
+
+      parts.push(`
+        <div class="mo-row-2line">
+          <div class="mo-row-2line-top">
+            <span class="mo-row-name">${escapeHtml(desc)}</span>
+            <span class="mo-row-amount" style="font-size:12px;font-weight:500;color:var(--text-muted);">${escapeHtml(form)}</span>
+          </div>
+          <div class="mo-row-meta mo-overview-dates">${allDates}</div>
+        </div>`);
     }
     parts.push(`</div>`);
   } else {
@@ -2842,17 +2944,43 @@ function renderEdgarRow(r, resolved) {
     badges.push(`<span class="mo-edgar-badge">Rule ${escapeHtml(r.exemptions.join(', '))}</span>`);
   }
 
-  // Meta line
+  // Meta line — keep only what a sales person cares about
   const metaBits = [];
+  const isForm4 = resolved.formType === '4';
+  const isFormD = resolved.formType === 'D';
+  // For Form 4: the entity name IS the insider, date is the key fact
+  // For Form D: date + first-sale date signal timing of the round
   metaBits.push(`Filed ${escapeHtml(r.fileDate || 'unknown')}`);
   if (r.dateOfFirstSale) metaBits.push(`first sale ${escapeHtml(r.dateOfFirstSale)}`);
-  if (r.incStates && r.incStates.length) metaBits.push(`Inc. ${escapeHtml(r.incStates[0])}`);
-  if (r.sics && r.sics.length) metaBits.push(`SIC ${escapeHtml(r.sics[0])}`);
+  // Skip Inc. state and SIC — legal noise, not sales signal
+  // Skip Rule exemptions — meaningful only to securities lawyers
 
-  // Execs (Form D only — and only if present)
-  const persons = (r.relatedPersons || []).slice(0, 3)
-    .map(p => `${escapeHtml(p.name)}${p.relationships && p.relationships.length ? ' (' + escapeHtml(p.relationships[0]) + ')' : ''}`)
-    .join(', ');
+  // Execs: for Form D show who's behind the raise (useful context)
+  // For Form 4 skip — the entity name IS the insider already
+  const persons = (!isForm4 && r.relatedPersons && r.relatedPersons.length)
+    ? r.relatedPersons.slice(0, 2)
+        .map(p => `${escapeHtml(p.name)}${p.relationships && p.relationships.length ? ' · ' + escapeHtml(p.relationships[0]) : ''}`)
+        .join('  ·  ')
+    : '';
+
+  // For overview mode rows (10-K, 10-Q, 8-K, DEF 14A): form type is the
+  // meaningful differentiator — filer name is always the same company.
+  // Lead with form type + date. For Form D sector searches the entity
+  // name IS the key signal, so keep it as the lead there.
+  const isOverviewRow = resolved && resolved.formType === 'overview';
+  const formLabel = r.form || resolved.formType || '';
+
+  if (isOverviewRow) {
+    return `
+      <div class="mo-row-2line">
+        <div class="mo-row-2line-top">
+          <span class="mo-row-name">${escapeHtml(r.entityName || 'Unknown')}</span>
+          <span class="mo-row-amount" style="font-weight:400;color:var(--text-muted);font-size:13px;">${escapeHtml(metaBits[0] || '')}</span>
+        </div>
+        ${accUrl ? `<div class="mo-row-actions"><a class="mo-row-view" href="${accUrl}" target="_blank" rel="noopener">View on EDGAR →</a></div>` : ''}
+      </div>
+    `;
+  }
 
   return `
     <div class="mo-row-2line">
@@ -2861,8 +2989,8 @@ function renderEdgarRow(r, resolved) {
         ${amt ? `<div class="mo-row-amount">${escapeHtml(amt)}</div>` : ''}
       </div>
       <div class="mo-row-meta">${metaBits.join(' · ')}</div>
-      ${badges.length ? `<div class="mo-edgar-badges">${badges.join('')}</div>` : ''}
-      ${persons ? `<div class="mo-edgar-row-persons"><span class="mo-edgar-row-persons-label">Execs:</span> ${persons}</div>` : ''}
+      ${badges.filter(b => !b.includes('mo-edgar-badge">')).length ? `<div class="mo-edgar-badges">${badges.filter(b => !b.includes('>Rule ')).join('')}</div>` : ''}
+      ${persons ? `<div class="mo-edgar-row-persons">${persons}</div>` : ''}
       ${accUrl ? `<div class="mo-row-actions"><a class="mo-row-view" href="${accUrl}" target="_blank" rel="noopener">View on EDGAR</a></div>` : ''}
     </div>
   `;
@@ -4114,6 +4242,24 @@ function renderCard(rows, attrs, resolved) {
     text: 'Copy link',
   }));
 
+  // LinkedIn people search — pre-filled to the company name so the user
+  // can immediately find the right contacts for prospecting.
+  // Only fires on vendor cards where we have a resolved company name.
+  const linkedinCompany = resolved.recipientResolved || (attrs.recipient && !attrs.recipient.includes(',') ? attrs.recipient : null);
+  if (linkedinCompany && !isSub) {
+    const liQuery = encodeURIComponent(`${linkedinCompany} federal sales`);
+    const liUrl = `https://www.linkedin.com/search/results/people/?keywords=${liQuery}`;
+    const liBtn = $$('a', {
+      class: 'mo-linkedin-btn',
+      href: liUrl,
+      target: '_blank',
+      rel: 'noopener',
+      title: `Find ${linkedinCompany} people on LinkedIn`,
+      text: 'Find people →',
+    });
+    head.appendChild(liBtn);
+  }
+
   const subtitleBits = [];
   if (isSub) {
     const primeName = resolved.recipientResolved || attrs.recipient || 'a prime';
@@ -4362,22 +4508,23 @@ function renderCard(rows, attrs, resolved) {
         'SEC filings',
         `${populated.length} public ${pluralize(populated.length, 'prime')} · ${totalFilings} recent ${pluralize(totalFilings, 'filing')}`,
       ));
-      const list = $$('div', { class: 'mo-sec-list' });
+      const list = $$('div', { class: 'mo-list' });
       let listHtml = '';
       for (const v of populated) {
-        listHtml += `<div class="mo-sec-vendor">
-          <div class="mo-sec-vendor-head">
-            <span class="mo-sec-vendor-name">${escapeHtml(v.display)}</span>
-            ${v.ticker ? `<span class="mo-sec-vendor-ticker">${escapeHtml(v.ticker)}</span>` : ''}
-          </div>`;
+        // Vendor name row — same weight as a contract recipient
+        listHtml += `<div class="mo-row-2line mo-sec-vendor-row">
+          <div class="mo-row-2line-top">
+            <span class="mo-row-name">${escapeHtml(v.display)}</span>
+            ${v.ticker ? `<span class="mo-row-amount mo-sec-ticker">${escapeHtml(v.ticker)}</span>` : ''}
+          </div>
+          <div class="mo-row-meta mo-sec-filings-inline">`;
         for (const f of v.filings) {
           const url = buildFilingUrl(v.cik, f.accession, f.primaryDoc);
-          listHtml += `<a class="mo-sec-filing" href="${url}" target="_blank" rel="noopener">
-            <span class="mo-sec-form">${escapeHtml(f.form)}</span>
-            <span class="mo-sec-date">${formatFilingDate(f.filedDate)}</span>
-          </a>`;
+          listHtml += `<a class="mo-sec-filing-chip" href="${url}" target="_blank" rel="noopener">${escapeHtml(f.form)} <span class="mo-sec-chip-date">${formatFilingDate(f.filedDate)}</span></a>`;
         }
-        listHtml += `<a class="mo-sec-all" href="${buildEdgarBrowseUrl(v.cik)}" target="_blank" rel="noopener">View all on EDGAR →</a></div>`;
+        listHtml += `</div>
+          <div class="mo-row-actions"><a class="mo-row-view" href="${buildEdgarBrowseUrl(v.cik)}" target="_blank" rel="noopener">View all on EDGAR →</a></div>
+        </div>`;
       }
       list.innerHTML = listHtml;
       card.appendChild(list);
