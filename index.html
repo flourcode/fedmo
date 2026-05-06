@@ -1189,9 +1189,8 @@ const USASPENDING = 'https://api.usaspending.gov/api/v2';
 //   4 entity-specific cross-mode      — single name, both views available
 const GREETING_PROMPTS = [
   'AI startups that raised over $20M in the past 90 days',
-  'AI companies that raised this quarter and sell to fed',
-  'Top vendors on SEWP V',
-  "What's CrowdStrike's federal footprint and recent insider activity?",
+  "Who's reselling AWS at DoD",
+  'Splunk renewals expiring in 90 days',
 ];
 
 // =============================================================================
@@ -4838,16 +4837,13 @@ function buildEdgarPills(rows, resolved) {
     return pills.slice(0, 4);
   }
 
-  // ── Sector-wide query — cross-reference to federal, refine date, swap form ──
+  // ── Sector-wide query — capital-markets follow-ups ──
   if (sector) {
     if (formType === 'D') {
-      // Suggest the cross-reference if not already on
-      if (!resolved.federalAdjacent) {
-        add(`${sector} startups that raised AND have federal contracts`);
-      }
       add(`Recent S-1 filings in ${sector}`);             // IPO watch
       add(`Insider trading in ${sector} this quarter`);   // Form 4 sector
       add(`Largest ${sector} raises in the last 90 days`);// refine
+      add(`SPVs in ${sector}`);                           // SPV pivot
     } else if (formType === 'S-1') {
       add(`${sector} startups that raised this quarter`); // Form D pivot
       add(`Insider trading in ${sector} this quarter`);
