@@ -2898,7 +2898,10 @@ async function pullEdgar(attrs) {
   // This gives correct filing links (right CIK) vs full-text search which returns
   // filings from OTHER companies that happen to mention the queried company.
   if (isOverview && company) {
-    const cik = await lookupCompanyCIK(company);
+    // Check local CIK table first — avoids EDGAR search for known public companies
+    // like SAIC, Leidos, Booz Allen whose short names don't match EDGAR legal names
+    const localMatch = matchPublicVendor(company);
+    const cik = localMatch?.cik || await lookupCompanyCIK(company);
     if (cik) {
       const sub = await fetchSubmissionsOverview(cik);
       if (sub && sub.rows.length) {
@@ -2906,7 +2909,8 @@ async function pullEdgar(attrs) {
         // queried company — prevents Amazon's CIK being used for "Anthropic".
         const entityLower = (sub.entityName || '').toLowerCase();
         const queryLower = company.toLowerCase().split(/\s+/)[0]; // first word
-        if (entityLower.includes(queryLower)) {
+        // Skip validation if CIK came from our local table — we already trust it
+        if (localMatch || entityLower.includes(queryLower)) {
           console.log(`[edgar:overview] CIK ${cik} (${sub.entityName}) — ${sub.rows.length} filings via submissions`);
           resolved.entityName = sub.entityName;
           const cutoff = query.dateRange?.startdt || null;
