@@ -897,14 +897,17 @@ a:hover { text-decoration: underline; }
 .mo-row-actions {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
+  gap: 2px;
   margin-top: 4px;
 }
 .mo-row-view, .mo-row-people {
   font-size: 11px;
   font-weight: 500;
-  padding: 2px 8px;
+  padding: 2px 6px;
   border-radius: 6px;
   text-decoration: none;
+  white-space: nowrap;
 }
 .mo-row-view { color: var(--primary-80); }
 .mo-row-view:hover, .mo-row-people:hover {
@@ -912,7 +915,6 @@ a:hover { text-decoration: underline; }
   color: var(--primary-100);
 }
 .mo-row-people { color: var(--text-muted); }
-.mo-row-actions { display: flex; justify-content: flex-end; gap: 4px; }
 
 /* Period-of-performance line — sits between agency/ID line and description.
    Hosts a status chip + the dates. */
@@ -1196,7 +1198,7 @@ a:hover { text-decoration: underline; }
   .mo-sort-btn { padding: 8px 14px; }
 
   /* View link: larger tap target on mobile */
-  .mo-row-view { padding: 6px 12px; font-size: 12px; }
+  .mo-row-view, .mo-row-people { padding: 4px 8px; font-size: 11px; }
 }
 </style>
 </head>
@@ -4151,7 +4153,7 @@ function renderContractRows(card, rows, attrs) {
     // View link — opens the USASpending detail page in a new tab. Can't render
     // it without an internal_id, so we only show it when the field is present.
     const viewLink = viewUrl
-      ? `<a class="mo-row-view" href="${escapeHtml(viewUrl)}" target="_blank" rel="noopener" aria-label="View on USASpending">View ↗</a>`
+      ? `<a class="mo-row-view" href="${escapeHtml(viewUrl)}" target="_blank" rel="noopener" aria-label="Source on USASpending">Source ↗</a>`
       : '';
     const _pUrl = liUrl(recipient);
     const peopleLink = _pUrl ? `<a class="mo-row-people" href="${escapeHtml(_pUrl)}" target="_blank" rel="noopener">People ↗</a>` : '';
