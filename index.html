@@ -81,7 +81,7 @@
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-html, body { margin: 0; padding: 0; }
+html, body { margin: 0; padding: 0; overflow-anchor: none; }
 body {
   font-family: var(--font);
   background: var(--bg-screen);
@@ -5429,7 +5429,10 @@ async function askMo(question, opts = {}) {
   } finally {
     busy = false;
     $send.disabled = false;
-    $input.focus();
+    // Don't call $input.focus() — it causes the browser to scroll
+    // the input into view, jumping the user away from the results.
+    // On mobile the keyboard dismiss is enough; on desktop the input
+    // is always visible. User can tap/click to refocus when ready.
   }
 }
 
