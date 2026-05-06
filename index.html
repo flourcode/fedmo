@@ -228,6 +228,42 @@ a:hover { text-decoration: underline; }
   text-align: center;
   margin-top: 12px;
 }
+.mo-modal-section-head {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-faint);
+  margin: 20px 0 8px;
+}
+.mo-modal-tips {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-bottom: 4px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--border-soft);
+}
+.mo-modal-tip {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border-soft);
+}
+.mo-modal-tip:last-child { border-bottom: none; }
+.mo-modal-tip-q {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--primary-80);
+}
+.mo-modal-tip-d {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
 
 /* ── Conversation ──────────────────────────────────────── */
 .mo-app {
@@ -1153,9 +1189,60 @@ a:hover { text-decoration: underline; }
     </button>
   </div>
   <div class="mo-modal-body">
-    <p>Tell Mo what you sell or which territory you cover. Mo pulls the data, explains the situation in a few sentences, and tells you what to do next.</p>
-    <p>Every number Mo cites comes from USASpending and you can verify each contract on usaspending.gov.</p>
-    <p>Ask about any vendor, agency, or topic at any time. Pivot freely. Talking about AWS at DoD and want to jump to textile suppliers at NASA? Just ask. Mo treats each question on its own terms and only carries context when you explicitly refer back to something ("what about VA", "just Navy").</p>
+    <p>Mo is not a search engine. You don't need Boolean operators or exact contract numbers. Describe what you're trying to understand and Mo figures out the query.</p>
+
+    <div class="mo-modal-section-head">Follow the contract money</div>
+    <div class="mo-modal-tips">
+      <div class="mo-modal-tip">
+        <span class="mo-modal-tip-q">Palantir at DoD</span>
+        <span class="mo-modal-tip-d">Prime contracts at a specific agency</span>
+      </div>
+      <div class="mo-modal-tip">
+        <span class="mo-modal-tip-q">Who resells Splunk at the Air Force</span>
+        <span class="mo-modal-tip-d">ISVs don't prime — Mo finds the reseller holding the paper</span>
+      </div>
+      <div class="mo-modal-tip">
+        <span class="mo-modal-tip-q">SAIC expiring contracts at Army</span>
+        <span class="mo-modal-tip-d">Re-compete opportunities in the next 90 days</span>
+      </div>
+      <div class="mo-modal-tip">
+        <span class="mo-modal-tip-q">Who does Leidos sub to</span>
+        <span class="mo-modal-tip-d">Subcontractor relationships from USASpending subaward data</span>
+      </div>
+      <div class="mo-modal-tip">
+        <span class="mo-modal-tip-q">Cyber awards at HHS this year</span>
+        <span class="mo-modal-tip-d">Keyword search across contract descriptions</span>
+      </div>
+      <div class="mo-modal-tip">
+        <span class="mo-modal-tip-q">CrowdStrike and competitors at DISA</span>
+        <span class="mo-modal-tip-d">Full competitive landscape at a specific office</span>
+      </div>
+    </div>
+
+    <div class="mo-modal-section-head">Follow the capital markets</div>
+    <div class="mo-modal-tips">
+      <div class="mo-modal-tip">
+        <span class="mo-modal-tip-q">Anthropic filings</span>
+        <span class="mo-modal-tip-d">Annual reports, 10-Qs, 8-Ks — the public company picture</span>
+      </div>
+      <div class="mo-modal-tip">
+        <span class="mo-modal-tip-q">AI startups that raised in FY26</span>
+        <span class="mo-modal-tip-d">Form D filings from SEC EDGAR — private fundraising rounds</span>
+      </div>
+      <div class="mo-modal-tip">
+        <span class="mo-modal-tip-q">Booz Allen insider trades</span>
+        <span class="mo-modal-tip-d">Form 4 filings — executives buying or selling stock</span>
+      </div>
+      <div class="mo-modal-tip">
+        <span class="mo-modal-tip-q">CrowdStrike federal footprint and recent insider activity</span>
+        <span class="mo-modal-tip-d">Two cards at once — contracts and capital markets side by side</span>
+      </div>
+    </div>
+
+    <div class="mo-modal-section-head">How Mo handles context</div>
+    <p style="font-size:13px;color:var(--text-muted);margin-bottom:8px;">Each question is treated independently. Mo doesn't carry context unless you explicitly reference something back — "what about VA" or "just Navy" will refine the previous result. Otherwise, start fresh with each question.</p>
+    <p style="font-size:13px;color:var(--text-muted);margin-bottom:0;">Every number Mo cites comes from USASpending or SEC EDGAR. Click any contract row to verify it directly on usaspending.gov.</p>
+
     <div class="mo-modal-actions">
       <a class="mo-modal-btn" href="https://calendly.com/markflournoy/chat-with-mark" target="_blank" rel="noopener" id="btnAboutCalendly">Chat with Mark</a>
     </div>
@@ -4477,16 +4564,15 @@ function renderCard(rows, attrs, resolved) {
     // Only on single-vendor cards, not keyword/competitor/subaward views.
     if (liCompanyName && !isSub && !attrs.keywords) {
       const liUrl = `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(liCompanyName)}`;
-      card.appendChild(compHead('Prospecting', `${escapeHtml(liCompanyName)} people on LinkedIn`));
+      card.appendChild(compHead('Prospecting', ''));
       const liRow = $$('div', { class: 'mo-list' });
       liRow.innerHTML = `
         <div class="mo-row-2line">
           <div class="mo-row-2line-top">
             <span class="mo-row-name">People at ${escapeHtml(liCompanyName)}</span>
           </div>
-          <div class="mo-row-meta">Federal sales · business development · capture management</div>
           <div class="mo-row-actions">
-            <a class="mo-row-view" href="${escapeHtml(liUrl)}" target="_blank" rel="noopener">Search LinkedIn →</a>
+            <a class="mo-row-view" href="${escapeHtml(liUrl)}" target="_blank" rel="noopener">LinkedIn →</a>
           </div>
         </div>`;
       card.appendChild(liRow);
