@@ -1650,7 +1650,7 @@ async function resolveAgency(name) {
       };
     }
     return null;
-  } catch { return null; }
+  } catch { _recipientCache.set(lookupKey, null); return null; }
 }
 
 const VENDOR_LEGAL_NAMES = {
@@ -1743,9 +1743,10 @@ const VENDOR_LEGAL_NAMES = {
   'immixgroup':             'IMMIXGROUP',
 };
 
+const _recipientCache = new Map();
 async function resolveRecipient(name) {
-
   const lookupKey = String(name || '').toLowerCase().trim();
+  if (_recipientCache.has(lookupKey)) return _recipientCache.get(lookupKey);
   const searchTerm = VENDOR_LEGAL_NAMES[lookupKey] || name;
 
   try {
@@ -1757,7 +1758,7 @@ async function resolveRecipient(name) {
     if (!r.ok) return null;
     const body = await r.json();
     const results = body.results || [];
-    if (!results.length) return null;
+    if (!results.length) { _recipientCache.set(lookupKey, null); return null; }
 
     const up = String(searchTerm).toUpperCase().trim();
     const wbRe = new RegExp(`\\b${up.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`);
@@ -1768,7 +1769,7 @@ async function resolveRecipient(name) {
 
     // 1. Exact match wins outright
     const exact = named.find(x => x.n === up);
-    if (exact) return exact.raw.recipient_name;
+    if (exact) { _recipientCache.set(lookupKey, exact.raw.recipient_name); return exact.raw.recipient_name; }
 
     // 2. Starts-with match — first one in autocomplete order
     const startsWith = named.find(x =>
@@ -1781,7 +1782,9 @@ async function resolveRecipient(name) {
     if (wordMatch) return wordMatch.raw.recipient_name;
 
     // 4. Default
-    return results[0].recipient_name || null;
+    const _rv = results[0].recipient_name || null;
+    _recipientCache.set(lookupKey, _rv);
+    return _rv;
   } catch { return null; }
 }
 
@@ -3960,27 +3963,15 @@ async function loadSecFilings(rows, attrs) {
   }
   if (!publics.length) return [];
 
-  const filings = [];
-  for (const v of publics) {
+  // Fetch all CIKs in parallel — was sequential (500ms × N vendors = seconds)
+  const results = await Promise.all(publics.map(async (v) => {
     const payload = await fetchEdgarFilings(v.cik);
-    if (!payload || payload.error) continue;
-    // Staleness guard: CIKs are permanent in EDGAR (never reassigned), so a
-    // CIK mismatch from M&A is not the real risk. The real risk is a typo in
-    // our CIK table pointing to a completely unrelated company. Guard against
-    // that by checking EDGAR returned a valid entity (non-empty name).
-    // We do NOT do token matching — that incorrectly blocks legitimate pairs
-    // like SAIC→"Science Applications International Corp", IBM→"International
-    // Business Machines Corp", Google→"Alphabet Inc", Raytheon→"RTX Corp".
-    // Those are correct CIK mappings; the brand name just differs from the
-    // SEC legal entity name.
-    if (payload.name === null || payload.name === undefined || payload.name === '') {
-      console.warn(`[edgar] CIK ${v.cik} returned empty name — skipping`);
-      continue;
-    }
+    if (!payload || payload.error) return null;
+    if (!payload.name) { console.warn(`[edgar] CIK ${v.cik} empty name`); return null; }
     const list = extractRecentFilings(payload, 3);
-    if (list.length) filings.push({ ...v, filings: list });
-  }
-  return filings;
+    return list.length ? { ...v, filings: list } : null;
+  }));
+  return results.filter(Boolean);
 }
 
 // =============================================================================
