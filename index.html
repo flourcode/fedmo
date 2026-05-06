@@ -1354,6 +1354,14 @@ a:hover { text-decoration: underline; }
 <script>
 'use strict';
 
+// Disable browser scroll restoration — on refresh the browser would otherwise
+// jump to the previous scroll position, cutting off Mo's greeting and face.
+// We always want to start at the top.
+if ('scrollRestoration' in history) {
+  history.scrollRestoration = 'manual';
+}
+window.scrollTo(0, 0);
+
 // =============================================================================
 // CONFIG
 // =============================================================================
