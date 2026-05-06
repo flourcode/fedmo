@@ -408,22 +408,7 @@ a:hover { text-decoration: underline; }
   border-bottom: 1px solid var(--border-soft);
   position: relative;
 }
-.mo-linkedin-btn {
-  display: inline-flex;
-  align-items: center;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--primary-80);
-  background: var(--primary-20);
-  border-radius: 999px;
-  padding: 3px 10px;
-  text-decoration: none;
-  white-space: nowrap;
-  transition: background 120ms;
-  margin-left: var(--s-2);
-  flex-shrink: 0;
-}
-.mo-linkedin-btn:hover { background: var(--primary-40); color: var(--primary-100); }
+
 
 .mo-card-share {
   position: absolute;
@@ -4242,24 +4227,6 @@ function renderCard(rows, attrs, resolved) {
     text: 'Copy link',
   }));
 
-  // LinkedIn people search — pre-filled to the company name so the user
-  // can immediately find the right contacts for prospecting.
-  // Only fires on vendor cards where we have a resolved company name.
-  const linkedinCompany = resolved.recipientResolved || (attrs.recipient && !attrs.recipient.includes(',') ? attrs.recipient : null);
-  if (linkedinCompany && !isSub) {
-    const liQuery = encodeURIComponent(`${linkedinCompany} federal sales`);
-    const liUrl = `https://www.linkedin.com/search/results/people/?keywords=${liQuery}`;
-    const liBtn = $$('a', {
-      class: 'mo-linkedin-btn',
-      href: liUrl,
-      target: '_blank',
-      rel: 'noopener',
-      title: `Find ${linkedinCompany} people on LinkedIn`,
-      text: 'Find people →',
-    });
-    head.appendChild(liBtn);
-  }
-
   const subtitleBits = [];
   if (isSub) {
     const primeName = resolved.recipientResolved || attrs.recipient || 'a prime';
@@ -4496,8 +4463,36 @@ function renderCard(rows, attrs, resolved) {
   // SEC fetch is async, so we have to chain pills onto its resolution. If
   // there's no SEC fetch (sub flow, or no rows), inject immediately.
   const agencyEntries = isSub ? [] : aggregateRowsBy(rows, isSub, 'agency');
-  const injectAtEnd = () =>
+  // Build clean LinkedIn search name — strip legal suffixes that confuse LinkedIn
+  const liRawName = resolved.recipientResolved || (attrs.recipient && !attrs.recipient.includes(',') ? attrs.recipient : null);
+  const liCompanyName = liRawName
+    ? liRawName
+        .replace(/[,.]?\s*(inc\.?|incorporated|corp\.?|corporation|llc|l\.l\.c\.?|ltd\.?|limited|plc|holdings?|company|co\.?)\.?\s*$/i, '')
+        .replace(/[,.]?\s*(federal|government|services|solutions|technologies|systems)\.?\s*$/i, '')
+        .trim()
+    : null;
+
+  const injectAtEnd = () => {
+    // LinkedIn prospecting section — same grammar as SEC filings section.
+    // Only on single-vendor cards, not keyword/competitor/subaward views.
+    if (liCompanyName && !isSub && !attrs.keywords) {
+      const liUrl = `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(liCompanyName)}`;
+      card.appendChild(compHead('Prospecting', `${escapeHtml(liCompanyName)} people on LinkedIn`));
+      const liRow = $$('div', { class: 'mo-list' });
+      liRow.innerHTML = `
+        <div class="mo-row-2line">
+          <div class="mo-row-2line-top">
+            <span class="mo-row-name">People at ${escapeHtml(liCompanyName)}</span>
+          </div>
+          <div class="mo-row-meta">Federal sales · business development · capture management</div>
+          <div class="mo-row-actions">
+            <a class="mo-row-view" href="${escapeHtml(liUrl)}" target="_blank" rel="noopener">Search LinkedIn →</a>
+          </div>
+        </div>`;
+      card.appendChild(liRow);
+    }
     injectPills(card, rows, attrs, vendorEntries, agencyEntries, total, expiringCount);
+  };
 
   // ── SEC filings (async — appended below after fetch) ──
   if (!isSub && rows.length > 0) {
