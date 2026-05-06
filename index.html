@@ -4237,7 +4237,7 @@ function renderSubawardRows(card, rows, attrs, resolved) {
       </div>
       <div class="mo-row-meta">${sub.count} subaward ${pluralize(sub.count, 'action')} on ${awards.length} prime ${pluralize(awards.length, 'award')}</div>
       <div class="mo-sub-detail">${detailHtml}</div>
-      <div class="mo-row-actions"><a class="mo-row-view" href="${subLiUrl}" target="_blank" rel="noopener">LinkedIn ↗</a></div>
+      <div class="mo-row-actions"><a class="mo-row-view" href="${subLiUrl}" target="_blank" rel="noopener">People ↗</a></div>
     </div>`;
   };
 
@@ -4582,7 +4582,7 @@ function renderCard(rows, attrs, resolved) {
             <span class="mo-row-name">People at ${escapeHtml(liCompanyName)}</span>
           </div>
           <div class="mo-row-actions">
-            <a class="mo-row-view" href="${escapeHtml(liUrl)}" target="_blank" rel="noopener">LinkedIn ↗</a>
+            <a class="mo-row-view" href="${escapeHtml(liUrl)}" target="_blank" rel="noopener">People ↗</a>
           </div>
         </div>`;
       card.appendChild(liRow);
