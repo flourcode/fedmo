@@ -1188,7 +1188,7 @@ const USASPENDING = 'https://api.usaspending.gov/api/v2';
 //   3 classic federal contract        — proves the original USASpending depth
 //   4 entity-specific cross-mode      — single name, both views available
 const GREETING_PROMPTS = [
-  'AI startups that raised over $20M in the past 90 days',
+  'AI startups that raised in the past 90 days',
   "Who's reselling AWS at DoD",
   'Splunk renewals expiring in 90 days',
 ];
@@ -2704,17 +2704,26 @@ async function pullEdgar(attrs) {
     }
   }
 
-  // Amount post-filter
+  // Amount post-filter. When user sets min_amount, KEEP Indefinite filings
+  // (open-ended pooled funds that don't disclose target). They might exceed
+  // the threshold; we can't prove they don't. Drop them only on max_amount
+  // (where their unknown size makes them unsafe to include).
   if (minAmount || maxAmount) {
     const before = rows.length;
+    let indefiniteKept = 0;
     rows = rows.filter(r => {
+      if (r.offeringIndefinite) {
+        if (maxAmount) return false;  // can't safely include unknown-size offerings under a ceiling
+        if (minAmount) { indefiniteKept++; return true; }  // include — might be ≥ threshold
+        return true;
+      }
       const amt = r.offeringAmount || 0;
       if (minAmount && amt < minAmount) return false;
       if (maxAmount && amt > maxAmount) return false;
       return true;
     });
     if (rows.length < before) {
-      resolved.amountFiltered = { before, after: rows.length };
+      resolved.amountFiltered = { before, after: rows.length, indefiniteKept };
     }
   }
 
