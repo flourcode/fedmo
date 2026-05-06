@@ -2707,6 +2707,63 @@ async function enrichFederalAdjacent(rows, concurrency = 4) {
 // ─────────────────────────────────────────────────────────────────────
 // Main EDGAR pull
 // ─────────────────────────────────────────────────────────────────────
+// Look up a company's CIK via EDGAR company search.
+// Returns the first CIK that has 10-K or 10-Q filings (i.e. a public company).
+// Returns null for private companies or if lookup fails.
+async function lookupCompanyCIK(companyName) {
+  if (!companyName) return null;
+  try {
+    const qs = `company=${encodeURIComponent(companyName)}&CIK=&type=10-K&dateb=&owner=include&count=10&search_text=&action=getcompany&output=atom`;
+    const r = await fetch(LAMBDA_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ request_type: 'edgar_proxy', host: 'www.sec.gov', path: '/cgi-bin/browse-edgar', queryString: qs, raw: true }),
+    });
+    const xml = await r.text();
+    // Atom feed: CIKs appear in href attributes as CIK=NNNNNNNN (with leading zeros)
+    const cikMatches = [...xml.matchAll(/CIK=(\d{10})/g)].map(m => m[1]);
+    const unique = [...new Set(cikMatches)];
+    return unique.length ? unique[0] : null;
+  } catch (e) {
+    console.warn('[edgar:cik]', e.message);
+    return null;
+  }
+}
+
+// Fetch filings for a known CIK from submissions API and build overview rows.
+// Returns null if submissions fetch fails or has no relevant filings.
+async function fetchSubmissionsOverview(cik) {
+  if (!cik) return null;
+  const padded = String(parseInt(cik, 10)).padStart(10, '0');
+  try {
+    const r = await fetch(LAMBDA_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ request_type: 'edgar_proxy', host: 'data.sec.gov', path: `/submissions/CIK${padded}.json` }),
+    });
+    const data = await r.json();
+    if (!data || !data.filings?.recent) return null;
+
+    const KEEP = new Set(['10-K', '10-Q', '8-K', 'DEF 14A', 'S-1']);
+    const { form, filingDate, accessionNumber, primaryDocument } = data.filings.recent;
+    const rows = form
+      .map((f, i) => ({
+        form: f,
+        fileDate: filingDate[i],
+        accession: accessionNumber[i],
+        primaryDoc: primaryDocument[i],
+        cik: String(parseInt(cik, 10)),
+        entityName: data.name || '',
+      }))
+      .filter(r => KEEP.has(r.form));
+
+    return rows.length ? { rows, entityName: data.name } : null;
+  } catch (e) {
+    console.warn('[edgar:submissions]', e.message);
+    return null;
+  }
+}
+
 async function pullEdgar(attrs) {
   const formType = normalizeFormType(attrs.form_type);
   const sectorInfo = attrs.sector ? expandEdgarSector(attrs.sector) : null;
@@ -2795,6 +2852,30 @@ async function pullEdgar(attrs) {
 
   // Fetch
   let rows, total;
+
+  // For overview mode on a named company: try CIK lookup → submissions API first.
+  // This gives correct filing links (right CIK) vs full-text search which returns
+  // filings from OTHER companies that happen to mention the queried company.
+  if (isOverview && company) {
+    const cik = await lookupCompanyCIK(company);
+    if (cik) {
+      const sub = await fetchSubmissionsOverview(cik);
+      if (sub && sub.rows.length) {
+        console.log(`[edgar:overview] CIK ${cik} (${sub.entityName}) — ${sub.rows.length} filings via submissions`);
+        resolved.entityName = sub.entityName;
+        // Apply date filter if set
+        const cutoff = query.dateRange?.startdt || null;
+        rows = cutoff ? sub.rows.filter(r => !r.fileDate || r.fileDate >= cutoff) : sub.rows;
+        total = rows.length;
+        // Skip edgarSearch entirely
+        rows.sort((a, b) => (b.fileDate || '').localeCompare(a.fileDate || ''));
+        resolved.totalFromEdgar = total;
+        return { rows, resolved, error: null };
+      }
+    }
+    // Fall through to full-text search if CIK lookup fails (private company)
+  }
+
   try {
     const res = await edgarSearch(query);
     rows = res.rows;
@@ -2990,19 +3071,33 @@ function renderEdgarCard(rows, resolved) {
       ...Object.keys(groups).filter(f => !ORDER.includes(f) && groups[f]),
     ];
 
-    const cikForBrowse = rows[0]?.cik;
+    // Use direct accession-based filing URLs — company browse URLs use CIK
+    // which is wrong for private companies (rows come from full-text search
+    // and may have CIKs belonging to other filers mentioning the company).
+    const accUrl = (r) => {
+      if (!r.accession) return null;
+      const acc = r.accession.replace(/-/g, '');
+      const cik = String(parseInt(r.cik || '0', 10));
+      // Link to the filing index page which is always correct regardless of who filed
+      return `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${cik}&type=${encodeURIComponent(r.form || '')}&dateb=&owner=include&count=10`;
+    };
+    // Better: link directly to EDGAR full-text search results for this company + form
+    const companyFormUrl = (r) => {
+      if (!r.accession) return null;
+      // Direct link to the filing document via accession number
+      const acc = r.accession.replace(/-/g, '');
+      const cik = String(parseInt(r.cik || '0', 10)).padStart(10, '0');
+      const primary = r.primaryDoc || 'index.htm';
+      return `https://www.sec.gov/Archives/edgar/data/${parseInt(r.cik || '0', 10)}/${acc}/${primary}`;
+    };
+
     parts.push(`<div class="mo-edgar-overview">`);
     for (const form of groupOrder) {
       const group = groups[form].sort((a, b) => (b.fileDate || '').localeCompare(a.fileDate || ''));
       const latest = group[0];
-      const filingUrl = latest.accession
-        ? `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${parseInt(latest.cik || cikForBrowse, 10)}&type=${encodeURIComponent(form)}&dateb=&owner=include&count=10`
-        : null;
       const desc = formDesc[form] || form;
       const allDates = group.slice(0, 4).map(r => {
-        const rowUrl = r.accession
-          ? `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${parseInt(r.cik || cikForBrowse, 10)}&type=${encodeURIComponent(form)}&dateb=&owner=include&count=10`
-          : null;
+        const rowUrl = companyFormUrl(r);
         return rowUrl
           ? `<a class="mo-overview-date-link" href="${rowUrl}" target="_blank" rel="noopener">${escapeHtml(r.fileDate || '')}</a>`
           : `<span class="mo-overview-date-link">${escapeHtml(r.fileDate || '')}</span>`;
