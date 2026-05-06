@@ -4225,7 +4225,7 @@ function renderSubawardRows(card, rows, attrs, resolved) {
     // Per-sub LinkedIn — clean company name same as card-level logic
     const subLiName = sub.name
       .replace(/[,.]?\s*(inc\.?|incorporated|corp\.?|corporation|llc|l\.l\.c\.?|ltd\.?|limited|plc|holdings?|company|co\.?)\.?\s*$/i, '')
-      .replace(/[,.]?\s*(federal|government|services|solutions|technologies|systems)\.?\s*$/i, '')
+      .replace(/[,.]?\s*(federal|government|services)\.?\s*$/i, '')
       .trim();
     const subLiQuery = `site:linkedin.com/in "${subLiName}"`;
     const subLiUrl = `https://www.google.com/search?q=${encodeURIComponent(subLiQuery)}`;
@@ -4564,7 +4564,6 @@ function renderCard(rows, attrs, resolved) {
   const liCompanyName = liRawName
     ? liRawName
         .replace(/[,.]?\s*(inc\.?|incorporated|corp\.?|corporation|llc|l\.l\.c\.?|ltd\.?|limited|plc|holdings?|company|co\.?)\.?\s*$/i, '')
-        .replace(/[,.]?\s*(federal|government|services|solutions|technologies|systems)\.?\s*$/i, '')
         .trim()
     : null;
 
