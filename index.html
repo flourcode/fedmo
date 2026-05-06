@@ -2721,7 +2721,7 @@ async function lookupCompanyCIK(companyName) {
     });
     const xml = await r.text();
     // Atom feed: CIKs appear in href attributes as CIK=NNNNNNNN (with leading zeros)
-    const cikMatches = [...xml.matchAll(/CIK=(\d{10})/g)].map(m => m[1]);
+    const cikMatches = [...xml.matchAll(/<cik>(\d+)<\/cik>/gi)].map(m => m[1]);
     const unique = [...new Set(cikMatches)];
     return unique.length ? unique[0] : null;
   } catch (e) {
@@ -3084,12 +3084,13 @@ function renderEdgarCard(rows, resolved) {
     // Better: link directly to EDGAR full-text search results for this company + form
     const companyFormUrl = (r) => {
       if (!r.accession) return null;
-      // Direct link to the filing document via accession number
       const acc = r.accession.replace(/-/g, '');
-      const cik = String(parseInt(r.cik || '0', 10)).padStart(10, '0');
-      const primary = r.primaryDoc || 'index.htm';
-      return `https://www.sec.gov/Archives/edgar/data/${parseInt(r.cik || '0', 10)}/${acc}/${primary}`;
-    };
+      const cikInt = parseInt(r.cik || '0', 10);
+      if (r.primaryDoc) {
+        return `https://www.sec.gov/Archives/edgar/data/${cikInt}/${acc}/${r.primaryDoc}`;
+      }
+      return `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${cikInt}&type=${encodeURIComponent(r.form || '')}&dateb=&owner=include&count=10`;
+    };;
 
     parts.push(`<div class="mo-edgar-overview">`);
     for (const form of groupOrder) {
