@@ -2912,13 +2912,15 @@ async function pullEdgar(attrs) {
   rows.sort((a, b) => (b.fileDate || '').localeCompare(a.fileDate || ''));
 
   // Enrich Form Ds with XML (top 20 for latency — now top 20 by date)
-  if (formType === 'D' && rows.length > 0) {
+  // Use resolved.formType to catch auto-pivot from overview → D
+  const effectiveFormType = resolved.formType || formType;
+  if (effectiveFormType === 'D' && rows.length > 0) {
     const enrichedTop = await enrichFormDsParallel(rows.slice(0, 20));
     rows = [...enrichedTop, ...rows.slice(20)];
   }
 
   // SPV detection — apply to all Form D rows
-  if (formType === 'D') {
+  if (effectiveFormType === 'D') {
     rows = rows.map(r => {
       const spv = detectSpv(r.entityName);
       return spv ? { ...r, spv } : r;
