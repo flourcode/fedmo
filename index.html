@@ -4222,6 +4222,13 @@ function renderSubawardRows(card, rows, attrs, resolved) {
       </div>`;
     }).join('');
 
+    // Per-sub LinkedIn — clean company name same as card-level logic
+    const subLiName = sub.name
+      .replace(/[,.]?\s*(inc\.?|incorporated|corp\.?|corporation|llc|l\.l\.c\.?|ltd\.?|limited|plc|holdings?|company|co\.?)\.?\s*$/i, '')
+      .replace(/[,.]?\s*(federal|government|services|solutions|technologies|systems)\.?\s*$/i, '')
+      .trim();
+    const subLiUrl = `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(subLiName)}`;
+
     return `<div class="${cls}"${rankAttr}>
       <div class="mo-row-2line-top">
         <span class="mo-row-name" title="${escapeHtml(sub.name)}">${escapeHtml(sub.name)}</span>
@@ -4229,6 +4236,7 @@ function renderSubawardRows(card, rows, attrs, resolved) {
       </div>
       <div class="mo-row-meta">${sub.count} subaward ${pluralize(sub.count, 'action')} on ${awards.length} prime ${pluralize(awards.length, 'award')}</div>
       <div class="mo-sub-detail">${detailHtml}</div>
+      <div class="mo-row-actions"><a class="mo-row-view" href="${subLiUrl}" target="_blank" rel="noopener">LinkedIn →</a></div>
     </div>`;
   };
 
@@ -4562,7 +4570,7 @@ function renderCard(rows, attrs, resolved) {
   const injectAtEnd = () => {
     // LinkedIn prospecting section — same grammar as SEC filings section.
     // Only on single-vendor cards, not keyword/competitor/subaward views.
-    if (liCompanyName && !isSub && !attrs.keywords) {
+    if (liCompanyName && !attrs.keywords) {
       const liUrl = `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(liCompanyName)}`;
       card.appendChild(compHead('Prospecting', ''));
       const liRow = $$('div', { class: 'mo-list' });
@@ -4581,8 +4589,27 @@ function renderCard(rows, attrs, resolved) {
   };
 
   // ── SEC filings (async — appended below after fetch) ──
-  if (!isSub && rows.length > 0) {
-    loadSecFilings(rows, attrs).then(populated => {
+  // For subaward cards, check the top sub recipients instead of prime rows.
+  const secRows = isSub
+    ? (() => {
+        const bySub = {};
+        for (const r of rows) {
+          const n = r._subName;
+          if (n) bySub[n] = (bySub[n] || 0) + (Number(r._amount) || 0);
+        }
+        return Object.entries(bySub)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 7)
+          .map(([name, amt]) => ({ 'Recipient Name': name, 'Award Amount': amt }));
+      })()
+    : rows;
+
+  const secAttrs = isSub
+    ? { ...attrs, recipient: resolved.recipientResolved || attrs.recipient }
+    : attrs;
+
+  if (rows.length > 0) {
+    loadSecFilings(secRows, secAttrs).then(populated => {
       if (!populated.length) { injectAtEnd(); return; }
       const totalFilings = populated.reduce((s, v) => s + v.filings.length, 0);
       card.appendChild(compHead(
@@ -4615,7 +4642,6 @@ function renderCard(rows, attrs, resolved) {
       injectAtEnd();
     });
   } else {
-    // No SEC fetch path (subaward flow, or empty rows) — inject pills now
     injectAtEnd();
   }
 
