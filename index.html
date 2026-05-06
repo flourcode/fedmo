@@ -578,6 +578,24 @@ a:hover { text-decoration: underline; }
      separator. Same layout as the contract row list. */
 }
 
+.mo-edgar-group-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+  padding: 12px 0 4px;
+  border-top: 1px solid var(--border-soft);
+  margin-top: 4px;
+}
+.mo-edgar-group-label:first-child { border-top: none; margin-top: 0; padding-top: 4px; }
+.mo-edgar-group-form {
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
 .mo-edgar-stats {
   /* Three-stat header for Form D queries — same grid as .mo-stats. */
   display: grid;
@@ -2253,7 +2271,7 @@ function expandEdgarSector(input) {
 // Form-type normalization
 // ─────────────────────────────────────────────────────────────────────
 function normalizeFormType(input) {
-  if (!input) return 'D';
+  if (!input) return 'overview';  // no form_type → curated annual view
   const s = String(input).trim().toUpperCase();
   if (s === 'FORM D' || s === 'D' || s === 'D/A') return 'D';
   if (s === '10K' || s === '10-K') return '10-K';
@@ -2552,7 +2570,19 @@ async function pullEdgar(attrs) {
   };
 
   // Build query
-  const query = { forms: [formType], dateRange: {} };
+  // 'overview' mode: curated annual view for a named public company —
+  // the set of filing types that help a seller understand the company.
+  // Skips Form 4 insider trades entirely (too noisy, 1,000+ rows).
+  const OVERVIEW_FORMS = ['10-K', '10-Q', '8-K', 'DEF 14A', 'S-1'];
+  const isOverview = formType === 'overview';
+  const effectiveForms = isOverview ? OVERVIEW_FORMS : [formType];
+  const query = { forms: effectiveForms, dateRange: {} };
+  // Default date window for overview: last 12 months
+  if (isOverview && !dateAfter) {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() - 1);
+    query.dateRange.startdt = d.toISOString().slice(0, 10);
+  }
   if (dateAfter) query.dateRange.startdt = dateAfter;
   if (dateBefore) query.dateRange.enddt = dateBefore;
   if (state) query.locationCode = state;
@@ -2673,7 +2703,7 @@ function renderEdgarCard(rows, resolved) {
   // ── HEAD ─────────────────────────────────────────────────
   parts.push(`<div class="mo-card-head">`);
 
-  const formLabels = { 'D': 'Form D — private offerings', '4': 'Form 4 — insider trades', '13F-HR': '13F — institutional positions', 'SC 13D': '13D — activist >5% stakes', 'SC 13G': '13G — passive >5% stakes', 'S-1': 'S-1 — IPO registrations', '10-K': '10-K — annual reports', '10-Q': '10-Q — quarterly reports', '8-K': '8-K — material events' };
+  const formLabels = { 'overview': 'SEC filings', 'D': 'Form D — private offerings', '4': 'Form 4 — insider trades', '13F-HR': '13F — institutional positions', 'SC 13D': '13D — activist >5% stakes', 'SC 13G': '13G — passive >5% stakes', 'S-1': 'S-1 — IPO registrations', '10-K': '10-K — annual reports', '10-Q': '10-Q — quarterly reports', '8-K': '8-K — material events' };
   const formLabel = formLabels[resolved.formType] || resolved.formType;
   let titleParts = [formLabel];
   if (resolved.company) titleParts.push(`for ${resolved.company}`);
@@ -2739,10 +2769,31 @@ function renderEdgarCard(rows, resolved) {
     </div>`);
   }
 
-  // ── ROW LIST (uses fedmo's .mo-row-2line) ───────────────
-  parts.push(`<div class="mo-edgar-rows">`);
-  rows.slice(0, 30).forEach(r => parts.push(renderEdgarRow(r, resolved)));
-  parts.push(`</div>`);
+  // ── ROW LIST ────────────────────────────────────────────
+  // Overview mode: group by form type so user sees 10-K, 10-Q, 8-K sections
+  if (resolved.formType === 'overview') {
+    const groups = {};
+    const ORDER = ['10-K', 'DEF 14A', '10-Q', '8-K', 'S-1'];
+    for (const r of rows.slice(0, 50)) {
+      const f = r.form || '?';
+      if (!groups[f]) groups[f] = [];
+      groups[f].push(r);
+    }
+    const groupOrder = [...ORDER.filter(f => groups[f]), ...Object.keys(groups).filter(f => !ORDER.includes(f))];
+    const formDesc = { '10-K': 'Annual report', 'DEF 14A': 'Proxy statement', '10-Q': 'Quarterly report', '8-K': 'Material event', 'S-1': 'IPO registration' };
+    parts.push(`<div class="mo-edgar-rows">`);
+    for (const form of groupOrder) {
+      const group = groups[form];
+      if (!group || !group.length) continue;
+      parts.push(`<div class="mo-edgar-group-label">${escapeHtml(formDesc[form] || form)} <span class="mo-edgar-group-form">${escapeHtml(form)}</span></div>`);
+      group.slice(0, 6).forEach(r => parts.push(renderEdgarRow(r, resolved)));
+    }
+    parts.push(`</div>`);
+  } else {
+    parts.push(`<div class="mo-edgar-rows">`);
+    rows.slice(0, 30).forEach(r => parts.push(renderEdgarRow(r, resolved)));
+    parts.push(`</div>`);
+  }
 
   return parts.join('');
 }
