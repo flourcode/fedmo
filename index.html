@@ -2812,8 +2812,20 @@ function renderEdgarCard(rows, resolved) {
   }
 
   // ── ROW LIST (uses fedmo's .mo-row-2line) ───────────────
+  // Show first 12 rows by default, hide the rest behind a "Show N more" button
+  // (matches USASpending card pattern). EDGAR caps at 100 max for performance.
+  const EDGAR_INITIAL = 12;
+  const EDGAR_MAX = 100;
+  const visibleRows = rows.slice(0, EDGAR_INITIAL);
+  const moreRows = rows.slice(EDGAR_INITIAL, EDGAR_MAX);
   parts.push(`<div class="mo-edgar-rows">`);
-  rows.slice(0, 30).forEach(r => parts.push(renderEdgarRow(r, resolved)));
+  visibleRows.forEach(r => parts.push(renderEdgarRow(r, resolved)));
+  if (moreRows.length > 0) {
+    parts.push(`<button class="mo-show-more" data-action="edgar-show-more">Show ${moreRows.length} more</button>`);
+    parts.push(`<div class="mo-edgar-show-more-rows" style="display:none;">`);
+    moreRows.forEach(r => parts.push(renderEdgarRow(r, resolved)));
+    parts.push(`</div>`);
+  }
   parts.push(`</div>`);
 
   return parts.join('');
@@ -4151,6 +4163,15 @@ function renderCard(rows, attrs, resolved) {
   if (resolved && resolved.edgarMode) {
     const card = $$('div', { class: 'mo-card' });
     card.innerHTML = renderEdgarCard(rows, resolved);
+    // Wire up EDGAR show-more button
+    const showMoreBtn = card.querySelector('[data-action="edgar-show-more"]');
+    if (showMoreBtn) {
+      showMoreBtn.addEventListener('click', () => {
+        const hidden = card.querySelector('.mo-edgar-show-more-rows');
+        if (hidden) hidden.style.display = '';
+        showMoreBtn.remove();
+      });
+    }
     // Build EDGAR follow-up pills and stash them on _pendingPills. The askMo
     // orchestrator drains _pendingPills into the DOM as siblings of the card
     // after the card is mounted into its slot.
@@ -4165,8 +4186,14 @@ function renderCard(rows, attrs, resolved) {
       wrap.addEventListener('click', (e) => {
         const btn = e.target.closest('.mo-pill');
         if (!btn) return;
-        const q = btn.getAttribute('data-q');
-        if (q) { $input.value = q; $input.focus(); }
+        if (busy) return;
+        const q = btn.dataset.q;
+        if (!q) return;
+        const $input = document.getElementById('input');
+        if ($input) $input.value = '';
+        track('ask', { source: 'pill', text: q.slice(0, 60) });
+        hideGreeting();
+        askMo(q);
       });
       card._pendingPills = wrap;
     }
@@ -4858,16 +4885,11 @@ function injectPills(card, rows, attrs, vendorEntries, agencyEntries, total, exp
     hideGreeting();
     askMo(q, { autoSort });
   });
-  // Insert as a SIBLING after the card, not a child. Pills float in the
-  // conversation flow between this turn's card and whatever comes next,
-  // matching the greeting examples' floating-in-page treatment.
-  if (card.parentNode) {
-    card.parentNode.insertBefore(wrap, card.nextSibling);
-  } else {
-    // Card hasn't been mounted yet (shouldn't happen given current call
-    // sites, but be defensive). Stash for later mount.
-    card._pendingPills = wrap;
-  }
+  // Always stash on the card. The askMo orchestrator will collect pills from
+  // all cards in the turn and append a single pill bar AFTER the prose, at
+  // the turn level — not inside the cards container, not as a card sibling.
+  // This matches Mark's design: pills come at the bottom of the turn, last.
+  card._pendingPills = wrap;
 }
 
 // =============================================================================
@@ -5067,13 +5089,12 @@ async function askMo(question, opts = {}) {
 
         // Render real card and swap into the slot. renderCard() handles
         // both USASpending and EDGAR modes via resolved.edgarMode flag.
+        // Pills are stashed on cardEl._pendingPills (set during render or
+        // after async SEC fetch). We collect them all at the end of the
+        // turn — see post-synth pill drain below.
         const cardEl = renderCard(rows, args, resolved);
 
         slot.replaceChild(cardEl, loadingEl);
-        if (cardEl._pendingPills && cardEl.parentNode) {
-          cardEl.parentNode.insertBefore(cardEl._pendingPills, cardEl.nextSibling);
-          delete cardEl._pendingPills;
-        }
         // Apply autoSort only to the first card (smart pills target headline data)
         if (autoSort && idx === 0 && !isEdgar) {
           requestAnimationFrame(() => {
@@ -5081,6 +5102,9 @@ async function askMo(question, opts = {}) {
             if (btn) btn.click();
           });
         }
+
+        // Stash the cardEl on the slot for later pill collection
+        slot._cardEl = cardEl;
 
         // Build the tool_result payload for the synthesizer.
         return summarizeToolResult(tc.name, args, rows, resolved, error);
@@ -5146,6 +5170,46 @@ async function askMo(question, opts = {}) {
     // Add Mo's complete turn to history for follow-ups
     if (proseAccumulated) {
       history.push({ role: 'model', parts: [{ text: proseAccumulated }] });
+    }
+
+    // Drain pending pills from all cards into a single consolidated bar at
+    // the END of the turn — after prose, outside the cards container.
+    // The SEC-fetch pill injection is async; wait a frame to let any
+    // pending pill set complete.
+    await new Promise(r => setTimeout(r, 50));
+    const pillBar = $$('div', { class: 'mo-pills mo-pills-turn' });
+    let pillBarHtml = '<span class="mo-pills-label">Try</span>';
+    let pillsCollected = 0;
+    const seenPillQueries = new Set();
+    document.querySelectorAll('.mo-card-slot').forEach(slot => {
+      const card = slot._cardEl;
+      if (!card || !card._pendingPills) return;
+      // Extract individual pill buttons from the stashed wrap, dedup by query
+      card._pendingPills.querySelectorAll('.mo-pill').forEach(btn => {
+        const q = btn.dataset.q;
+        if (!q || seenPillQueries.has(q)) return;
+        seenPillQueries.add(q);
+        const sortAttr = btn.dataset.sort ? ` data-sort="${escapeHtml(btn.dataset.sort)}"` : '';
+        pillBarHtml += `<button class="mo-pill" type="button" data-q="${escapeHtml(q)}"${sortAttr}>${escapeHtml(q)}</button>`;
+        pillsCollected++;
+      });
+      delete card._pendingPills;
+    });
+    if (pillsCollected > 0) {
+      pillBar.innerHTML = pillBarHtml;
+      pillBar.addEventListener('click', (e) => {
+        const btn = e.target.closest('.mo-pill');
+        if (!btn) return;
+        if (busy) return;
+        const q = btn.dataset.q;
+        const autoSort = btn.dataset.sort || null;
+        if (!q) return;
+        if ($input) $input.value = '';
+        track('ask', { source: 'pill', text: q.slice(0, 60) });
+        hideGreeting();
+        askMo(q, autoSort ? { autoSort } : {});
+      });
+      moTurn.insertEl(pillBar);
     }
 
   } catch (err) {
