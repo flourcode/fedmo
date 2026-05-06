@@ -899,18 +899,20 @@ a:hover { text-decoration: underline; }
   justify-content: flex-end;
   margin-top: 4px;
 }
-.mo-row-view {
+.mo-row-view, .mo-row-people {
   font-size: 11px;
-  color: var(--primary-80);
   font-weight: 500;
   padding: 2px 8px;
   border-radius: 6px;
   text-decoration: none;
 }
-.mo-row-view:hover {
+.mo-row-view { color: var(--primary-80); }
+.mo-row-view:hover, .mo-row-people:hover {
   background: var(--primary-20);
   color: var(--primary-100);
 }
+.mo-row-people { color: var(--text-muted); }
+.mo-row-actions { display: flex; justify-content: flex-end; gap: 4px; }
 
 /* Period-of-performance line — sits between agency/ID line and description.
    Hosts a status chip + the dates. */
@@ -4069,6 +4071,15 @@ function sortRows(rows, sortKey) {
   return sorted;
 }
 
+function liUrl(name) {
+  if (!name) return null;
+  const n = String(name)
+    .replace(/[,.]?\s*(inc\.?|incorporated|corp\.?|corporation|llc|l\.l\.c\.?|ltd\.?|limited|plc|holdings?|company|co\.?)\.?\s*$/i, '')
+    .trim();
+  if (!n || n.length < 3) return null;
+  return `https://www.google.com/search?q=${encodeURIComponent(`site:linkedin.com/in "${n}"`)}`;
+}
+
 function renderContractRows(card, rows, attrs) {
   card.appendChild(compHead('Contracts', `${rows.length} rows`));
 
@@ -4142,6 +4153,8 @@ function renderContractRows(card, rows, attrs) {
     const viewLink = viewUrl
       ? `<a class="mo-row-view" href="${escapeHtml(viewUrl)}" target="_blank" rel="noopener" aria-label="View on USASpending">View ↗</a>`
       : '';
+    const _pUrl = liUrl(recipient);
+    const peopleLink = _pUrl ? `<a class="mo-row-people" href="${escapeHtml(_pUrl)}" target="_blank" rel="noopener">People ↗</a>` : '';
 
     const cls = `mo-row-2line${isRanked ? ' mo-row-ranked' : ''}`;
     const rankAttr = isRanked ? ` data-rank="${idx + 1}"` : '';
@@ -4153,7 +4166,7 @@ function renderContractRows(card, rows, attrs) {
       ${metaLine1Parts.length ? `<div class="mo-row-meta">${escapeHtml(metaLine1Parts.join(' · '))}</div>` : ''}
       ${popLine ? `<div class="mo-row-meta-pop">${chip}${escapeHtml(popLine)}</div>` : (chip ? `<div class="mo-row-meta-pop">${chip}</div>` : '')}
       <div class="mo-row-desc" title="${escapeHtml(desc || '')}">${escapeHtml(desc || '—')}</div>
-      ${viewLink ? `<div class="mo-row-actions">${viewLink}</div>` : ''}
+      ${(viewLink || peopleLink) ? `<div class="mo-row-actions">${viewLink}${peopleLink}</div>` : ''}
     </div>`;
   };
 
@@ -4271,12 +4284,7 @@ function renderSubawardRows(card, rows, attrs, resolved) {
     }).join('');
 
     // Per-sub LinkedIn — clean company name same as card-level logic
-    const subLiName = sub.name
-      .replace(/[,.]?\s*(inc\.?|incorporated|corp\.?|corporation|llc|l\.l\.c\.?|ltd\.?|limited|plc|holdings?|company|co\.?)\.?\s*$/i, '')
-      .replace(/[,.]?\s*(federal|government|services)\.?\s*$/i, '')
-      .trim();
-    const subLiQuery = `site:linkedin.com/in "${subLiName}"`;
-    const subLiUrl = `https://www.google.com/search?q=${encodeURIComponent(subLiQuery)}`;
+    const subLiUrl = liUrl(sub.name);
 
     return `<div class="${cls}"${rankAttr}>
       <div class="mo-row-2line-top">
@@ -4285,7 +4293,7 @@ function renderSubawardRows(card, rows, attrs, resolved) {
       </div>
       <div class="mo-row-meta">${sub.count} subaward ${pluralize(sub.count, 'action')} on ${awards.length} prime ${pluralize(awards.length, 'award')}</div>
       <div class="mo-sub-detail">${detailHtml}</div>
-      <div class="mo-row-actions"><a class="mo-row-view" href="${subLiUrl}" target="_blank" rel="noopener">People ↗</a></div>
+      <div class="mo-row-actions">${subLiUrl ? `<a class="mo-row-people" href="${escapeHtml(subLiUrl)}" target="_blank" rel="noopener">People ↗</a>` : ""}</div>
     </div>`;
   };
 
@@ -4622,8 +4630,7 @@ function renderCard(rows, attrs, resolved) {
   const injectAtEnd = () => {
     // LinkedIn prospecting section — always show for the top vendor.
     if (liCompanyName) {
-      const liQuery = `site:linkedin.com/in "${liCompanyName}"`;
-      const liUrl = `https://www.google.com/search?q=${encodeURIComponent(liQuery)}`;
+      const liCardUrl = liUrl(liCompanyName);
       card.appendChild(compHead('Prospecting', ''));
       const liRow = $$('div', { class: 'mo-list' });
       liRow.innerHTML = `
@@ -4632,7 +4639,7 @@ function renderCard(rows, attrs, resolved) {
             <span class="mo-row-name">People at ${escapeHtml(liCompanyName)}</span>
           </div>
           <div class="mo-row-actions">
-            <a class="mo-row-view" href="${escapeHtml(liUrl)}" target="_blank" rel="noopener">People ↗</a>
+            <a class="mo-row-view" href="${escapeHtml(liCardUrl)}" target="_blank" rel="noopener">People ↗</a>
           </div>
         </div>`;
       card.appendChild(liRow);
