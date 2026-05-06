@@ -1293,7 +1293,7 @@ a:hover { text-decoration: underline; }
         <span class="mo-modal-tip-d">Direct links to 10-K, 10-Q, 8-K, proxy — not a search result</span>
       </div>
       <div class="mo-modal-tip">
-        <span class="mo-modal-tip-q">Booz Allen insider trades</span>
+        <span class="mo-modal-tip-q">Booz Allen insider transactions</span>
         <span class="mo-modal-tip-d">Form 4 — who filed, how many times, when</span>
       </div>
       <div class="mo-modal-tip">
@@ -1302,7 +1302,7 @@ a:hover { text-decoration: underline; }
       </div>
       <div class="mo-modal-tip">
         <span class="mo-modal-tip-q">CrowdStrike federal footprint and recent insider activity</span>
-        <span class="mo-modal-tip-d">Two cards — contracts left, insider trades right</span>
+        <span class="mo-modal-tip-d">Two cards — contracts left, insider transactions right</span>
       </div>
       <div class="mo-modal-tip">
         <span class="mo-modal-tip-q">Anthropic filings</span>
@@ -3017,7 +3017,7 @@ function renderEdgarCard(rows, resolved) {
   // ── HEAD ─────────────────────────────────────────────────
   parts.push(`<div class="mo-card-head">`);
 
-  const formLabels = { 'overview': 'SEC filings', 'D': 'Form D — private offerings', '4': 'Form 4 — insider trades', '13F-HR': '13F — institutional positions', 'SC 13D': '13D — activist >5% stakes', 'SC 13G': '13G — passive >5% stakes', 'S-1': 'S-1 — IPO registrations', '10-K': '10-K — annual reports', '10-Q': '10-Q — quarterly reports', '8-K': '8-K — material events' };
+  const formLabels = { 'overview': 'SEC filings', 'D': 'Form D — private offerings', '4': 'Form 4 — insider transactions', '13F-HR': '13F — institutional positions', 'SC 13D': '13D — activist >5% stakes', 'SC 13G': '13G — passive >5% stakes', 'S-1': 'S-1 — IPO registrations', '10-K': '10-K — annual reports', '10-Q': '10-Q — quarterly reports', '8-K': '8-K — material events' };
   const formLabel = formLabels[resolved.formType] || resolved.formType;
   let titleParts = [formLabel];
   if (resolved.company) titleParts.push(`for ${resolved.company}`);
@@ -3048,7 +3048,7 @@ function renderEdgarCard(rows, resolved) {
   // so users who aren't SEC experts immediately understand what they're looking at.
   const FORM_CONTEXT = {
     'D':     'Form D is filed when a private company raises money from investors. Each row is one fundraising round — the entity name is often an SPV set up specifically for that raise.',
-    '4':     'Form 4 is filed within 2 days when a corporate insider buys or sells company stock. The name shown is the executive or director who made the trade.',
+    '4':     'Form 4 is filed within 2 days when a corporate insider buys or sells company stock. The name shown is the executive or director who made the transaction.',
     '13F-HR':'13F is a quarterly snapshot of what a large institutional investor owns. Each row shows one fund\'s reported position.',
     'SC 13D': '13D is filed when an investor crosses 5% ownership and intends to influence the company. Often signals activist interest.',
     'SC 13G': '13G is filed when an investor crosses 5% ownership passively — usually an index fund or long-term holder.',
