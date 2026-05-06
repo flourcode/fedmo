@@ -145,25 +145,59 @@ a:hover { text-decoration: underline; }
 .mo-modal-backdrop.open { opacity: 1; pointer-events: auto; }
 .mo-modal {
   position: fixed;
+  /* Desktop: centered dialog */
   top: 50%;
   left: 50%;
   transform: translate(-50%, -48%) scale(0.98);
   width: calc(100% - 32px);
   max-width: 460px;
-  max-height: calc(100vh - 64px);
-  overflow-y: auto;
+  max-height: calc(100vh - 80px);
+  /* overflow on a wrapper inside — keeps border-radius intact */
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
   background: var(--bg-card);
   border-radius: var(--radius);
-  box-shadow: 0 8px 32px rgba(10,10,20,0.12);
+  box-shadow: 0 8px 32px rgba(10,10,20,0.18);
   z-index: 101;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 180ms, transform 180ms;
+  transition: opacity 200ms, transform 200ms;
 }
 .mo-modal.open {
   opacity: 1;
   pointer-events: auto;
   transform: translate(-50%, -50%) scale(1);
+}
+/* Mobile: bottom sheet — full width, slides up, rounded top corners only */
+@media (max-width: 600px) {
+  .mo-modal {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    max-width: 100%;
+    max-height: 88vh;
+    border-radius: var(--radius) var(--radius) 0 0;
+    transform: translateY(12px) scale(0.99);
+    box-shadow: 0 -4px 32px rgba(10,10,20,0.14);
+  }
+  .mo-modal.open {
+    transform: translateY(0) scale(1);
+  }
+}
+.mo-modal-handle {
+  display: none; /* hidden on desktop */
+  width: 36px;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  margin: 10px auto 4px;
+  flex-shrink: 0;
+}
+@media (max-width: 600px) {
+  .mo-modal-handle { display: block; }
 }
 .mo-modal-header {
   display: flex;
@@ -190,7 +224,13 @@ a:hover { text-decoration: underline; }
   border-radius: 8px;
 }
 .mo-modal-close:active { background: var(--primary-20); }
-.mo-modal-body { padding: 20px; }
+.mo-modal-body {
+  padding: 20px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  /* Scrolls here, not on .mo-modal — keeps rounded corners intact */
+}
 .mo-modal-body p {
   margin: 0 0 12px;
   color: var(--text-body);
@@ -227,6 +267,13 @@ a:hover { text-decoration: underline; }
   color: var(--text-muted);
   text-align: center;
   margin-top: 12px;
+}
+@media (max-width: 600px) {
+  .mo-modal-body { padding: 16px; }
+  .mo-modal-tips { font-size: 13px; }
+  .mo-modal-tip { padding: 7px 10px; }
+  .mo-modal-tip-q { font-size: 12px; }
+  .mo-modal-tip-d { font-size: 11px; }
 }
 .mo-modal-section-head {
   font-size: 11px;
@@ -1178,6 +1225,7 @@ a:hover { text-decoration: underline; }
 <!-- About modal, opens from the hamburger -->
 <div class="mo-modal-backdrop" id="aboutBackdrop"></div>
 <div class="mo-modal" id="aboutModal" role="dialog" aria-labelledby="aboutTitle" aria-hidden="true">
+  <div class="mo-modal-handle" aria-hidden="true"></div>
   <div class="mo-modal-header">
     <svg class="mo-modal-face" viewBox="0 0 40 40"><use href="#icon-face-open"/></svg>
     <div>
@@ -4560,7 +4608,11 @@ function renderCard(rows, attrs, resolved) {
   // there's no SEC fetch (sub flow, or no rows), inject immediately.
   const agencyEntries = isSub ? [] : aggregateRowsBy(rows, isSub, 'agency');
   // Build clean LinkedIn search name — strip legal suffixes that confuse LinkedIn
-  const liRawName = resolved.recipientResolved || (attrs.recipient && !attrs.recipient.includes(',') ? attrs.recipient : null);
+  // For recipient queries use the resolved name; for keyword/competitor
+  // queries fall back to the top vendor by dollar amount.
+  const liRawName = resolved.recipientResolved
+    || (attrs.recipient && !attrs.recipient.includes(',') ? attrs.recipient : null)
+    || (vendorEntries[0] ? vendorEntries[0][0] : null);
   const liCompanyName = liRawName
     ? liRawName
         .replace(/[,.]?\s*(inc\.?|incorporated|corp\.?|corporation|llc|l\.l\.c\.?|ltd\.?|limited|plc|holdings?|company|co\.?)\.?\s*$/i, '')
@@ -4568,9 +4620,8 @@ function renderCard(rows, attrs, resolved) {
     : null;
 
   const injectAtEnd = () => {
-    // LinkedIn prospecting section — same grammar as SEC filings section.
-    // Only on single-vendor cards, not keyword/competitor/subaward views.
-    if (liCompanyName && !attrs.keywords) {
+    // LinkedIn prospecting section — always show for the top vendor.
+    if (liCompanyName) {
       const liQuery = `site:linkedin.com/in "${liCompanyName}"`;
       const liUrl = `https://www.google.com/search?q=${encodeURIComponent(liQuery)}`;
       card.appendChild(compHead('Prospecting', ''));
