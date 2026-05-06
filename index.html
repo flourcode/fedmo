@@ -1836,9 +1836,12 @@ async function pull(attrs) {
   // EDGAR branch: any tag with form_type set goes to capital-markets path.
   // Recognized form types: D (private raises), 4 (insider trades), 13F
   // (institutional positions), 13D, 13G, S-1 (IPO), 10-K, 10-Q, 8-K.
-  // Federal contract queries do NOT use form_type, so this branch never
-  // fires for them.
-  if (attrs.form_type) {
+  // Route to EDGAR when form_type= is set OR when company=/sector= is
+  // present without a recipient= — covers "Leidos SEC filings" where
+  // Mo omits form_type for the overview mode.
+  const isEdgarQuery = attrs.form_type ||
+    ((attrs.company || attrs.sector) && !attrs.recipient);
+  if (isEdgarQuery) {
     return await pullEdgar(attrs);
   }
 
@@ -2790,9 +2793,18 @@ function renderEdgarCard(rows, resolved) {
     }
     parts.push(`</div>`);
   } else {
-    parts.push(`<div class="mo-edgar-rows">`);
-    rows.slice(0, 30).forEach(r => parts.push(renderEdgarRow(r, resolved)));
+    const EDGAR_SHOW_INITIAL = 10;
+    const visibleRows = rows.slice(0, EDGAR_SHOW_INITIAL);
+    const hiddenRows = rows.slice(EDGAR_SHOW_INITIAL, 100);
+    parts.push(`<div class="mo-edgar-rows" id="edgar-rows-main">`);
+    visibleRows.forEach(r => parts.push(renderEdgarRow(r, resolved)));
     parts.push(`</div>`);
+    if (hiddenRows.length > 0) {
+      parts.push(`<button class="mo-show-more" data-action="edgar-show-more">Show ${hiddenRows.length} more</button>`);
+      parts.push(`<div class="mo-edgar-rows mo-edgar-rows-hidden" style="display:none">`);
+      hiddenRows.forEach(r => parts.push(renderEdgarRow(r, resolved)));
+      parts.push(`</div>`);
+    }
   }
 
   return parts.join('');
@@ -3532,6 +3544,16 @@ async function loadSecFilings(rows, attrs) {
   const topPrimes = Object.entries(byPrime).sort((a, b) => b[1] - a[1]).slice(0, 7).map(([n]) => n);
 
   const injected = [];
+  // Always inject the queried recipient so it appears in the SEC footer
+  // even if it doesn't show in the top rows (e.g. a Leidos query that
+  // returned DOE lab rows — Leidos wasn't a recipient but user asked about Leidos)
+  if (attrs && attrs.recipient) {
+    const recipNames = String(attrs.recipient).split(',').map(s => s.trim()).filter(Boolean);
+    for (const n of recipNames) {
+      const match = matchPublicVendor(n);
+      if (match) injected.push(match.display || n);
+    }
+  }
   if (attrs && attrs.keywords) {
     const kwVendors = String(attrs.keywords).split(',').map(k => k.trim()).filter(Boolean);
     for (const kw of kwVendors) {
@@ -4047,6 +4069,14 @@ function renderCard(rows, attrs, resolved) {
   if (resolved && resolved.edgarMode) {
     const card = $$('div', { class: 'mo-card' });
     card.innerHTML = renderEdgarCard(rows, resolved);
+    // Wire up show-more for long EDGAR result lists
+    const edgarShowMore = card.querySelector('[data-action="edgar-show-more"]');
+    if (edgarShowMore) {
+      edgarShowMore.addEventListener('click', () => {
+        card.querySelector('.mo-edgar-rows-hidden').style.display = '';
+        edgarShowMore.remove();
+      });
+    }
     return card;
   }
 
