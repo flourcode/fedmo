@@ -5135,7 +5135,7 @@ function renderMoTurn(question) {
   turn.appendChild(proseEl);
 
   $conv.appendChild(turn);
-  scrollBottom();
+  scrollTurnIntoView(turn);  // bring Mo face to top of viewport, once
 
   return {
     appendText: (t) => {
@@ -5163,7 +5163,7 @@ function renderMoTurn(question) {
         if (!toAppend) return;
       }
       proseEl.append(document.createTextNode(toAppend));
-      scrollBottom();
+      scrollIfNearBottom();
     },
 
     replaceText: (t) => {
@@ -5171,7 +5171,7 @@ function renderMoTurn(question) {
       const cleaned = (t || '').replace(/^[\s<>]+/, '');
       if (cleaned) proseEl.append(document.createTextNode(cleaned));
     },
-    insertEl: (el) => { turn.appendChild(el); scrollBottom(); },
+    insertEl: (el) => { turn.appendChild(el); scrollIfNearBottom(); },
     setError: (msg) => { turn.appendChild($$('div', { class: 'mo-err', text: msg })); },
     done: () => {},
     _shown: 0,
@@ -5199,6 +5199,27 @@ function renderLoadingCard() {
 
 function scrollBottom() {
   window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+}
+
+// Scroll the new Mo turn into view at the top of the viewport — shows the
+// face and start of prose. Only called once per turn, not on every chunk.
+function scrollTurnIntoView(turnEl) {
+  if (!turnEl) return;
+  // Small delay so the element is painted before we measure
+  requestAnimationFrame(() => {
+    const rect = turnEl.getBoundingClientRect();
+    const offset = 12; // breathing room above the face
+    window.scrollBy({ top: rect.top - offset, behavior: 'smooth' });
+  });
+}
+
+// Only scroll to bottom if user is already near the bottom (within 200px).
+// This lets users who scroll up to re-read stay where they are.
+function scrollIfNearBottom() {
+  const distFromBottom = document.body.scrollHeight - window.scrollY - window.innerHeight;
+  if (distFromBottom < 200) {
+    window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+  }
 }
 
 // =============================================================================
