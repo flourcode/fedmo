@@ -5099,7 +5099,12 @@ function renderUserTurn(text) {
     $$('div', { class: 'mo-bubble', text }),
   );
   $conv.appendChild(turn);
-  scrollBottom();
+  // Scroll the user bubble to the top — answer flows naturally downward.
+  // Use a rAF so the element is painted before we measure.
+  requestAnimationFrame(() => {
+    const rect = turn.getBoundingClientRect();
+    window.scrollBy({ top: rect.top - 12, behavior: 'smooth' });
+  });
 }
 
 function renderMoTurn(question) {
@@ -5126,7 +5131,7 @@ function renderMoTurn(question) {
   turn.appendChild(proseEl);
 
   $conv.appendChild(turn);
-  scrollTurnIntoView(turn);  // bring Mo face to top of viewport, once
+  // No scroll here — user bubble is already at top, Mo turn appears just below
 
   return {
     appendText: (t) => {
@@ -5154,7 +5159,7 @@ function renderMoTurn(question) {
         if (!toAppend) return;
       }
       proseEl.append(document.createTextNode(toAppend));
-      scrollIfNearBottom();
+      // No scroll during streaming — user reads downward naturally
     },
 
     replaceText: (t) => {
