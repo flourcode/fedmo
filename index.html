@@ -2861,19 +2861,42 @@ async function pullEdgar(attrs) {
     if (cik) {
       const sub = await fetchSubmissionsOverview(cik);
       if (sub && sub.rows.length) {
-        console.log(`[edgar:overview] CIK ${cik} (${sub.entityName}) — ${sub.rows.length} filings via submissions`);
-        resolved.entityName = sub.entityName;
-        // Apply date filter if set
-        const cutoff = query.dateRange?.startdt || null;
-        rows = cutoff ? sub.rows.filter(r => !r.fileDate || r.fileDate >= cutoff) : sub.rows;
-        total = rows.length;
-        // Skip edgarSearch entirely
-        rows.sort((a, b) => (b.fileDate || '').localeCompare(a.fileDate || ''));
-        resolved.totalFromEdgar = total;
-        return { rows, resolved, error: null };
+        // Validate: the returned CIK's entity name must loosely match the
+        // queried company — prevents Amazon's CIK being used for "Anthropic".
+        const entityLower = (sub.entityName || '').toLowerCase();
+        const queryLower = company.toLowerCase().split(/\s+/)[0]; // first word
+        if (entityLower.includes(queryLower)) {
+          console.log(`[edgar:overview] CIK ${cik} (${sub.entityName}) — ${sub.rows.length} filings via submissions`);
+          resolved.entityName = sub.entityName;
+          const cutoff = query.dateRange?.startdt || null;
+          rows = cutoff ? sub.rows.filter(r => !r.fileDate || r.fileDate >= cutoff) : sub.rows;
+          total = rows.length;
+          rows.sort((a, b) => (b.fileDate || '').localeCompare(a.fileDate || ''));
+          resolved.totalFromEdgar = total;
+          return { rows, resolved, error: null };
+        } else {
+          console.warn(`[edgar:overview] CIK ${cik} name mismatch: "${sub.entityName}" vs query "${company}" — falling through`);
+        }
       }
     }
-    // Fall through to full-text search if CIK lookup fails (private company)
+    // No public company CIK found — check if this is a known private company
+    // by searching Form D filings. Private companies like Anthropic and OpenAI
+    // only file Form D (fundraising). Show those instead of nothing/wrong data.
+    console.log(`[edgar:overview] No public CIK for "${company}" — pivoting to Form D`);
+    resolved.formType = 'D';
+    resolved.autoPrivatePivot = company; // flag for card header messaging
+    // Fall through to Form D search below
+  }
+
+  // If we pivoted from overview to Form D (private company), update query forms
+  if (resolved.autoPrivatePivot) {
+    query.forms = ['D'];
+    // Widen date window for Form D — private companies raise infrequently
+    if (!dateAfter) {
+      const d = new Date();
+      d.setFullYear(d.getFullYear() - 3);
+      query.dateRange.startdt = d.toISOString().slice(0, 10);
+    }
   }
 
   try {
@@ -2960,7 +2983,9 @@ function renderEdgarCard(rows, resolved) {
 
   // Subtitle: human-readable date window, no jargon
   const subBits = [];
-  if (resolved.dateAfter) {
+  if (resolved.autoPrivatePivot) {
+    subBits.push(`${resolved.autoPrivatePivot} is a private company — showing fundraising history instead`);
+  } else if (resolved.dateAfter) {
     const today = new Date().toISOString().slice(0, 10);
     if (resolved.dateBefore) subBits.push(`Filed ${resolved.dateAfter} through ${resolved.dateBefore}`);
     else subBits.push(`Filed since ${resolved.dateAfter}`);
