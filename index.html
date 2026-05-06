@@ -1337,7 +1337,7 @@ a:hover { text-decoration: underline; }
 
 <form class="mo-composer" id="composer">
   <div class="mo-composer-inner">
-    <input type="text" id="input" placeholder="What do you sell or cover?" autocomplete="off" enterkeyhint="send" autofocus>
+    <input type="text" id="input" placeholder="What do you sell or cover?" autocomplete="off" enterkeyhint="send">
     <button type="submit" id="send" aria-label="Send">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
     </button>
@@ -5464,6 +5464,11 @@ function hideGreeting() {
 }
 function showGreeting() {
   if ($greeting) $greeting.style.display = '';
+}
+
+// Focus input on desktop only — autofocus on mobile triggers keyboard + scroll on load
+if (!('ontouchstart' in window) && !navigator.maxTouchPoints) {
+  document.getElementById('input')?.focus();
 }
 
 const $greetingExamples = document.getElementById('greeting-examples');
