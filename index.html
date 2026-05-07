@@ -1393,7 +1393,7 @@ const GREETING_PROMPTS = [
   'Who resells AWS',
   'Cyber awards at HHS this year',
   'AI startups that raised in FY26',
-  'Sales plan for cloud across FedCiv',
+  'Who does SAIC sub to',
 ];
 
 // =============================================================================
@@ -5779,7 +5779,10 @@ async function askMo(question, opts = {}) {
           moTurn._shown = cleanedPrefix.length; // advance past original (incl whitespace)
         }
         // Rebuild fullText: cleaned prefix + post-tag remainder
-        fullText = cleanedPrefix + fullText.slice(tag.end);
+        // Strip leading whitespace from remainder — the \n between consecutive
+        // tags causes a visible blank line in the prose div
+        const tagRemainder = fullText.slice(tag.end).replace(/^\n+/, '');
+        fullText = cleanedPrefix + tagRemainder;
         // Remember where the most recent tag ended (after collapse) so we
         // can detect any malformed FOLLOWING tag attempt that comes after.
         moTurn._firedTagEnd = cleanedPrefix.length;
