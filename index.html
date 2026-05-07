@@ -384,13 +384,25 @@ a:hover { text-decoration: underline; }
 }
 .mo-insight {
   font-size: 14px;
-  line-height: 1.55;
-  color: var(--text-muted);
+  line-height: 1.6;
+  color: var(--text-body);
   white-space: pre-wrap;
   word-wrap: break-word;
-  margin: 16px 0 8px;
-  padding: 14px 4px 0;
-  border-top: 1px solid var(--border-soft);
+  margin: 20px 0 8px;
+  padding: 14px 16px;
+  background: var(--bg-tint);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--primary-60);
+}
+.mo-insight::before {
+  content: "Mo's take";
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--primary-60);
+  margin-bottom: 8px;
 }
 .mo-turn-mo .mo-err {
   margin-top: 8px;
@@ -5337,17 +5349,20 @@ async function fireInsight(cardEl, rows, resolved, attrs) {
     const insightEl = $$('div', { class: 'mo-insight', text: '' });
     turn.appendChild(insightEl);
 
-    const insightPrompt = `You have just retrieved federal contract data. Here are the computed signals:
+    const userQuestion = attrs._originalQuestion || '';
+    const insightPrompt = `You are a federal sales strategist analyzing live USASpending data for someone who asked: "${userQuestion}"
 
+Here are the computed signals from the data pull:
 ${JSON.stringify(signals, null, 2)}
 
-Write 2-4 sentences of insight that a seasoned federal overlay rep would notice from these specific numbers. Focus on:
-- What the concentration level tells you about market dynamics
-- What the expiring contracts mean for timing
-- Any non-obvious pattern in agency buying, vendor positioning, or contract structure
-- What a seller should actually do differently because of this data
+Write 2-3 sentences of sharp, specific insight tailored to their question and these exact numbers. Address them directly — they asked a specific question, give them a specific answer informed by the data.
 
-Be specific. Name dollar amounts, vendor names, and timing windows. Do NOT give generic advice. Do NOT restate what the numbers already show — synthesize what they mean.`;
+Rules:
+- Name specific dollar amounts, vendor names, contract IDs, and timing windows from the signals
+- Connect the data back to what they were actually asking about
+- Do NOT give generic "build relationships" advice
+- Do NOT restate the numbers — say what they MEAN for this person's specific situation
+- If they mentioned their company or role, speak to that context specifically`;
 
     const r = await fetch(LAMBDA_URL, {
       method: 'POST',
@@ -5434,7 +5449,7 @@ async function askMo(question, opts = {}) {
 
         // Fire insight analysis after card data is loaded — Mo now has
         // actual signals to reason from, not just the question.
-        fireInsight(cardEl, rows, resolved, tag.attrs);
+        fireInsight(cardEl, rows, resolved, { ...tag.attrs, _originalQuestion: question });
       })
       .catch(err => {
         if (myLoadingEl && myLoadingEl.parentNode) myLoadingEl.remove();
