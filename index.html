@@ -5370,7 +5370,7 @@ Be specific. Name dollar amounts, vendor names, and timing windows. Do NOT give 
       if (done) break;
       text += decoder.decode(value, { stream: true });
       // Strip any data tags that leak through
-      insightEl.textContent = text.replace(/<data[^/]*\/>/gi, '').replace(/^\s+/, '');
+      insightEl.textContent = text.split('<data').map((p,i) => i===0 ? p : p.slice(p.indexOf('/>')+2)).join('').replace(/^\s+/, '');
     }
 
     if (!insightEl.textContent.trim()) insightEl.remove();
