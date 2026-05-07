@@ -5406,9 +5406,19 @@ async function fireInsight(cardEl, rows, resolved, attrs) {
       timingEvidence = 'No near-term expirations — longer sales cycle expected';
     }
 
+    // Detect if the user is likely asking FROM inside the dominant vendor
+    // e.g. "how do I sell more AWS to Navy" — top vendor IS AWS, user works there
+    const queryRecipient = (attrs.recipient || '').toLowerCase();
+    const topVendorName = (sorted[0]?.[0] || '').toLowerCase();
+    const isInsideVendor = queryRecipient && topVendorName &&
+      (topVendorName.includes(queryRecipient) || queryRecipient.includes(topVendorName.split(' ')[0]));
+
     // Recommended play type
     let playType, playRationale;
-    if (marketStability === 'monopolistic' || marketStability === 'concentrated') {
+    if (isInsideVendor && top1Share > 0.5) {
+      playType = 'account_expansion';
+      playRationale = `${sorted[0]?.[0]} already dominates at ${Math.round(top1Share*100)}% direct spend — strategy is (1) protect and expand existing accounts at expiring contracts, and (2) identify channel partners who hold adjacent programs not yet in the direct footprint`;
+    } else if (marketStability === 'monopolistic' || marketStability === 'concentrated') {
       if (incumbentVulnerability === 'high') {
         playType = 'competitive_displacement';
         playRationale = 'Concentrated market + aging incumbent = displacement opportunity through recompete';
