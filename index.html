@@ -5223,6 +5223,11 @@ function renderMoTurn(question) {
     insertEl: (el) => { turn.appendChild(el); },
     setError: (msg) => { turn.appendChild($$('div', { class: 'mo-err', text: msg })); },
     done: () => {},
+    appendInsight: (text) => {
+      if (!text || !text.trim()) return;
+      const el = $$('div', { class: 'mo-insight', text: text.trim() });
+      turn.appendChild(el);
+    },
     _shown: 0,
   };
 }
@@ -5463,8 +5468,18 @@ async function askMo(question, opts = {}) {
       }
     }
 
-    // Stream done. If we suppressed prose because of a broken tag, leave it
-    // suppressed — it's garbage.
+    // Stream done. Extract prose after the last fired tag and render as
+    // insight block below the card.
+    if (tagsFired > 0 && moTurn._firedTagEnd !== undefined) {
+      const rawAfter = fullText.slice(moTurn._firedTagEnd).trim();
+      const cleanInsight = rawAfter.replace(/<data[^>]*\/>/gi, '').trim();
+      if (cleanInsight.length > 30) {
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          moTurn.appendInsight(cleanInsight);
+        }));
+      }
+    }
+
     history.push({ role: 'model', parts: [{ text: fullText }] });
     // Cap history at last 4 turns (2 user + 2 model pairs). Long histories
     // anchor Mo to old topics when the user pivots — "AWS at DoD" then
