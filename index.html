@@ -5593,22 +5593,22 @@ async function fireSynthesisInsight(cardResults, question) {
       };
     }).filter(Boolean);
 
-    const synthesisPrompt = `You are a veteran federal sales strategist building a sales plan.
+    const synthesisPrompt = `You are a veteran federal sales strategist building a sales plan for someone who asked: "${question}"
 
-The user asked: "${question}"
-
-You pulled ${cardResults.length} data cards. Here are the combined signals:
+You pulled ${cardResults.length} data cards covering different angles of this market. Here are the signals per card:
 
 ${JSON.stringify(cardSummaries, null, 2)}
 
-Write a SALES PLAN as 4 short paragraphs of plain prose — no markdown, no bullet points, no bold text, no asterisks, no numbered lists. Just clean sentences.
+Write a SALES PLAN in 4 short paragraphs of plain prose. Rules:
+- Use "you" and "your" throughout — never "we" or "our"
+- No markdown, no bullet points, no bold, no asterisks, no numbered lists
+- Each card represents a different market angle — treat them as distinct plays, not one homogeneous market
+- Be specific: name exact dollar amounts, vendor names, contract IDs, and expiry dates from the data above
 
-Paragraph 1 — Market assessment: what these cards together tell you about the opportunity and dynamics.
-Paragraph 2 — The recommended play: specific strategy given concentration, timing, and channel data.
-Paragraph 3 — Priority targets: specific vendors, agencies, or contract IDs to pursue first. Name them.
-Paragraph 4 — First moves this week: 2-3 concrete actions with specific days or timing.
-
-Be specific. Use exact dollar amounts, vendor names, and contract details from the data. No generic advice. Write it like a real overlay rep's QBR notes — direct, grounded, actionable.`;
+Paragraph 1 — Market snapshot: What do these cards together reveal about market structure? Call out where concentration is high vs fragmented — these are different plays requiring different strategies.
+Paragraph 2 — The plays by segment: For each distinct market segment in the cards, name the specific recommended play (direct prime, partner teaming, displacement, account expansion) and WHY the data supports it. Don't treat a 80%+ concentrated market the same as a fragmented one.
+Paragraph 3 — Priority targets this quarter: Name the 2-3 specific vendors, agencies, or expiring contracts that represent the highest-probability near-term opportunities. Include dollar amounts and expiry dates.
+Paragraph 4 — First moves this week: 3 concrete actions with specific timing. Name the person or team to call, the contract or vehicle to reference, and the pitch angle.`;
 
     const insightEl = $$('div', { class: 'mo-insight', text: '' });
     turn.appendChild(insightEl);
