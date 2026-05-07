@@ -5530,6 +5530,93 @@ Be specific. Use names, dollar amounts, timing windows from above. No generic ad
   }
 }
 
+// Synthesis insight for multi-card planning queries.
+// Combines signals from all cards into one coherent sales plan.
+async function fireSynthesisInsight(cardResults, question) {
+  if (!cardResults.length) return;
+
+  // Use the last card's element to append the synthesis block
+  const lastCard = cardResults[cardResults.length - 1];
+  const turn = lastCard.cardEl?.closest('.mo-turn-mo');
+  if (!turn) return;
+
+  try {
+    // Build combined signals from all cards
+    const cardSummaries = cardResults.map(({ rows, resolved, attrs }, i) => {
+      if (!rows.length) return null;
+      const byVendor = {};
+      for (const r of rows) {
+        const n = r['Recipient Name'] || '?';
+        byVendor[n] = (byVendor[n] || 0) + (Number(r['Award Amount']) || 0);
+      }
+      const sorted = Object.entries(byVendor).sort((a,b) => b[1]-a[1]);
+      const total = sorted.reduce((s,[,v]) => s+v, 0);
+      const today = new Date().toISOString().slice(0,10);
+      const in90 = new Date(Date.now()+90*864e5).toISOString().slice(0,10);
+      const expiring = rows.filter(r => r['End Date'] && r['End Date'] <= in90 && r['End Date'] >= today);
+      const top3Share = total > 0 ? Math.round(sorted.slice(0,3).reduce((s,[,v])=>s+v,0)/total*100) : 0;
+
+      return {
+        card: i + 1,
+        query: attrs.keywords || attrs.recipient || attrs.agency || 'unknown',
+        total: `$${(total/1e6).toFixed(1)}M`,
+        vendors: sorted.length,
+        top_vendor: sorted[0] ? `${sorted[0][0]}: $${(sorted[0][1]/1e6).toFixed(1)}M (${Math.round(sorted[0][1]/total*100)}%)` : 'none',
+        top3_concentration: `${top3Share}%`,
+        expiring_90d: expiring.length,
+        expiring_value: `$${(expiring.reduce((s,r)=>s+(Number(r['Award Amount'])||0),0)/1e6).toFixed(1)}M`,
+        agencies: [...new Set(rows.map(r=>r['Awarding Agency']).filter(Boolean))].slice(0,3),
+      };
+    }).filter(Boolean);
+
+    const synthesisPrompt = `You are a veteran federal sales strategist building a sales plan.
+
+The user asked: "${question}"
+
+You pulled ${cardResults.length} data cards. Here are the combined signals:
+
+${JSON.stringify(cardSummaries, null, 2)}
+
+Write a SALES PLAN in 4-6 sentences. Structure it as:
+1. Market assessment — what these cards together tell you about the opportunity size and dynamics
+2. The recommended play — specific strategy given the concentration, timing, and channel data
+3. Priority targets — specific vendors, agencies, or contracts to pursue first (name them)
+4. First moves this week — 2-3 concrete actions with timing
+
+Be specific. Use exact dollar amounts, vendor names, and contract details from the data. No generic advice. This should read like a real overlay rep's QBR summary.`;
+
+    const insightEl = $$('div', { class: 'mo-insight', text: '' });
+    turn.appendChild(insightEl);
+
+    const r = await fetch(LAMBDA_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        history: [{ role: 'user', parts: [{ text: synthesisPrompt }] }],
+        insight_mode: true,
+      }),
+    });
+
+    if (!r.ok || !r.body) return;
+    const reader = r.body.getReader();
+    const decoder = new TextDecoder();
+    let text = '';
+    insightEl.textContent = '';
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      text += decoder.decode(value, { stream: true });
+      insightEl.textContent = text.split('<data').map((p,i) => i===0 ? p : p.slice(p.indexOf('/>')+2)).join('').replace(/^\s+/, '');
+    }
+
+    if (!insightEl.textContent.trim()) insightEl.remove();
+
+  } catch(e) {
+    console.warn('[synthesis]', e.message);
+  }
+}
+
 async function askMo(question, opts = {}) {
   if (busy) return;
   busy = true;
@@ -5544,6 +5631,8 @@ async function askMo(question, opts = {}) {
   let tagsFired = 0;
   const MAX_TAGS = 4;  // Mo can emit up to four tags per turn — needed for multi-query sales plans
   let loadingEl = null;       // most recent loading card (for replacement)
+  const allCardResults = []; // collects {cardEl, rows, resolved, attrs} for synthesis
+  let cardsPending = 0;      // how many cards are still loading
   let secondLoadingEl = null; // when both tags fire, second card has its own loading
   let suppressFrom = -1;  // index in fullText to start hiding from (broken tag opener)
 
@@ -5551,6 +5640,7 @@ async function askMo(question, opts = {}) {
   // Used for both the first tag and any subsequent tags.
   const fireTag = (tag, isSecond) => {
     console.log('[mo:tag]', JSON.stringify(tag.attrs));
+    cardsPending++;
     const myLoadingEl = renderLoadingCard();
     moTurn.insertEl(myLoadingEl);
     if (!isSecond) loadingEl = myLoadingEl;
@@ -5582,9 +5672,17 @@ async function askMo(question, opts = {}) {
         }
         if (error) moTurn.setError(error);
 
-        // Fire insight analysis after card data is loaded — Mo now has
-        // actual signals to reason from, not just the question.
-        fireInsight(cardEl, rows, resolved, { ...tag.attrs, _originalQuestion: question });
+        // Collect card result for potential synthesis
+        allCardResults.push({ cardEl, rows, resolved, attrs: { ...tag.attrs, _originalQuestion: question } });
+        cardsPending--;
+
+        if (tagsFired === 1) {
+          // Single card — fire insight immediately
+          fireInsight(cardEl, rows, resolved, { ...tag.attrs, _originalQuestion: question });
+        } else if (cardsPending === 0) {
+          // All cards loaded — fire synthesis insight on the last card
+          fireSynthesisInsight(allCardResults, question);
+        }
       })
       .catch(err => {
         if (myLoadingEl && myLoadingEl.parentNode) myLoadingEl.remove();
