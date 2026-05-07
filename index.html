@@ -1393,7 +1393,7 @@ const GREETING_PROMPTS = [
   'Who resells AWS',
   'Cyber awards at HHS this year',
   'AI startups that raised in FY26',
-  'Sales plan for cloud across FedCiv',
+  'Who does SAIC sub to',
 ];
 
 // =============================================================================
@@ -5603,6 +5603,7 @@ Write a SALES PLAN in 4 short paragraphs of plain prose. Rules:
 - Use "you" and "your" throughout — never "we" or "our"
 - No markdown, no bullet points, no bold, no asterisks, no numbered lists
 - Each card represents a different market angle — treat them as distinct plays, not one homogeneous market
+- Do NOT sum dollar amounts across cards — the same contracts may appear in multiple cards causing double-counting. Reference each card's totals separately and flag where they overlap
 - Be specific: name exact dollar amounts, vendor names, contract IDs, and expiry dates from the data above
 
 Paragraph 1 — Market snapshot: What do these cards together reveal about market structure? Call out where concentration is high vs fragmented — these are different plays requiring different strategies.
