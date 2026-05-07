@@ -5293,6 +5293,94 @@ function scrollIfNearBottom() {
 // so the broken fragment doesn't render as visible garbage. We track whether
 // Mo started a tag (`<data`) and suppress all subsequent text until either
 // `/>` arrives or the stream ends.
+// Compute structured signals from card data and send to Lambda for insight prose.
+// Mo reasons from actual numbers, not from memory of the question.
+async function fireInsight(cardEl, rows, resolved, attrs) {
+  if (!rows || rows.length === 0) return;
+  if (resolved?.edgarMode) return;
+
+  const turn = cardEl?.closest('.mo-turn-mo');
+  if (!turn) return;
+
+  try {
+    // Build signal primitives deterministically
+    const byVendor = {};
+    for (const r of rows) {
+      const n = r['Recipient Name'] || '?';
+      byVendor[n] = (byVendor[n] || 0) + (Number(r['Award Amount']) || 0);
+    }
+    const sorted = Object.entries(byVendor).sort((a,b) => b[1]-a[1]);
+    const total = sorted.reduce((s,[,v]) => s+v, 0);
+    const top3 = sorted.slice(0,3);
+    const topShare = total > 0 ? Math.round(top3.reduce((s,[,v])=>s+v,0)/total*100) : 0;
+    const today = new Date().toISOString().slice(0,10);
+    const expiring = rows.filter(r => r['End Date'] && r['End Date'] <= new Date(Date.now()+90*864e5).toISOString().slice(0,10) && r['End Date'] >= today);
+    const avgAge = rows.filter(r=>r['Start Date']).reduce((s,r)=>{
+      const days = (new Date()-new Date(r['Start Date']))/(864e5);
+      return s + days;
+    }, 0) / (rows.filter(r=>r['Start Date']).length || 1);
+
+    const signals = {
+      query: attrs,
+      total_obligated: `$${(total/1e6).toFixed(1)}M`,
+      vendor_count: sorted.length,
+      top_vendors: top3.map(([n,v]) => `${n}: $${(v/1e6).toFixed(1)}M (${Math.round(v/total*100)}%)`),
+      top3_concentration: `${topShare}%`,
+      expiring_90d: expiring.length,
+      expiring_value: `$${(expiring.reduce((s,r)=>s+(Number(r['Award Amount'])||0),0)/1e6).toFixed(1)}M`,
+      avg_contract_age_days: Math.round(avgAge),
+      sample_descriptions: rows.slice(0,3).map(r => r['Description']||'').filter(Boolean),
+      agencies: [...new Set(rows.map(r=>r['Awarding Agency']).filter(Boolean))].slice(0,5),
+    };
+
+    // Create insight element and append directly to turn
+    const insightEl = $$('div', { class: 'mo-insight', text: '' });
+    turn.appendChild(insightEl);
+
+    const insightPrompt = `You have just retrieved federal contract data. Here are the computed signals:
+
+${JSON.stringify(signals, null, 2)}
+
+Write 2-4 sentences of insight that a seasoned federal overlay rep would notice from these specific numbers. Focus on:
+- What the concentration level tells you about market dynamics
+- What the expiring contracts mean for timing
+- Any non-obvious pattern in agency buying, vendor positioning, or contract structure
+- What a seller should actually do differently because of this data
+
+Be specific. Name dollar amounts, vendor names, and timing windows. Do NOT give generic advice. Do NOT restate what the numbers already show — synthesize what they mean.`;
+
+    const r = await fetch(LAMBDA_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        history: [{ role: 'user', parts: [{ text: insightPrompt }] }],
+        insight_mode: true,
+      }),
+    });
+
+    if (!r.ok || !r.body) return;
+
+    const reader = r.body.getReader();
+    const decoder = new TextDecoder();
+    let text = '';
+    insightEl.textContent = '';
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      text += decoder.decode(value, { stream: true });
+      // Strip any data tags that leak through
+      insightEl.textContent = text.replace(/<data[^>]*\/>/gi, '').replace(/^[\s
+]+/, '');
+    }
+
+    if (!insightEl.textContent.trim()) insightEl.remove();
+
+  } catch(e) {
+    console.warn('[insight]', e.message);
+  }
+}
+
 async function askMo(question, opts = {}) {
   if (busy) return;
   busy = true;
@@ -5344,6 +5432,10 @@ async function askMo(question, opts = {}) {
           delete cardEl._pendingPills;
         }
         if (error) moTurn.setError(error);
+
+        // Fire insight analysis after card data is loaded — Mo now has
+        // actual signals to reason from, not just the question.
+        fireInsight(cardEl, rows, resolved, tag.attrs);
       })
       .catch(err => {
         if (myLoadingEl && myLoadingEl.parentNode) myLoadingEl.remove();
@@ -5465,18 +5557,6 @@ async function askMo(question, opts = {}) {
       if (visibleEnd > moTurn._shown) {
         moTurn.appendText(fullText.slice(moTurn._shown, visibleEnd));
         moTurn._shown = visibleEnd;
-      }
-    }
-
-    // Stream done. Extract prose after the last fired tag and render as
-    // insight block below the card.
-    if (tagsFired > 0 && moTurn._firedTagEnd !== undefined) {
-      const rawAfter = fullText.slice(moTurn._firedTagEnd).trim();
-      const cleanInsight = rawAfter.replace(/<data[^>]*\/>/gi, '').trim();
-      if (cleanInsight.length > 30) {
-        requestAnimationFrame(() => requestAnimationFrame(() => {
-          moTurn.appendInsight(cleanInsight);
-        }));
       }
     }
 
