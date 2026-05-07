@@ -5314,7 +5314,7 @@ async function fireInsight(cardEl, rows, resolved, attrs) {
   if (!turn) return;
 
   try {
-    // Build signal primitives deterministically
+    // ── LAYER 1: Raw metrics ──────────────────────────────────────────
     const byVendor = {};
     for (const r of rows) {
       const n = r['Recipient Name'] || '?';
@@ -5322,26 +5322,148 @@ async function fireInsight(cardEl, rows, resolved, attrs) {
     }
     const sorted = Object.entries(byVendor).sort((a,b) => b[1]-a[1]);
     const total = sorted.reduce((s,[,v]) => s+v, 0);
-    const top3 = sorted.slice(0,3);
-    const topShare = total > 0 ? Math.round(top3.reduce((s,[,v])=>s+v,0)/total*100) : 0;
+    const top1Share = total > 0 ? sorted[0]?.[1]/total : 0;
+    const top3Share = total > 0 ? sorted.slice(0,3).reduce((s,[,v])=>s+v,0)/total : 0;
     const today = new Date().toISOString().slice(0,10);
-    const expiring = rows.filter(r => r['End Date'] && r['End Date'] <= new Date(Date.now()+90*864e5).toISOString().slice(0,10) && r['End Date'] >= today);
-    const avgAge = rows.filter(r=>r['Start Date']).reduce((s,r)=>{
-      const days = (new Date()-new Date(r['Start Date']))/(864e5);
-      return s + days;
-    }, 0) / (rows.filter(r=>r['Start Date']).length || 1);
+    const in90 = new Date(Date.now()+90*864e5).toISOString().slice(0,10);
+    const expiring = rows.filter(r => r['End Date'] && r['End Date'] <= in90 && r['End Date'] >= today);
+    const expiringVal = expiring.reduce((s,r)=>s+(Number(r['Award Amount'])||0),0);
+    const withAge = rows.filter(r=>r['Start Date']);
+    const avgAgeDays = withAge.length
+      ? withAge.reduce((s,r)=>(s+(new Date()-new Date(r['Start Date']))/(864e5)),0)/withAge.length
+      : 0;
+    const vehicles = rows.map(r=>r['pulled_from']||r['Contract Award Type']||'').filter(Boolean);
+    const descriptions = rows.map(r=>(r['Description']||'').toLowerCase());
+    const hasCloud = descriptions.some(d=>/cloud|aws|azure|gcp|govcloud|saas/i.test(d));
+    const hasModern = descriptions.some(d=>/devsecops|agile|platform|moderniz|zero.trust|api/i.test(d));
+    const hasLegacy = descriptions.some(d=>/mainframe|legacy|cobol|sustain|operation.*support|help.desk/i.test(d));
+    const agencies = [...new Set(rows.map(r=>r['Awarding Agency']).filter(Boolean))];
 
+    // ── LAYER 2: Market classification ────────────────────────────────
+    // Market stability
+    let marketStability, stabilityEvidence;
+    if (top1Share > 0.6) {
+      marketStability = 'monopolistic';
+      stabilityEvidence = `Single vendor controls ${Math.round(top1Share*100)}% — market effectively locked`;
+    } else if (top3Share > 0.8) {
+      marketStability = 'concentrated';
+      stabilityEvidence = `Top 3 vendors hold ${Math.round(top3Share*100)}% — high barrier to new entrants`;
+    } else if (sorted.length > 15 && top3Share < 0.5) {
+      marketStability = 'fragmented';
+      stabilityEvidence = `${sorted.length} vendors, top 3 only ${Math.round(top3Share*100)}% — competitive, winnable`;
+    } else {
+      marketStability = 'competitive';
+      stabilityEvidence = `${sorted.length} vendors with ${Math.round(top3Share*100)}% concentration — moderate competition`;
+    }
+
+    // Incumbent vulnerability
+    let incumbentVulnerability, vulnEvidence;
+    if (avgAgeDays > 1500 && expiring.length > 0) {
+      incumbentVulnerability = 'high';
+      vulnEvidence = `Avg contract age ${Math.round(avgAgeDays/365*10)/10} years with ${expiring.length} contracts expiring — aging footprint in renewal window`;
+    } else if (avgAgeDays > 900 && top1Share > 0.3) {
+      incumbentVulnerability = 'moderate';
+      vulnEvidence = `Incumbent has held position avg ${Math.round(avgAgeDays/365*10)/10} years — entrenched but not immune`;
+    } else if (expiring.length >= 3) {
+      incumbentVulnerability = 'moderate';
+      vulnEvidence = `${expiring.length} contracts expiring creates multiple recompete opportunities`;
+    } else {
+      incumbentVulnerability = 'low';
+      vulnEvidence = `Contracts are mostly mid-lifecycle — limited near-term displacement opportunity`;
+    }
+
+    // SaaS/modern tech friendliness
+    let saasScore, saasEvidence;
+    if (hasCloud && hasModern) {
+      saasScore = 'receptive';
+      saasEvidence = 'Active cloud and DevSecOps language in contract descriptions — agency buying modern tech';
+    } else if (hasCloud || hasModern) {
+      saasScore = 'emerging';
+      saasEvidence = hasCloud
+        ? 'Cloud procurement present — agency is modernizing but early'
+        : 'DevSecOps/agile language present — buying modern delivery but cloud TBD';
+    } else if (hasLegacy) {
+      saasScore = 'legacy-heavy';
+      saasEvidence = 'Contract descriptions suggest services/operations heavy — procurement inertia likely high';
+    } else {
+      saasScore = 'unclear';
+      saasEvidence = 'Mixed signals — needs deeper qualification';
+    }
+
+    // Timing signal
+    let timingUrgency, timingEvidence;
+    if (expiring.length >= 3 && expiringVal > total * 0.15) {
+      timingUrgency = 'critical';
+      timingEvidence = `$${(expiringVal/1e6).toFixed(1)}M (${Math.round(expiringVal/total*100)}% of spend) expiring in 90 days — requirements being written now`;
+    } else if (expiring.length >= 2) {
+      timingUrgency = 'active';
+      timingEvidence = `${expiring.length} contracts totaling $${(expiringVal/1e6).toFixed(1)}M expiring — renewal conversations underway`;
+    } else if (expiring.length === 1) {
+      timingUrgency = 'watch';
+      timingEvidence = `1 contract ($${(expiringVal/1e6).toFixed(1)}M) expiring — worth monitoring`;
+    } else {
+      timingUrgency = 'patient';
+      timingEvidence = 'No near-term expirations — longer sales cycle expected';
+    }
+
+    // Recommended play type
+    let playType, playRationale;
+    if (marketStability === 'monopolistic' || marketStability === 'concentrated') {
+      if (incumbentVulnerability === 'high') {
+        playType = 'competitive_displacement';
+        playRationale = 'Concentrated market + aging incumbent = displacement opportunity through recompete';
+      } else {
+        playType = 'partner_teaming';
+        playRationale = 'Locked market — only viable path is teaming with the dominant prime, not displacing them';
+      }
+    } else if (marketStability === 'fragmented') {
+      playType = 'direct_prime';
+      playRationale = 'Fragmented market with no dominant player — viable to compete directly on next opportunity';
+    } else {
+      if (saasScore === 'receptive' || saasScore === 'emerging') {
+        playType = 'modernization_wedge';
+        playRationale = 'Competitive market with modern tech appetite — lead with capability differentiation';
+      } else {
+        playType = 'partner_teaming';
+        playRationale = 'Services-heavy market — align with integrators who manage delivery';
+      }
+    }
+
+    // Foot in door — most accessible entry point
+    const topPrime = sorted[0]?.[0] || 'the top prime';
+    const expiringPrime = expiring[0] ? (rows.find(r=>r['Award ID']===expiring[0]['Award ID'])||{})['Recipient Name'] || topPrime : null;
+
+    // ── LAYER 3: Structured judgment object ───────────────────────────
     const signals = {
-      query: attrs,
-      total_obligated: `$${(total/1e6).toFixed(1)}M`,
+      // Context
+      user_question: attrs._originalQuestion || '',
+      agency: attrs.agency || 'federal market',
+      keywords: attrs.keywords || '',
+
+      // Raw metrics (for reference)
+      total_obligated: `$${(total/1e6).toFixed(1)}M across ${rows.length} contracts`,
       vendor_count: sorted.length,
-      top_vendors: top3.map(([n,v]) => `${n}: $${(v/1e6).toFixed(1)}M (${Math.round(v/total*100)}%)`),
-      top3_concentration: `${topShare}%`,
-      expiring_90d: expiring.length,
-      expiring_value: `$${(expiring.reduce((s,r)=>s+(Number(r['Award Amount'])||0),0)/1e6).toFixed(1)}M`,
-      avg_contract_age_days: Math.round(avgAge),
-      sample_descriptions: rows.slice(0,3).map(r => r['Description']||'').filter(Boolean),
-      agencies: [...new Set(rows.map(r=>r['Awarding Agency']).filter(Boolean))].slice(0,5),
+      top_vendor: `${sorted[0]?.[0]}: $${((sorted[0]?.[1]||0)/1e6).toFixed(1)}M (${Math.round(top1Share*100)}%)`,
+      top3_vendors: sorted.slice(0,3).map(([n,v]) => `${n}: $${(v/1e6).toFixed(1)}M (${Math.round(v/total*100)}%)`),
+
+      // Classified signals (judgment primitives)
+      market_stability: { score: marketStability, evidence: stabilityEvidence },
+      incumbent_vulnerability: { score: incumbentVulnerability, evidence: vulnEvidence },
+      saas_friendliness: { score: saasScore, evidence: saasEvidence },
+      timing_urgency: { score: timingUrgency, evidence: timingEvidence },
+
+      // Recommended play
+      recommended_play: { type: playType, rationale: playRationale },
+
+      // Entry point
+      best_entry: expiringPrime
+        ? `${expiringPrime} has a contract expiring ${expiring[0]?.['End Date']} — highest urgency partner`
+        : `${topPrime} controls the largest share — primary teaming target`,
+
+      // Contract context
+      avg_contract_age: `${Math.round(avgAgeDays/365*10)/10} years`,
+      expiring_90d: `${expiring.length} contracts, $${(expiringVal/1e6).toFixed(1)}M`,
+      sample_descriptions: rows.slice(0,2).map(r => r['Description']||'').filter(Boolean).map(d=>d.slice(0,120)),
     };
 
     // Create insight element and append directly to turn
@@ -5349,19 +5471,33 @@ async function fireInsight(cardEl, rows, resolved, attrs) {
     turn.appendChild(insightEl);
 
     const userQuestion = attrs._originalQuestion || '';
-    const insightPrompt = `You are a federal sales strategist analyzing live USASpending data for someone who asked: "${userQuestion}"
+    const insightPrompt = `You are a veteran federal sales strategist. Someone asked: "${userQuestion}"
 
-Here are the computed signals from the data pull:
-${JSON.stringify(signals, null, 2)}
+You have pre-classified the market using deterministic signal analysis. Here are the judgment primitives — reason FROM these, do not re-derive them:
 
-Write 2-3 sentences of sharp, specific insight tailored to their question and these exact numbers. Address them directly — they asked a specific question, give them a specific answer informed by the data.
+MARKET CLASSIFICATION:
+- Stability: ${signals.market_stability.score} — ${signals.market_stability.evidence}
+- Incumbent vulnerability: ${signals.incumbent_vulnerability.score} — ${signals.incumbent_vulnerability.evidence}
+- SaaS/modern tech receptivity: ${signals.saas_friendliness.score} — ${signals.saas_friendliness.evidence}
+- Timing urgency: ${signals.timing_urgency.score} — ${signals.timing_urgency.evidence}
 
-Rules:
-- Name specific dollar amounts, vendor names, contract IDs, and timing windows from the signals
-- Connect the data back to what they were actually asking about
-- Do NOT give generic "build relationships" advice
-- Do NOT restate the numbers — say what they MEAN for this person's specific situation
-- If they mentioned their company or role, speak to that context specifically`;
+RECOMMENDED PLAY: ${signals.recommended_play.type}
+Rationale: ${signals.recommended_play.rationale}
+
+BEST ENTRY POINT: ${signals.best_entry}
+
+RAW CONTEXT:
+- ${signals.total_obligated}
+- Top vendor: ${signals.top_vendor}
+- Avg contract age: ${signals.avg_contract_age}
+- Expiring in 90 days: ${signals.expiring_90d}
+
+Write 3 sentences of sharp sales intelligence for this specific person:
+1. What the market classification means for THEIR situation (name their company/product if mentioned)
+2. The specific play they should run and why this market supports it
+3. The exact first move — who to call, what to say, why now
+
+Be specific. Use names, dollar amounts, timing windows from above. No generic advice. No restating what the classification already says — translate it into action.`;
 
     const r = await fetch(LAMBDA_URL, {
       method: 'POST',
