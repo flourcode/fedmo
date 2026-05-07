@@ -1393,7 +1393,7 @@ const GREETING_PROMPTS = [
   'Who resells AWS',
   'Cyber awards at HHS this year',
   'AI startups that raised in FY26',
-  'Who does SAIC sub to',
+  'Sales plan for cloud across FedCiv',
 ];
 
 // =============================================================================
@@ -5771,9 +5771,12 @@ async function askMo(question, opts = {}) {
             moTurn.replaceText(cleanedPrefix);
           }
         }
-        if (cleanedPrefix.length > moTurn._shown) {
-          moTurn.appendText(cleanedPrefix.slice(moTurn._shown));
-          moTurn._shown = cleanedPrefix.length;
+        // Strip trailing whitespace — Gemini often emits blank lines before
+        // the tag which render as visible gaps under white-space: pre-wrap
+        const cleanedPrefixTrimmed = cleanedPrefix.trimEnd();
+        if (cleanedPrefixTrimmed.length > moTurn._shown) {
+          moTurn.appendText(cleanedPrefixTrimmed.slice(moTurn._shown));
+          moTurn._shown = cleanedPrefix.length; // advance past original (incl whitespace)
         }
         // Rebuild fullText: cleaned prefix + post-tag remainder
         fullText = cleanedPrefix + fullText.slice(tag.end);
