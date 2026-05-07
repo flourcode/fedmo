@@ -5542,7 +5542,7 @@ async function askMo(question, opts = {}) {
   const moTurn = renderMoTurn(question);
   let fullText = '';
   let tagsFired = 0;
-  const MAX_TAGS = 2;  // Mo can emit up to two tags per turn for compound questions
+  const MAX_TAGS = 4;  // Mo can emit up to four tags per turn — needed for multi-query sales plans
   let loadingEl = null;       // most recent loading card (for replacement)
   let secondLoadingEl = null; // when both tags fire, second card has its own loading
   let suppressFrom = -1;  // index in fullText to start hiding from (broken tag opener)
@@ -5553,8 +5553,8 @@ async function askMo(question, opts = {}) {
     console.log('[mo:tag]', JSON.stringify(tag.attrs));
     const myLoadingEl = renderLoadingCard();
     moTurn.insertEl(myLoadingEl);
-    if (isSecond) secondLoadingEl = myLoadingEl;
-    else loadingEl = myLoadingEl;
+    if (!isSecond) loadingEl = myLoadingEl;
+    else secondLoadingEl = myLoadingEl;
 
     pull(tag.attrs)
       .then(({ rows, resolved, error }) => {
@@ -5666,7 +5666,7 @@ async function askMo(question, opts = {}) {
           if (broken >= 0) suppressFrom = cleanedPrefix.length + broken;
         }
 
-        fireTag(tag, tagsFired === 2);
+        fireTag(tag, tagsFired > 1);
         // Loop continues — if another complete tag is in fullText, we
         // process it. Otherwise the while loop exits via the break above.
       }
