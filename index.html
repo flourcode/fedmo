@@ -5520,7 +5520,12 @@ Be specific. Use names, dollar amounts, timing windows from above. No generic ad
       if (done) break;
       text += decoder.decode(value, { stream: true });
       // Strip any data tags that leak through
-      insightEl.textContent = text.split('<data').map((p,i) => i===0 ? p : p.slice(p.indexOf('/>')+2)).join('').replace(/^\s+/, '');
+      const cleaned = text.split('<data').map((p,i) => i===0 ? p : p.slice(p.indexOf('/>')+2)).join('')
+        .replace(/\*\*([^*]+)\*\*/g, '$1')  // strip bold **text**
+        .replace(/\*([^*]+)\*/g, '$1')        // strip italic *text*
+        .replace(/^#+\s/gm, '')               // strip headers
+        .replace(/^\s+/, '');
+      insightEl.textContent = cleaned;
     }
 
     if (!insightEl.textContent.trim()) insightEl.remove();
@@ -5577,13 +5582,14 @@ You pulled ${cardResults.length} data cards. Here are the combined signals:
 
 ${JSON.stringify(cardSummaries, null, 2)}
 
-Write a SALES PLAN in 4-6 sentences. Structure it as:
-1. Market assessment — what these cards together tell you about the opportunity size and dynamics
-2. The recommended play — specific strategy given the concentration, timing, and channel data
-3. Priority targets — specific vendors, agencies, or contracts to pursue first (name them)
-4. First moves this week — 2-3 concrete actions with timing
+Write a SALES PLAN as 4 short paragraphs of plain prose — no markdown, no bullet points, no bold text, no asterisks, no numbered lists. Just clean sentences.
 
-Be specific. Use exact dollar amounts, vendor names, and contract details from the data. No generic advice. This should read like a real overlay rep's QBR summary.`;
+Paragraph 1 — Market assessment: what these cards together tell you about the opportunity and dynamics.
+Paragraph 2 — The recommended play: specific strategy given concentration, timing, and channel data.
+Paragraph 3 — Priority targets: specific vendors, agencies, or contract IDs to pursue first. Name them.
+Paragraph 4 — First moves this week: 2-3 concrete actions with specific days or timing.
+
+Be specific. Use exact dollar amounts, vendor names, and contract details from the data. No generic advice. Write it like a real overlay rep's QBR notes — direct, grounded, actionable.`;
 
     const insightEl = $$('div', { class: 'mo-insight', text: '' });
     turn.appendChild(insightEl);
@@ -5607,7 +5613,12 @@ Be specific. Use exact dollar amounts, vendor names, and contract details from t
       const { value, done } = await reader.read();
       if (done) break;
       text += decoder.decode(value, { stream: true });
-      insightEl.textContent = text.split('<data').map((p,i) => i===0 ? p : p.slice(p.indexOf('/>')+2)).join('').replace(/^\s+/, '');
+      const cleaned = text.split('<data').map((p,i) => i===0 ? p : p.slice(p.indexOf('/>')+2)).join('')
+        .replace(/\*\*([^*]+)\*\*/g, '$1')  // strip bold **text**
+        .replace(/\*([^*]+)\*/g, '$1')        // strip italic *text*
+        .replace(/^#+\s/gm, '')               // strip headers
+        .replace(/^\s+/, '');
+      insightEl.textContent = cleaned;
     }
 
     if (!insightEl.textContent.trim()) insightEl.remove();
