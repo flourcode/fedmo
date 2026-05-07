@@ -5481,33 +5481,42 @@ async function fireInsight(cardEl, rows, resolved, attrs) {
     turn.appendChild(insightEl);
 
     const userQuestion = attrs._originalQuestion || '';
+    // Build play-specific instruction so Gemini can't ignore the classification
+    let playInstruction = '';
+    const play = signals.recommended_play.type;
+    if (play === 'account_expansion') {
+      playInstruction = `IMPORTANT: The recommended play is ACCOUNT EXPANSION. This means the person asking IS the dominant vendor or works for them. Do NOT suggest they team with themselves or treat the incumbent as someone else. Focus on: (1) which specific expiring contracts represent renewal risk or expansion opportunity, (2) which channel partners could help expand into programs they don't currently hold, (3) which adjacent agencies or offices are not yet in their footprint.`;
+    } else if (play === 'partner_teaming') {
+      playInstruction = `IMPORTANT: The recommended play is PARTNER TEAMING. The market is locked — name the specific dominant partner to approach and what to offer them. Do not suggest direct prime competition.`;
+    } else if (play === 'competitive_displacement') {
+      playInstruction = `IMPORTANT: The recommended play is COMPETITIVE DISPLACEMENT. Name the specific vulnerable incumbent, the specific expiring contract, and the specific weakness signal that creates the opening.`;
+    } else if (play === 'direct_prime') {
+      playInstruction = `IMPORTANT: The recommended play is DIRECT PRIME. The market is fragmented enough to compete directly. Name which vehicle to use, which office to target, and what the RFP timing looks like.`;
+    } else if (play === 'modernization_wedge') {
+      playInstruction = `IMPORTANT: The recommended play is MODERNIZATION WEDGE. Lead with technical differentiation. Name which incumbent is showing signs of technical debt and which program office is most likely to be receptive.`;
+    }
+
     const insightPrompt = `You are a veteran federal sales strategist. Someone asked: "${userQuestion}"
 
-You have pre-classified the market using deterministic signal analysis. Here are the judgment primitives — reason FROM these, do not re-derive them:
+You have pre-classified the market. ${playInstruction}
 
-MARKET CLASSIFICATION:
-- Stability: ${signals.market_stability.score} — ${signals.market_stability.evidence}
+CLASSIFIED SIGNALS — reason FROM these, do not contradict them:
+- Market stability: ${signals.market_stability.score} — ${signals.market_stability.evidence}
 - Incumbent vulnerability: ${signals.incumbent_vulnerability.score} — ${signals.incumbent_vulnerability.evidence}
-- SaaS/modern tech receptivity: ${signals.saas_friendliness.score} — ${signals.saas_friendliness.evidence}
 - Timing urgency: ${signals.timing_urgency.score} — ${signals.timing_urgency.evidence}
+- Recommended play: ${signals.recommended_play.type} — ${signals.recommended_play.rationale}
+- Best entry point: ${signals.best_entry}
 
-RECOMMENDED PLAY: ${signals.recommended_play.type}
-Rationale: ${signals.recommended_play.rationale}
-
-BEST ENTRY POINT: ${signals.best_entry}
-
-RAW CONTEXT:
+RAW NUMBERS:
 - ${signals.total_obligated}
 - Top vendor: ${signals.top_vendor}
-- Avg contract age: ${signals.avg_contract_age}
 - Expiring in 90 days: ${signals.expiring_90d}
+- Avg contract age: ${signals.avg_contract_age}
 
-Write 3 sentences of sharp sales intelligence for this specific person:
-1. What the market classification means for THEIR situation (name their company/product if mentioned)
-2. The specific play they should run and why this market supports it
-3. The exact first move — who to call, what to say, why now
-
-Be specific. Use names, dollar amounts, timing windows from above. No generic advice. No restating what the classification already says — translate it into action.`;
+Write 3 sentences. No markdown. No bullet points. Plain prose.
+Sentence 1: What this specific market situation means for this specific person given their role/company.
+Sentence 2: The exact play to run — be specific about who, what vehicle, what timing.
+Sentence 3: The first call to make this week — name the person, company, or contract ID.`;
 
     const r = await fetch(LAMBDA_URL, {
       method: 'POST',
