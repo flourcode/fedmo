@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<!-- Theme / UI behavior -->
+<meta name="theme-color" content="#FDFCFF">
+<meta name="color-scheme" content="light dark">
+<meta name="format-detection" content="telephone=no">
+<!-- iOS PWA -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Fedmo Consulting">
+<!-- Android PWA -->
+<meta name="mobile-web-app-capable" content="yes">
+<!-- Icons -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='96 96 448 448'%3E%3Cstyle%3Epath%7Bfill:%232C2B28%7D .arrow%7Bfill:%23FFFFFF%7D @media (prefers-color-scheme:dark)%7B.arrow%7Bfill:%23DCD8D0%7D%7D%3C/style%3E%3Cpath d='M480 96C515.3 96 544 124.7 544 160L544 480C544 515.3 515.3 544 480 544L160 544C124.7 544 96 515.3 96 480L96 160C96 124.7 124.7 96 160 96L480 96z'/%3E%3Cpath class='arrow' d='M368 360C368 373.3 378.7 384 392 384C405.3 384 416 373.3 416 360L416 248C416 234.7 405.3 224 392 224L280 224C266.7 224 256 234.7 256 248C256 261.3 266.7 272 280 272L334.1 272L231.1 375C221.7 384.4 221.7 399.6 231.1 408.9C240.5 418.2 255.7 418.3 265 408.9L368 305.9L368 360z'/%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.json">
+<title>Work with Mark | Federal Pipeline &amp; Partner Coaching — Fedmo</title>
+<meta name="title" content="Work with Mark | Federal Pipeline & Partner Coaching — Fedmo">
+<meta name="description" content="Federal sales coaching focused on growing pipeline through channel partners. Book a 1-hour strategy call, or set up a monthly coaching engagement for your team.">
+<meta name="keywords" content="federal sales coaching, channel partner strategy, government pipeline growth, federal BD consulting, partner co-sell, federal sales consultant">
+<link rel="canonical" href="https://fedmo.com/consulting/">
+<!-- OpenGraph -->
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://fedmo.com/consulting/">
+<meta property="og:title" content="Work with Mark | Federal Pipeline & Partner Coaching">
+<meta property="og:description" content="Grow federal pipeline through partners. Book a 1-hour strategy call, or set up a monthly coaching engagement for your team.">
+<meta property="og:image" content="https://fedmo.com/consulting.png">
+<!-- Twitter -->
+<meta property="twitter:card" content="summary_large_image">
+<meta property="twitter:title" content="Work with Mark | Federal Pipeline & Partner Coaching">
+<meta property="twitter:description" content="Grow federal pipeline through partners. Book a 1-hour strategy call, or set up a monthly coaching engagement.">
+<!-- Structured Data -->
+<script type="application/ld+json">
+{
+"@context":"https://schema.org",
+"@type":"Service",
+"name":"Federal Pipeline & Partner Coaching",
+"url":"https://fedmo.com/consulting/",
+"description":"Federal sales coaching focused on growing pipeline through channel partners.",
+"serviceType":"Sales consulting",
+"areaServed":"US",
+"provider":{"@type":"Person","name":"Mark Flournoy"},
+"offers":{"@type":"Offer","price":"99","priceCurrency":"USD","description":"1-hour federal sales strategy call"}
+}
+</script>
+<!-- Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,200..800;1,200..800&display=swap">
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,200..800;1,200..800&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<noscript><link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,200..800;1,200..800&display=swap" rel="stylesheet"></noscript>
+<!-- Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-R0CRXSQJL5"></script>
+<script>
+try {
+  var _fd = localStorage.getItem('fedmo_dark');
+  if (_fd==='1' || (_fd===null && window.matchMedia('(prefers-color-scheme:dark)').matches)) {
+    document.documentElement.classList.add('dark');
+  }
+} catch(e) {}
+window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-R0CRXSQJL5');
+</script>
+<style>
+/* ── TOKENS ────────────────────────────────── */
+:root {
+  --bg:        #FDFCFF;
+  --bg-app:    #FFFFFF;
+  --bg-hover:  rgba(70,68,110,0.06);
+  --bg-active: rgba(70,68,110,0.11);
+
+  --text-primary:    #393640;
+  --text-secondary:  #535059;
+  --text-tertiary:   #7572B7;
+  --text-quaternary: #ACAAD4;
+
+  --border:       #DEDCD4;
+  --border-inner: #E3E3F1;
+
+  --btn-bg:    #46446E;
+  --btn-text:  #FFFFFF;
+  --btn-hover: #5E5B92;
+
+  --chip-bg:   #E3E3F1;
+  --chip-hover:#ACAAD4;
+
+  --go-bg:    rgba(52,199,89,0.08);   --go-text:   #1A6E31;
+
+  --accent:     #46446E;
+  --accent-mid: #5E5B92;
+  --accent-dim: #E3E3F1;
+
+  --radius:    12px;
+  --radius-sm: 12px;
+  --radius-xs: 8px;
+  --shadow:    0 1px 3px rgba(44,41,51,0.06);
+  --shadow-sm: 0 1px 2px rgba(44,41,51,0.05);
+  --shadow-lift: 0 4px 18px rgba(44,41,51,0.10);
+  --font: 'Atkinson Hyperlegible Next', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --transition: all 0.16s cubic-bezier(0.4,0,0.2,1);
+  --safe-top:    env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+
+  --text-xs:   0.72rem;
+  --text-sm:   0.85rem;
+  --text-base: 0.9375rem;
+  --text-lg:   1.1rem;
+  --text-xl:   1.35rem;
+  --text-2xl:  1.65rem;
+  --text-hero: clamp(2rem, 4.5vw, 2.75rem);
+}
+
+/* ── DARK MODE ── */
+@media (prefers-color-scheme: dark) { :root:not(.light) {
+  --bg:        #0F0E13;
+  --bg-app:    #1A1820;
+  --bg-hover:  rgba(180,175,220,0.07);
+  --bg-active: rgba(180,175,220,0.13);
+  --text-primary:    #E8E6F0;
+  --text-secondary:  #B8B5C8;
+  --text-tertiary:   #9B98C8;
+  --text-quaternary: #5A5870;
+  --border:       #2E2B3A;
+  --border-inner: #252233;
+  --btn-bg:    #7572B7;
+  --btn-text:  #FFFFFF;
+  --btn-hover: #8885C8;
+  --chip-bg:   #252233;
+  --chip-hover:#302D42;
+  --accent:     #9B98C8;
+  --accent-mid: #7572B7;
+  --accent-dim: #252233;
+  --shadow:    0 1px 3px rgba(0,0,0,0.3);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.25);
+  --shadow-lift: 0 4px 18px rgba(0,0,0,0.4);
+}}
+:root.dark {
+  --bg:        #0F0E13;
+  --bg-app:    #1A1820;
+  --bg-hover:  rgba(180,175,220,0.07);
+  --bg-active: rgba(180,175,220,0.13);
+  --text-primary:    #E8E6F0;
+  --text-secondary:  #B8B5C8;
+  --text-tertiary:   #9B98C8;
+  --text-quaternary: #5A5870;
+  --border:       #2E2B3A;
+  --border-inner: #252233;
+  --btn-bg:    #7572B7;
+  --btn-text:  #FFFFFF;
+  --btn-hover: #8885C8;
+  --chip-bg:   #252233;
+  --chip-hover:#302D42;
+  --accent:     #9B98C8;
+  --accent-mid: #7572B7;
+  --accent-dim: #252233;
+  --shadow:    0 1px 3px rgba(0,0,0,0.3);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.25);
+  --shadow-lift: 0 4px 18px rgba(0,0,0,0.4);
+}
+.dark .site-header { background: rgba(15,14,19,0.96) !important; }
+
+/* ── RESET ─────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; font-family: var(--font); -webkit-tap-highlight-color: transparent; }
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 90px;
+  -webkit-text-size-adjust: 100%;
+  background: var(--bg);
+}
+html, body { width: 100%; min-height: 100dvh; overscroll-behavior: none; }
+body { color: var(--text-primary); letter-spacing: -0.01em; background: var(--bg); -webkit-font-smoothing: antialiased; }
+::selection { background: rgba(91,75,168,0.15); }
+a, button, input, select { touch-action: manipulation; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.13); border-radius: 9999px; }
+
+/* ── HEADER ─────────────────────────────────── */
+.site-header {
+  position: sticky; top: 0; z-index: 200;
+  background: rgba(253,252,255,0.96);
+  backdrop-filter: saturate(160%) blur(16px);
+  -webkit-backdrop-filter: saturate(160%) blur(16px);
+  padding: max(10px, var(--safe-top)) 12px 0;
+}
+.header-top {
+  display: flex; align-items: center; justify-content: space-between;
+  padding-bottom: 10px; gap: 10px;
+  max-width: min(96vw, 1100px); margin: 0 auto;
+}
+.logo-link {
+  font-size: 0.95rem; font-weight: 800; letter-spacing: -0.01em;
+  color: #FFFFFF; text-decoration: none;
+  background: var(--btn-bg); border: 1px solid transparent;
+  border-radius: var(--radius-sm); padding: 0 14px; height: 36px;
+  display: inline-flex; align-items: center;
+  transition: var(--transition);
+}
+.logo-link:hover { background: var(--btn-hover); }
+.hdr-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  height: 36px; padding: 0 12px; gap: 6px;
+  background: var(--bg-app); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); font-size: var(--text-sm);
+  font-weight: 600; color: var(--text-secondary); cursor: pointer;
+  font-family: var(--font); text-decoration: none; transition: var(--transition);
+  white-space: nowrap;
+}
+.hdr-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+/* ── PAGE LAYOUT ────────────────────────────── */
+.page-wrap { max-width: min(96vw, 1100px); margin: 0 auto; padding: 40px 12px calc(4rem + var(--safe-bottom)); }
+
+/* ── HERO ───────────────────────────────────── */
+.hero { margin-bottom: 14px; }
+.hero-eyebrow {
+  font-size: var(--text-xs); font-weight: 700; color: var(--text-tertiary);
+  text-transform: uppercase; letter-spacing: 0.09em; margin-bottom: 12px;
+}
+.hero-title {
+  font-size: var(--text-hero); font-weight: 800; color: var(--text-primary);
+  letter-spacing: -0.03em; line-height: 1.05; margin-bottom: 14px;
+  max-width: 18ch;
+}
+.hero-sub {
+  font-size: var(--text-lg); color: var(--text-secondary); font-weight: 400;
+  line-height: 1.5; max-width: 56ch;
+}
+
+/* ── PROBLEM / POSITIONING STRIP ────────────── */
+.pitch {
+  margin: 30px 0 36px;
+  font-size: var(--text-base); color: var(--text-secondary);
+  line-height: 1.6; max-width: 62ch;
+}
+.pitch strong { color: var(--text-primary); font-weight: 700; }
+
+/* ── TIER CARDS ─────────────────────────────── */
+.tiers {
+  display: grid; gap: 16px;
+  grid-template-columns: repeat(2, 1fr);
+}
+@media (max-width: 720px) { .tiers { grid-template-columns: 1fr; } }
+
+.tier {
+  background: var(--bg-app);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 26px 24px;
+  display: flex; flex-direction: column;
+  box-shadow: var(--shadow-sm);
+}
+.tier.is-featured {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-lift);
+}
+.tier-flag {
+  align-self: flex-start;
+  font-size: 0.66rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.07em; color: #FFFFFF;
+  background: var(--accent); border-radius: 999px;
+  padding: 3px 10px; margin-bottom: 14px;
+}
+.tier-name {
+  font-size: var(--text-xl); font-weight: 800; color: var(--text-primary);
+  letter-spacing: -0.02em; margin-bottom: 4px;
+}
+.tier-price {
+  display: flex; align-items: baseline; gap: 7px; margin-bottom: 4px;
+}
+.tier-price-amount {
+  font-size: var(--text-2xl); font-weight: 800; color: var(--text-primary);
+  letter-spacing: -0.03em;
+}
+.tier-price-unit { font-size: var(--text-sm); color: var(--text-tertiary); font-weight: 600; }
+.tier-price-note { font-size: var(--text-sm); color: var(--text-tertiary); font-weight: 600; }
+.tier-tagline {
+  font-size: var(--text-base); color: var(--text-secondary);
+  line-height: 1.5; margin: 12px 0 16px;
+}
+.tier-list { list-style: none; margin: 0 0 22px; display: flex; flex-direction: column; gap: 9px; }
+.tier-list li {
+  font-size: var(--text-sm); color: var(--text-secondary);
+  line-height: 1.45; padding-left: 24px; position: relative;
+}
+.tier-list li::before {
+  content: ""; position: absolute; left: 0; top: 2px;
+  width: 16px; height: 16px; border-radius: 50%;
+  background: var(--go-bg);
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%231A6E31' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: center;
+}
+.tier-cta {
+  margin-top: auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  gap: 8px; height: 48px; width: 100%;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-base); font-weight: 700; font-family: var(--font);
+  text-decoration: none; cursor: pointer; transition: var(--transition);
+}
+.tier-cta-primary { background: var(--btn-bg); color: var(--btn-text); border: 1px solid transparent; }
+.tier-cta-primary:hover { background: var(--btn-hover); }
+.tier-cta-ghost {
+  background: var(--bg-app); color: var(--accent);
+  border: 1px solid var(--accent);
+}
+.tier-cta-ghost:hover { background: var(--bg-hover); }
+.tier-foot {
+  font-size: var(--text-xs); color: var(--text-quaternary);
+  text-align: center; margin-top: 10px; line-height: 1.4;
+}
+
+/* ── HOW IT WORKS ───────────────────────────── */
+.section-label {
+  font-size: var(--text-xs); font-weight: 700; color: var(--text-quaternary);
+  text-transform: uppercase; letter-spacing: 0.08em;
+  margin: 44px 0 16px; padding-top: 4px;
+  border-top: 1px solid var(--border);
+}
+.steps { display: grid; gap: 14px; grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 720px) { .steps { grid-template-columns: 1fr; } }
+.step {
+  background: var(--bg-app); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 20px;
+}
+.step-num {
+  font-size: var(--text-sm); font-weight: 800; color: #FFFFFF;
+  background: var(--accent); width: 26px; height: 26px;
+  border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  margin-bottom: 12px;
+}
+.step-title { font-size: var(--text-base); font-weight: 700; color: var(--text-primary); margin-bottom: 5px; }
+.step-text { font-size: var(--text-sm); color: var(--text-secondary); line-height: 1.5; }
+
+/* ── WHO IT'S FOR ───────────────────────────── */
+.fit {
+  background: var(--bg-app); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 24px;
+}
+.fit-row { display: grid; gap: 22px; grid-template-columns: 1fr 1fr; }
+@media (max-width: 560px) { .fit-row { grid-template-columns: 1fr; gap: 16px; } }
+.fit-h { font-size: var(--text-base); font-weight: 700; margin-bottom: 10px; }
+.fit-h.yes { color: var(--go-text); }
+.fit-h.no  { color: var(--text-tertiary); }
+.fit-list { list-style: none; display: flex; flex-direction: column; gap: 7px; }
+.fit-list li { font-size: var(--text-sm); color: var(--text-secondary); line-height: 1.45; }
+
+/* ── CREDIBILITY ────────────────────────────── */
+.cred {
+  margin-top: 30px;
+  background: var(--accent-dim);
+  border-radius: var(--radius);
+  padding: 24px;
+  font-size: var(--text-base); color: var(--text-secondary); line-height: 1.6;
+}
+.cred strong { color: var(--text-primary); font-weight: 700; }
+.cred a { color: var(--accent); font-weight: 600; }
+
+/* ── FINAL CTA ──────────────────────────────── */
+.final {
+  margin-top: 36px; text-align: center;
+  padding: 32px 20px;
+}
+.final-h { font-size: var(--text-2xl); font-weight: 800; color: var(--text-primary); letter-spacing: -0.025em; margin-bottom: 8px; }
+.final-sub { font-size: var(--text-base); color: var(--text-secondary); margin-bottom: 20px; }
+.final-cta {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  height: 52px; padding: 0 32px;
+  background: var(--btn-bg); color: var(--btn-text);
+  border-radius: var(--radius-sm); border: 1px solid transparent;
+  font-size: var(--text-lg); font-weight: 700; font-family: var(--font);
+  text-decoration: none; transition: var(--transition);
+}
+.final-cta:hover { background: var(--btn-hover); }
+
+/* ── FOOTER ─────────────────────────────────── */
+.site-footer {
+  border-top: 1px solid var(--border);
+  padding: 26px 12px calc(1.5rem + var(--safe-bottom));
+  max-width: min(96vw, 1100px); margin: 16px auto 0;
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+}
+.footer-links { display: flex; gap: 16px; margin-bottom: 3px; }
+.footer-links a, .footer-back {
+  font-size: var(--text-sm); font-weight: 500;
+  color: var(--accent); text-decoration: none;
+}
+.footer-links a:hover, .footer-back:hover { opacity: 0.72; }
+.footer-copy { font-size: var(--text-xs); color: var(--text-quaternary); }
+
+@media (max-width: 640px) {
+  .page-wrap { padding: 26px 12px calc(3rem + var(--safe-bottom)); }
+  .tier { padding: 22px 18px; }
+}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="site-header">
+  <div class="header-top">
+    <a href="/" class="logo-link">Fedmo.</a>
+    <div style="flex:1;"></div>
+    <a href="/tools/" class="hdr-btn">Tools</a>
+    <button class="hdr-btn" id="darkToggleBtn" onclick="toggleDark()" title="Toggle dark mode" aria-label="Toggle dark mode">
+      <svg id="darkToggleIcon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+    </button>
+  </div>
+</header>
+
+<div class="page-wrap">
+
+  <!-- HERO -->
+  <div class="hero">
+    <div class="hero-eyebrow">Work with Mark</div>
+    <h1 class="hero-title">Grow federal pipeline through partners.</h1>
+    <p class="hero-sub">Most federal teams under-use their channel. I help sellers and sales leaders build the partner motion that fills the top of the funnel &mdash; and coach the broader federal sales work around it.</p>
+  </div>
+
+  <!-- POSITIONING -->
+  <p class="pitch">
+    Resellers, ISVs, integrators, and OEMs all touch the same agencies you do. When that channel is mapped and worked deliberately, it becomes a pipeline engine &mdash; co-sell motions, warm intros, and teaming that you can't manufacture cold. <strong>That's the work.</strong> The retainer goes wider too: territory planning, deal strategy, and pipeline reviews, built around your team's real accounts.
+  </p>
+
+  <!-- TIERS -->
+  <div class="tiers">
+
+    <!-- Tier 1: Strategy Call -->
+    <div class="tier">
+      <span class="tier-flag">Start here</span>
+      <div class="tier-name">Strategy Call</div>
+      <div class="tier-price">
+        <span class="tier-price-amount">$99</span>
+        <span class="tier-price-unit">/ 1-hour call</span>
+      </div>
+      <p class="tier-tagline">A focused working session on your specific partner gaps. Bring a real deal or a real territory &mdash; we work it live.</p>
+      <ul class="tier-list">
+        <li>Map the partners already touching your top accounts</li>
+        <li>Spot the co-sell and teaming plays you're leaving on the table</li>
+        <li>Walk away with two or three concrete next moves</li>
+        <li>No prep deck required &mdash; just bring the real situation</li>
+      </ul>
+      <a class="tier-cta tier-cta-primary" href="https://calendly.com/markflournoy/deepdive" target="_blank" rel="noopener" data-cta="strategy-call">Book the call &mdash; $99</a>
+      <div class="tier-foot">Booking &amp; payment handled by Calendly.</div>
+    </div>
+
+    <!-- Tier 2: Monthly Coaching -->
+    <div class="tier is-featured">
+      <span class="tier-flag">Ongoing</span>
+      <div class="tier-name">Monthly Partner Coaching</div>
+      <div class="tier-price">
+        <span class="tier-price-note">Custom monthly engagement</span>
+      </div>
+      <p class="tier-tagline">Hands-on work with your team to build and run the partner motion &mdash; plus the broader federal sales coaching around it.</p>
+      <ul class="tier-list">
+        <li>Partner mapping and a co-sell plan for your live accounts</li>
+        <li>Recurring pipeline reviews with your sellers</li>
+        <li>Territory planning and deal strategy as needed</li>
+        <li>Scope and price set together on the strategy call</li>
+      </ul>
+      <a class="tier-cta tier-cta-ghost" href="https://calendly.com/markflournoy/deepdive" target="_blank" rel="noopener" data-cta="retainer-call">Start with a call</a>
+      <div class="tier-foot">The strategy call is how every engagement begins.</div>
+    </div>
+
+  </div>
+
+  <!-- HOW IT WORKS -->
+  <div class="section-label">How it works</div>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-title">Book the call</div>
+      <div class="step-text">Grab a 1-hour slot for $99. Come with a real deal, a territory, or a partner question you're stuck on.</div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-title">Work it live</div>
+      <div class="step-text">We map your channel, find the plays, and leave you with next moves you can run that week.</div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-title">Go deeper if it fits</div>
+      <div class="step-text">If the team needs ongoing help, we scope a monthly engagement on that same call. No pressure either way.</div>
+    </div>
+  </div>
+
+  <!-- WHO IT'S FOR -->
+  <div class="section-label">Who this is for</div>
+  <div class="fit">
+    <div class="fit-row">
+      <div>
+        <div class="fit-h yes">A good fit</div>
+        <ul class="fit-list">
+          <li>Federal sellers who know their product but not their channel</li>
+          <li>Sales leaders whose pipeline is too thin and too cold</li>
+          <li>Teams sitting on partner relationships they don't work</li>
+          <li>ISVs and OEMs trying to build a federal reseller motion</li>
+        </ul>
+      </div>
+      <div>
+        <div class="fit-h no">Probably not</div>
+        <ul class="fit-list">
+          <li>Teams looking for lead lists or contact data</li>
+          <li>Anyone wanting a done-for-you sales outsourcing service</li>
+          <li>Pure commercial sales with no federal motion</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- CREDIBILITY -->
+  <div class="cred">
+    <strong>Why me.</strong> I'm a federal seller, not a career consultant &mdash; I built <a href="/">Fedmo</a> and the Fedmo tools because I needed them in my own deals. The coaching comes from running real federal pipeline through partners, not from a framework. You get someone who's carried a number.
+  </div>
+
+  <!-- FINAL CTA -->
+  <div class="final">
+    <div class="final-h">Ready to work your channel?</div>
+    <div class="final-sub">One hour, $99, a real plan. Start there.</div>
+    <a class="final-cta" href="https://calendly.com/markflournoy/deepdive" target="_blank" rel="noopener" data-cta="final">Book your strategy call</a>
+  </div>
+
+</div><!-- /page-wrap -->
+
+<footer class="site-footer">
+  <div class="footer-links">
+    <a href="/">Ask Mo</a>
+    <a href="/tools/">Tools</a>
+  </div>
+  <a href="/" class="footer-back">&larr; Back to Fedmo</a>
+  <div class="footer-copy">&copy; 2026 Fedmo.com &mdash; Federal Market Intelligence for BD &amp; Sales Teams</div>
+</footer>
+
+<script>
+'use strict';
+
+function toggleDark() {
+  var isDark = document.documentElement.classList.toggle('dark');
+  try { localStorage.setItem('fedmo_dark', isDark ? '1' : '0'); } catch(e) {}
+  var icon = document.getElementById('darkToggleIcon');
+  if (!icon) return;
+  icon.innerHTML = isDark
+    ? '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>'
+    : '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
+}
+
+// Sync the toggle icon on load if dark mode is already active.
+if (document.documentElement.classList.contains('dark')) {
+  var _ic = document.getElementById('darkToggleIcon');
+  if (_ic) _ic.innerHTML = '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>';
+}
+
+// Track CTA clicks so you can see which entry point converts.
+document.querySelectorAll('[data-cta]').forEach(function (el) {
+  el.addEventListener('click', function () {
+    try { gtag('event', 'consulting_cta', { cta: el.getAttribute('data-cta') }); } catch (e) {}
+  });
+});
+</script>
+</body>
+</html>
