@@ -480,6 +480,64 @@ a:hover { text-decoration: underline; }
   background: var(--primary-40);
 }
 
+/* ── How to talk to Mo panel ──
+   Sits below the tappable starters. Soft tinted card; examples are plain
+   inline text (not pills) so it reads as guidance, not more buttons. */
+.mo-howto {
+  margin-top: 20px;
+  background: var(--bg-tint);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  padding: 16px 18px;
+}
+.mo-howto-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-title);
+  letter-spacing: var(--track-tight);
+  margin-bottom: 6px;
+}
+.mo-howto-lead {
+  font-size: 13px;
+  color: var(--text-body);
+  line-height: 1.5;
+  margin-bottom: 12px;
+}
+.mo-howto-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 8px;
+  align-items: baseline;
+}
+.mo-howto-tag {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--primary-100);
+  background: var(--primary-20);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.mo-howto-ex {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+.mo-howto-foot {
+  font-size: 12.5px;
+  color: var(--text-faint);
+  line-height: 1.5;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-soft);
+}
+/* On narrow screens the tag sits above its examples for breathing room. */
+@media (max-width: 460px) {
+  .mo-howto-row { flex-direction: column; gap: 4px; }
+}
+
 /* ── Pills (follow-up suggestions) ── */
 /* Float below a card in the conversation flow, NOT inside the card.
    Same pill shape as the greeting examples so they read as the same
@@ -1400,6 +1458,23 @@ a:hover { text-decoration: underline; }
       <div class="mo-greeting-hello">Hi, I'm Mo.</div>
       <div class="mo-greeting-tagline">Ask me anything about federal contracts or private capital. I pull live data from USASpending and SEC EDGAR so you can follow the money.</div>
       <div class="mo-greeting-examples" id="greeting-examples"></div>
+
+      <!-- How to talk to Mo — teaches ask-don't-keyword + what Mo can do.
+           Examples here are illustrative copy, not tappable, so a new user
+           reads the pattern before trying the tappable starters above. -->
+      <div class="mo-howto">
+        <div class="mo-howto-title">How to talk to Mo</div>
+        <div class="mo-howto-lead">Ask a real question, like you'd ask a colleague. Mo figures out the database query &mdash; you don't need keywords or codes.</div>
+        <div class="mo-howto-row">
+          <span class="mo-howto-tag">Contracts</span>
+          <span class="mo-howto-ex">&ldquo;Who's winning cybersecurity on SEWP V?&rdquo; &middot; &ldquo;SAIC's expiring contracts at the Army&rdquo; &middot; &ldquo;Who does Leidos sub to?&rdquo;</span>
+        </div>
+        <div class="mo-howto-row">
+          <span class="mo-howto-tag">Capital markets</span>
+          <span class="mo-howto-ex">&ldquo;Booz Allen executive stock activity&rdquo; &middot; &ldquo;Which AI startups raised money recently?&rdquo;</span>
+        </div>
+        <div class="mo-howto-foot">Name a company, agency, contract vehicle, or market and Mo pulls live data from USASpending and SEC EDGAR. Not sure where to start? Just say what you sell &mdash; Mo will ask one question, then dig in.</div>
+      </div>
 
     </div>
   </div>
