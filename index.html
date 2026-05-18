@@ -269,6 +269,13 @@ a:hover { text-decoration: underline; }
   box-sizing: border-box;
 }
 .mo-modal-btn:active { background: #3A385A; transform: scale(0.99); }
+/* Secondary variant — used for the Tools link so it reads as a softer,
+   adjacent action next to the primary "Chat with Mark" CTA. */
+.mo-modal-btn.is-secondary {
+  background: var(--primary-20);
+  color: var(--primary-100);
+}
+.mo-modal-btn.is-secondary:active { background: var(--primary-40); }
 .mo-modal-foot {
   font-size: 12px;
   color: var(--text-muted);
@@ -849,6 +856,40 @@ a:hover { text-decoration: underline; }
   border-color: var(--primary-100);
 }
 
+/* ── Sankey flow diagram ─────────────────────────────────
+   Rendered into the same .mo-treemap-host as the treemap, so it shares the
+   host's horizontal margin. Height is intrinsic (the SVG viewBox sets it). */
+.mo-sankey {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 10px;
+  overflow: visible;
+}
+.mo-sankey-link {
+  transition: fill-opacity 120ms;
+}
+.mo-sankey-link:hover {
+  fill-opacity: 0.6 !important;
+}
+.mo-sankey-label {
+  font-family: var(--font);
+  fill: var(--text-body);
+  pointer-events: none;
+}
+.mo-sankey-value {
+  font-family: var(--font);
+  fill: var(--text-muted);
+  pointer-events: none;
+}
+.mo-sankey-empty {
+  font-family: var(--font);
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 28px 12px;
+  text-align: center;
+}
+
 /* ── Rows ─────────────────────────────────────────────── */
 /* Vertical 2-line rows, not a spreadsheet table. Each row is a self-contained
    block: name + amount on top, agency/award ID on second, PoP + status chip
@@ -1344,6 +1385,7 @@ a:hover { text-decoration: underline; }
     </div>
 
     <div class="mo-modal-actions">
+      <a class="mo-modal-btn is-secondary" href="/tools/" id="btnAboutTools">Free Sales Tools</a>
       <a class="mo-modal-btn" href="https://calendly.com/markflournoy/chat-with-mark" target="_blank" rel="noopener" id="btnAboutCalendly">Chat with Mark</a>
     </div>
     <div class="mo-modal-foot">Feedback or want to talk federal sales? Book time with Mark.</div>
@@ -1386,14 +1428,26 @@ window.scrollTo(0, 0);
 // =============================================================================
 // CONFIG
 // =============================================================================
+// Consolidated backend. One Lambda Function URL now serves three routes,
+// selected by request body:
+//   { history }                                  -> Mo chat (streamed text)
+//   { request_type: 'edgar_proxy', ... }          -> SEC EDGAR relay
+//   { request_type: 'usaspending_proxy', ... }    -> USASpending relay (optional)
+// The USASpending proxy is additive — the frontend still calls USASpending
+// directly below (USASPENDING const). Adopt the proxy later for server-side
+// rate control. See lambda.mjs / CONSOLIDATION_PLAN.md.
 const LAMBDA_URL = 'https://4gxuwrrugc4s6zqcxsos2exg5y0sjcrc.lambda-url.us-east-1.on.aws/';
 const USASPENDING = 'https://api.usaspending.gov/api/v2';
 
+// Orientation starters. Written to teach the interaction model by example:
+// each one is a plain-English question a rep new to a territory would actually
+// ask. The fourth deliberately exercises the EDGAR path so a first-time user
+// discovers the capital-markets capability without being told it exists.
 const GREETING_PROMPTS = [
-  'Who resells AWS',
-  'Cyber awards at HHS this year',
-  'AI startups that raised in FY26',
-  'Sales plan for cloud across FedCiv',
+  "Who's buying cybersecurity at DHS",
+  'Biggest contracts expiring at the Navy in the next 6 months',
+  'I sell cloud infrastructure — where should I focus in civilian agencies',
+  'Which AI startups raised money recently and also sell to the government',
 ];
 
 // =============================================================================
@@ -3663,6 +3717,255 @@ function renderTreemapInto(host, items) {
 }
 
 // =============================================================================
+// SANKEY — agency → vendor money flow  (pure SVG, no library)
+// =============================================================================
+//
+// Ported from the Fedhoo concept but rebuilt dependency-free to match Fedmo's
+// rendering style (renderTreemapInto). Fedhoo's drawSankey needs D3 +
+// d3-sankey; Fedmo loads no charting library, so adding one just for a flow
+// diagram is dead weight. This draws a two-column flow — awarding agency on
+// the left, recipient vendor on the right — with link ribbons sized by dollar
+// volume, using the same color palette and money formatting as the treemap.
+//
+// The layout is intentionally simple: nodes are stacked vertically in each
+// column, proportional to their total flow; a link is a filled quadratic
+// ribbon from the right edge of an agency node to the left edge of a vendor
+// node. No collision solver, no iterative relaxation — for the top ~8 agencies
+// and ~10 vendors this reads cleanly and renders instantly.
+
+// Build {agencies, vendors, links} from contract rows. Caps each side so the
+// diagram stays legible; everything past the cap folds into an "Other" node.
+function buildSankeyModel(rows, isSub) {
+  const MAX_LEFT = 7;    // agencies (or primes, for sub flow)
+  const MAX_RIGHT = 9;   // vendors  (or subs,   for sub flow)
+
+  const amountOf = (r) => isSub
+    ? (Number(r._amount) || 0)
+    : (Number(r['Award Amount']) || 0);
+
+  // Left = awarding office (uses the same Office-fallback as the treemap so
+  // labels match). For sub flow, left is the prime.
+  const leftOf = (r) => {
+    if (isSub) return r['Recipient Name'] || '(unknown prime)';
+    const agency = r['Awarding Agency'] || '';
+    const sub = r['Awarding Sub Agency'] || agency;
+    return buildOfficeLabel(r['Award ID'], agency, sub) || '(unknown)';
+  };
+  const rightOf = (r) => isSub
+    ? (r._subName || '(unknown sub)')
+    : (r['Recipient Name'] || '(unknown vendor)');
+
+  // Aggregate the full agency→vendor matrix.
+  const pairTotals = new Map();   // "left\u0000right" -> amount
+  const leftTotals = new Map();
+  const rightTotals = new Map();
+  for (const r of rows) {
+    const amt = amountOf(r);
+    if (amt <= 0) continue;
+    const l = leftOf(r), rt = rightOf(r);
+    leftTotals.set(l, (leftTotals.get(l) || 0) + amt);
+    rightTotals.set(rt, (rightTotals.get(rt) || 0) + amt);
+    const k = l + '\u0000' + rt;
+    pairTotals.set(k, (pairTotals.get(k) || 0) + amt);
+  }
+  if (pairTotals.size === 0) return null;
+
+  // Pick the visible nodes on each side; fold the rest into "Other".
+  const pickTop = (totals, cap) => {
+    const sorted = [...totals.entries()].sort((a, b) => b[1] - a[1]);
+    const top = sorted.slice(0, cap);
+    const rest = sorted.slice(cap);
+    const keep = new Set(top.map(([n]) => n));
+    const otherSum = rest.reduce((s, [, v]) => s + v, 0);
+    return { keep, otherSum, otherCount: rest.length };
+  };
+  const L = pickTop(leftTotals, MAX_LEFT);
+  const R = pickTop(rightTotals, MAX_RIGHT);
+
+  const leftName  = (n) => L.keep.has(n) ? n : '__OTHER_L__';
+  const rightName = (n) => R.keep.has(n) ? n : '__OTHER_R__';
+
+  // Collapse links onto the visible node set.
+  const linkMap = new Map();
+  for (const [k, amt] of pairTotals) {
+    const [l, rt] = k.split('\u0000');
+    const lk = leftName(l), rk = rightName(rt);
+    const mk = lk + '\u0000' + rk;
+    linkMap.set(mk, (linkMap.get(mk) || 0) + amt);
+  }
+
+  // Final node lists, sorted by total flow descending; "Other" sinks to bottom.
+  const buildNodes = (keep, otherSum, otherCount, side) => {
+    const totals = new Map();
+    for (const [mk, amt] of linkMap) {
+      const [lk, rk] = mk.split('\u0000');
+      const name = side === 'left' ? lk : rk;
+      totals.set(name, (totals.get(name) || 0) + amt);
+    }
+    const nodes = [...keep]
+      .filter(n => totals.has(n))
+      .map(n => ({ name: n, value: totals.get(n), isOther: false }))
+      .sort((a, b) => b.value - a.value);
+    const otherKey = side === 'left' ? '__OTHER_L__' : '__OTHER_R__';
+    if (otherSum > 0 && totals.has(otherKey)) {
+      nodes.push({
+        name: `Other (${otherCount})`,
+        value: totals.get(otherKey),
+        isOther: true,
+        _key: otherKey,
+      });
+    }
+    return nodes;
+  };
+  const agencies = buildNodes(L.keep, L.otherSum, L.otherCount, 'left');
+  const vendors  = buildNodes(R.keep, R.otherSum, R.otherCount, 'right');
+
+  const links = [...linkMap.entries()].map(([mk, value]) => {
+    const [lk, rk] = mk.split('\u0000');
+    return { source: lk, target: rk, value };
+  }).filter(l => l.value > 0);
+
+  return { agencies, vendors, links };
+}
+
+// Render the flow diagram into `host`. Stores the rows for resize re-render.
+function renderSankeyInto(host, rows, isSub) {
+  const model = buildSankeyModel(rows, isSub);
+  if (!model || model.agencies.length === 0 || model.vendors.length === 0) {
+    host.innerHTML = '<div class="mo-sankey-empty">Not enough flow data to draw a diagram.</div>';
+    return;
+  }
+  const { agencies, vendors, links } = model;
+
+  const W = host.clientWidth || 320;
+  const narrow = W <= 420;
+  const NODE_W = 9;
+  const PAD = narrow ? 6 : 9;          // vertical gap between stacked nodes
+  const LABEL_GAP = 6;
+  const TOP = 8, BOT = 8;
+  const rowMax = Math.max(agencies.length, vendors.length);
+  const H = Math.max(narrow ? 200 : 240, rowMax * (narrow ? 30 : 34) + TOP + BOT);
+
+  const colLeftX = 0;
+  const colRightX = W - NODE_W;
+  const usableH = H - TOP - BOT;
+
+  // Assign each node a y/height proportional to its value within its column.
+  const layoutColumn = (nodes, x) => {
+    const total = nodes.reduce((s, n) => s + n.value, 0) || 1;
+    const gaps = (nodes.length - 1) * PAD;
+    const drawH = Math.max(10, usableH - gaps);
+    let cursor = TOP;
+    const out = new Map();
+    nodes.forEach((n, i) => {
+      const h = Math.max(3, (n.value / total) * drawH);
+      out.set(n.name, { x, y: cursor, h, node: n, idx: i });
+      cursor += h + PAD;
+    });
+    return out;
+  };
+  const leftPos = layoutColumn(agencies, colLeftX);
+  const rightPos = layoutColumn(vendors, colRightX);
+
+  // Color: agencies take palette slots in rank order; "Other" stays neutral.
+  const colorFor = (pos) =>
+    pos.node.isOther ? TREEMAP_OTHER_COLOR
+      : (TREEMAP_COLORS[pos.idx] || TREEMAP_COLORS[TREEMAP_COLORS.length - 1]);
+
+  // Within each node, links stack so ribbons don't all collide at the midline.
+  const leftOffsets = new Map();   // name -> running y offset for outgoing links
+  const rightOffsets = new Map();  // name -> running y offset for incoming links
+  for (const p of leftPos.values()) leftOffsets.set(p.node.name, 0);
+  for (const p of rightPos.values()) rightOffsets.set(p.node.name, 0);
+
+  // Sort links big-first so dominant ribbons draw first (under smaller ones).
+  const sortedLinks = links.slice().sort((a, b) => b.value - a.value);
+
+  let svg = `<svg class="mo-sankey" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">`;
+
+  // ── Link ribbons ──
+  for (const link of sortedLinks) {
+    const lp = leftPos.get(link.source);
+    const rp = rightPos.get(link.target);
+    if (!lp || !rp) continue;
+
+    const lTotal = lp.node.value || 1;
+    const rTotal = rp.node.value || 1;
+    const lThick = Math.max(1.2, (link.value / lTotal) * lp.h);
+    const rThick = Math.max(1.2, (link.value / rTotal) * rp.h);
+
+    const lOff = leftOffsets.get(link.source);
+    const rOff = rightOffsets.get(link.target);
+    const ly0 = lp.y + lOff;
+    const ry0 = rp.y + rOff;
+    leftOffsets.set(link.source, lOff + lThick);
+    rightOffsets.set(link.target, rOff + rThick);
+
+    const x0 = colLeftX + NODE_W;
+    const x1 = colRightX;
+    const xc = (x0 + x1) / 2;
+    const ribbonColor = colorFor(lp);
+
+    // Filled ribbon: top edge then bottom edge back, cubic bezier curves.
+    const topPath =
+      `M ${x0} ${ly0.toFixed(1)} ` +
+      `C ${xc} ${ly0.toFixed(1)}, ${xc} ${ry0.toFixed(1)}, ${x1} ${ry0.toFixed(1)}`;
+    const ly1 = ly0 + lThick, ry1 = ry0 + rThick;
+    const botPath =
+      `L ${x1} ${ry1.toFixed(1)} ` +
+      `C ${xc} ${ry1.toFixed(1)}, ${xc} ${ly1.toFixed(1)}, ${x0} ${ly1.toFixed(1)} Z`;
+
+    svg += `<path d="${topPath} ${botPath}" fill="${ribbonColor}" fill-opacity="0.34" ` +
+           `class="mo-sankey-link"><title>${escapeHtml(link.source)} \u2192 ` +
+           `${escapeHtml(link.target)} \u2014 ${fmtMoney(link.value)}</title></path>`;
+  }
+
+  // ── Node bars + labels ──
+  const drawNodes = (posMap, side) => {
+    for (const pos of posMap.values()) {
+      const fill = pos.node.isOther ? 'url(#sankey-other-hatch)' : colorFor(pos);
+      svg += `<rect x="${pos.x}" y="${pos.y.toFixed(1)}" width="${NODE_W}" ` +
+             `height="${pos.h.toFixed(1)}" rx="2" fill="${fill}">` +
+             `<title>${escapeHtml(pos.node.name)} \u2014 ${fmtMoney(pos.node.value)}</title></rect>`;
+      // Label: agencies anchor-start to the right of the bar; vendors
+      // anchor-end to the left of the bar.
+      const fontSize = narrow ? 9 : 10.5;
+      const cy = pos.y + pos.h / 2;
+      const charW = fontSize * 0.52;
+      const room = side === 'left'
+        ? (W / 2 - NODE_W - LABEL_GAP)
+        : (W / 2 - NODE_W - LABEL_GAP);
+      const charsFit = Math.max(5, Math.floor(room / charW));
+      const label = shortenLabel(pos.node.name, charsFit, pos.node.isOther);
+      const valTxt = fmtMoney(pos.node.value);
+      const tx = side === 'left' ? (pos.x + NODE_W + LABEL_GAP) : (pos.x - LABEL_GAP);
+      const anchor = side === 'left' ? 'start' : 'end';
+      const showVal = pos.h > fontSize + 9;
+      const nameY = showVal ? cy - 2 : cy + fontSize / 3;
+      svg += `<text x="${tx.toFixed(1)}" y="${nameY.toFixed(1)}" ` +
+             `text-anchor="${anchor}" class="mo-sankey-label" ` +
+             `font-size="${fontSize}" font-weight="600">${escapeHtml(label)}</text>`;
+      if (showVal) {
+        svg += `<text x="${tx.toFixed(1)}" y="${(cy + fontSize).toFixed(1)}" ` +
+               `text-anchor="${anchor}" class="mo-sankey-value" ` +
+               `font-size="${(fontSize - 1.5).toFixed(1)}">${valTxt}</text>`;
+      }
+    }
+  };
+  // Hatch pattern for "Other" nodes — same treatment as the treemap.
+  svg += `<defs><pattern id="sankey-other-hatch" patternUnits="userSpaceOnUse" ` +
+         `width="6" height="6" patternTransform="rotate(45)">` +
+         `<rect width="6" height="6" fill="${TREEMAP_OTHER_COLOR}"/>` +
+         `<line x1="0" y1="0" x2="0" y2="6" stroke="rgba(70,68,110,0.10)" stroke-width="3"/>` +
+         `</pattern></defs>`;
+  drawNodes(leftPos, 'left');
+  drawNodes(rightPos, 'right');
+
+  svg += `</svg>`;
+  host.innerHTML = svg;
+}
+
+// =============================================================================
 // STATE MAP — tile grid (us_state_grid1, AK moved NW)
 // =============================================================================
 const STATE_TILE_LAYOUT = {
@@ -4716,8 +5019,15 @@ function renderCard(rows, attrs, resolved) {
 
     const tmHost = $$('div', { class: 'mo-treemap-host' });
 
-    // Helper: re-render treemap + update header for a given dimension
-    const renderForDimension = (dimension) => {
+    // The card's primary visual has three views:
+    //   vendor / agency — treemap, broken down by that dimension
+    //   flow            — Sankey ribbon diagram, agency -> vendor money flow
+    // All three render into the same host element (tmHost). `currentView`
+    // tracks which is showing so the resize handler re-renders correctly.
+    let currentView = initialDimension;   // 'vendor' | 'agency' | 'flow'
+
+    // Render a treemap for a given dimension + update the comp-head text.
+    const renderTreemapView = (dimension) => {
       const items = buildTreemapItems(rows, isSub, dimension);
       // Count only named cells (exclude the "Other (N)" bucket if present)
       // so the displayed count matches what the user sees as labeled cells.
@@ -4744,31 +5054,63 @@ function renderCard(rows, attrs, resolved) {
       }
       titleEl.textContent = label;
       metaEl.textContent = meta;
-      // Force re-render: clear data-rendered marker and call render
+      // Force re-render: drop both stashed-data markers, then render.
       tmHost.removeAttribute('data-tm-items');
+      tmHost.removeAttribute('data-sk-view');
       tmHost.innerHTML = '';
       renderTreemapInto(tmHost, items);
     };
 
-    // For non-sub queries, render a vendor/agency toggle above the treemap
-    if (!isSub) {
-      const toggle = $$('div', { class: 'mo-tm-toggle' });
+    // Render the Sankey flow view into the same host.
+    const renderFlowView = () => {
+      const leftLabel = isSub ? 'primes' : 'agencies';
+      titleEl.textContent = 'Money flow';
+      metaEl.textContent = `${leftLabel} \u2192 ${isSub ? 'subs' : 'vendors'}`;
+      tmHost.removeAttribute('data-tm-items');
+      // Stash the rows so the resize handler can re-render the flow.
+      try {
+        tmHost.setAttribute('data-sk-view', isSub ? 'sub' : 'prime');
+        tmHost.setAttribute('data-sk-rows', JSON.stringify(rows));
+      } catch { /* rows too large to stash — resize just won't reflow flow */ }
+      tmHost.innerHTML = '';
+      renderSankeyInto(tmHost, rows, isSub);
+    };
+
+    // Unified view dispatcher used by both the toggle and initial render.
+    const showView = (view) => {
+      currentView = view;
+      if (view === 'flow') renderFlowView();
+      else renderTreemapView(view);
+    };
+
+    // View switcher — treemap dimensions + flow. For sub-flow cards we only
+    // show "Treemap | Flow" since the vendor/agency split doesn't apply.
+    const toggle = $$('div', { class: 'mo-tm-toggle' });
+    if (isSub) {
       toggle.innerHTML = `
-        <button class="mo-tm-toggle-btn${initialDimension === 'vendor' ? ' is-active' : ''}" data-dim="vendor">By vendor</button>
-        <button class="mo-tm-toggle-btn${initialDimension === 'agency' ? ' is-active' : ''}" data-dim="agency">By agency</button>
+        <button class="mo-tm-toggle-btn is-active" data-view="vendor">Treemap</button>
+        <button class="mo-tm-toggle-btn" data-view="flow">Flow</button>
       `;
-      compHead.appendChild(toggle);
-      toggle.querySelectorAll('.mo-tm-toggle-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-          toggle.querySelectorAll('.mo-tm-toggle-btn').forEach(b => b.classList.remove('is-active'));
-          btn.classList.add('is-active');
-          renderForDimension(btn.dataset.dim);
-        });
-      });
+    } else {
+      toggle.innerHTML = `
+        <button class="mo-tm-toggle-btn${initialDimension === 'vendor' ? ' is-active' : ''}" data-view="vendor">By vendor</button>
+        <button class="mo-tm-toggle-btn${initialDimension === 'agency' ? ' is-active' : ''}" data-view="agency">By agency</button>
+        <button class="mo-tm-toggle-btn" data-view="flow">Flow</button>
+      `;
     }
+    compHead.appendChild(toggle);
+    toggle.querySelectorAll('.mo-tm-toggle-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (btn.classList.contains('is-active')) return;
+        toggle.querySelectorAll('.mo-tm-toggle-btn').forEach(b => b.classList.remove('is-active'));
+        btn.classList.add('is-active');
+        track('card_view', { view: btn.dataset.view });
+        showView(btn.dataset.view);
+      });
+    });
 
     card.appendChild(tmHost);
-    requestAnimationFrame(() => renderForDimension(initialDimension));
+    requestAnimationFrame(() => showView(initialDimension));
   }
 
   if (isSub) {
@@ -6012,6 +6354,15 @@ window.addEventListener('resize', () => {
   _resizeTimer = setTimeout(() => {
     reRenderHostsBy('.mo-treemap-host', 'data-tm-items', renderTreemapInto);
     reRenderHostsBy('.mo-statemap-host', 'data-sm-geo', renderStateMapInto);
+    // Flow-view hosts stash rows under data-sk-rows + a data-sk-view marker.
+    document.querySelectorAll('.mo-treemap-host[data-sk-rows]').forEach(host => {
+      const raw = host.getAttribute('data-sk-rows');
+      if (!raw) return;
+      try {
+        const rows = JSON.parse(raw);
+        renderSankeyInto(host, rows, host.getAttribute('data-sk-view') === 'sub');
+      } catch { /* skip — too large to reflow */ }
+    });
   }, 150);
 });
 
