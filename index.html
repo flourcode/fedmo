@@ -1439,15 +1439,15 @@ window.scrollTo(0, 0);
 const LAMBDA_URL = 'https://4gxuwrrugc4s6zqcxsos2exg5y0sjcrc.lambda-url.us-east-1.on.aws/';
 const USASPENDING = 'https://api.usaspending.gov/api/v2';
 
-// Orientation starters. Written to teach the interaction model by example:
-// each one is a plain-English question a rep new to a territory would actually
-// ask. The fourth deliberately exercises the EDGAR path so a first-time user
-// discovers the capital-markets capability without being told it exists.
+// Orientation starters. Kept short (~20-26 chars) so each pill stays on a
+// single line on a narrow phone. Still plain-English questions, not keywords —
+// Mo's clarifying logic fills in any missing specifics. The fourth deliberately
+// exercises the EDGAR path so first-time users discover capital-markets data.
 const GREETING_PROMPTS = [
-  "Who's buying cybersecurity at DHS",
-  'Biggest contracts expiring at the Navy in the next 6 months',
-  'I sell cloud infrastructure — where should I focus in civilian agencies',
-  'Which AI startups raised money recently and also sell to the government',
+  "Who's buying cyber at DHS",
+  'Expiring Navy contracts',
+  'Where to sell cloud in FedCiv',
+  'AI startups that just raised',
 ];
 
 // =============================================================================
