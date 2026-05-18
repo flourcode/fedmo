@@ -130,6 +130,21 @@ a:hover { text-decoration: underline; }
   cursor: pointer;
 }
 .mo-header-action:active { background: var(--primary-20); }
+/* "Work with Mark" — left-aligned text pill in the header. Tinted so it's
+   visible without competing with the ask bar, which is the page's main job. */
+.mo-header-link {
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--primary-100);
+  background: var(--primary-20);
+  padding: 7px 14px;
+  border-radius: 999px;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 120ms;
+}
+.mo-header-link:hover, .mo-header-link:active { background: var(--primary-40); }
 
 /* Modal: production has an About modal explaining what Mo does, opened from
    the hamburger icon. */
@@ -1351,6 +1366,7 @@ a:hover { text-decoration: underline; }
 
 <header class="mo-header">
   <div class="mo-header-inner">
+    <a class="mo-header-link" href="/consulting/" data-cta="header-consulting">Work with Mark</a>
     <div class="mo-header-spacer"></div>
     <button class="mo-header-action" id="btnReset" aria-label="New conversation" title="New conversation">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
@@ -1444,10 +1460,10 @@ a:hover { text-decoration: underline; }
 
     <div class="mo-modal-actions">
       <a class="mo-modal-btn is-secondary" href="/tools/" id="btnAboutTools">Free Sales Tools</a>
-      <a class="mo-modal-btn is-secondary" href="/consulting/" id="btnAboutConsulting">Work with Mark — Partner Coaching</a>
+      <a class="mo-modal-btn is-secondary" href="/consulting/" id="btnAboutConsulting">Federal Prospecting with AI — Workshop</a>
       <a class="mo-modal-btn" href="https://calendly.com/markflournoy/chat-with-mark" target="_blank" rel="noopener" id="btnAboutCalendly">Chat with Mark</a>
     </div>
-    <div class="mo-modal-foot">Free intro chat above. For paid coaching on growing pipeline through partners, see Work with Mark.</div>
+    <div class="mo-modal-foot">Free intro chat above. For the paid AI prospecting workshop and team coaching, see Work with Mark.</div>
   </div>
 </div>
 
@@ -6327,6 +6343,14 @@ document.getElementById('btnReset').addEventListener('click', () => {
   history.length = 0;
   showGreeting();
   $input.focus();
+});
+
+// Track clicks to the consulting page from the header link and About modal,
+// so you can see which entry point drives workshop traffic in analytics.
+document.querySelectorAll('a[href="/consulting/"]').forEach((el) => {
+  el.addEventListener('click', () => {
+    track('consulting_click', { source: el.dataset.cta || el.id || 'unknown' });
+  });
 });
 
 $conv.addEventListener('click', (e) => {
