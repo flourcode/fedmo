@@ -1,0 +1,2462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<!-- Theme / UI behavior -->
+<meta name="theme-color" content="#FDFCFF">
+<meta name="color-scheme" content="light dark">
+<meta name="format-detection" content="telephone=no">
+<!-- iOS PWA -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Fedhoo Tools">
+<!-- Android PWA -->
+<meta name="mobile-web-app-capable" content="yes">
+<!-- Icons -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='96 96 448 448'%3E%3Cstyle%3Epath%7Bfill:%232C2B28%7D .arrow%7Bfill:%23FFFFFF%7D @media (prefers-color-scheme:dark)%7B.arrow%7Bfill:%23DCD8D0%7D%7D%3C/style%3E%3Cpath d='M480 96C515.3 96 544 124.7 544 160L544 480C544 515.3 515.3 544 480 544L160 544C124.7 544 96 515.3 96 480L96 160C96 124.7 124.7 96 160 96L480 96z'/%3E%3Cpath class='arrow' d='M368 360C368 373.3 378.7 384 392 384C405.3 384 416 373.3 416 360L416 248C416 234.7 405.3 224 392 224L280 224C266.7 224 256 234.7 256 248C256 261.3 266.7 272 280 272L334.1 272L231.1 375C221.7 384.4 221.7 399.6 231.1 408.9C240.5 418.2 255.7 418.3 265 408.9L368 305.9L368 360z'/%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.json">
+<title>Fedhoo Tools | Free Calculators for Federal Sales &amp; BD Teams</title>
+<meta name="title" content="Fedhoo Tools | Free Calculators for Federal Sales & BD Teams">
+<meta name="description" content="Free tools for federal sales and BD teams: bid/no-bid, pipeline, run rate, discount impact, commission, FIRE, and more.">
+<meta name="keywords" content="federal sales calculator, pipeline coverage calculator, bid no bid tool, commission calculator, government sales tools, federal BD tools, run rate calculator, discount impact calculator, sales territory planning">
+<link rel="canonical" href="https://fedhoo.com/tools/">
+<!-- OpenGraph -->
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://fedhoo.com/tools/">
+<meta property="og:title" content="Fedhoo Tools | Free Calculators for Federal Sales Teams">
+<meta property="og:description" content="Free calculators for federal sales and BD teams: bid/no-bid, pipeline, run rate, discount impact, commission, and more.">
+<meta property="og:image" content="https://fedhoo.com/tools.png">
+<!-- Twitter -->
+<meta property="twitter:card" content="summary_large_image">
+<meta property="twitter:title" content="Fedhoo Tools | Free Calculators for Federal Sales Teams">
+<meta property="twitter:description" content="Free tools for federal sales and BD teams: bid no-bid, pipeline, run rate, discount impact, commission, and more.">
+<!-- Structured Data -->
+<script type="application/ld+json">
+{
+"@context":"https://schema.org",
+"@type":"WebApplication",
+"name":"Fedhoo Tools",
+"url":"https://fedhoo.com/tools/",
+"description":"Free tools for federal sales and BD teams.",
+"applicationCategory":"BusinessApplication",
+"operatingSystem":"Web",
+"offers":{"@type":"Offer","price":"0","priceCurrency":"USD"}
+}
+</script>
+<!-- Performance -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Google+Sans+Flex:opsz,wght@6..144,1..1000&display=swap" rel="stylesheet">
+<!-- Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-T343V4RFHV"></script>
+<script>
+try {
+  var _fd = localStorage.getItem('fedhoo_dark');
+  if (_fd==='1' || (_fd===null && window.matchMedia('(prefers-color-scheme:dark)').matches)) {
+    document.documentElement.classList.add('dark');
+  }
+} catch(e) {}
+window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-T343V4RFHV');
+</script>
+<style>
+/* ── TOKENS ────────────────────────────────── */
+:root {
+  --bg:        #FDFCFF;
+  --bg-app:    #FFFFFF;
+  --bg-hover:  rgba(70,68,110,0.06);
+  --bg-active: rgba(70,68,110,0.11);
+
+  --text-primary:    #393640;
+  --text-secondary:  #535059;
+  --text-tertiary:   #7572B7;
+  --text-quaternary: #ACAAD4;
+
+  --border:       #DEDCD4;
+  --border-inner: #E3E3F1;
+
+  --btn-bg:    #46446E;
+  --btn-text:  #FFFFFF;
+  --btn-hover: #5E5B92;
+
+  --chip-bg:   #E3E3F1;
+  --chip-hover:#ACAAD4;
+
+  --go-bg:    rgba(52,199,89,0.08);   --go-text:   #1A6E31;
+  --warn-bg:  rgba(200,160,0,0.09);   --warn-text: #6B5000;
+  --crit-bg:  rgba(200,50,30,0.08);   --crit-text: #8C1A0E;
+
+  --accent:     #46446E;
+  --accent-mid: #5E5B92;
+  --accent-dim: #E3E3F1;
+
+  /* Channel margin bar colors — kept, updated to purple palette */
+  --c-oem:   #46446E;
+  --c-disty: #5E5B92;
+  --c-var:   #7572B7;
+  --c-si:    #3A8C72;
+
+  --radius:    12px;
+  --radius-sm: 12px;
+  --radius-xs: 8px;
+  --shadow:    0 1px 3px rgba(44,41,51,0.06);
+  --shadow-sm: 0 1px 2px rgba(44,41,51,0.05);
+  --font: 'Google Sans Flex', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+  --transition: all 0.16s cubic-bezier(0.4,0,0.2,1);
+  --safe-top:    env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+
+  --text-xs:   0.72rem;
+  --text-sm:   0.85rem;
+  --text-base: 0.9375rem;
+  --text-lg:   1.1rem;
+  --text-xl:   1.35rem;
+  --text-2xl:  1.65rem;
+  --text-hero: clamp(2rem, 4.5vw, 2.75rem);
+}
+
+/* ── DARK MODE ── */
+@media (prefers-color-scheme: dark) { :root:not(.light) {
+  --bg:        #0F0E13;
+  --bg-app:    #1A1820;
+  --bg-hover:  rgba(180,175,220,0.07);
+  --bg-active: rgba(180,175,220,0.13);
+  --text-primary:    #E8E6F0;
+  --text-secondary:  #B8B5C8;
+  --text-tertiary:   #9B98C8;
+  --text-quaternary: #5A5870;
+  --border:       #2E2B3A;
+  --border-inner: #252233;
+  --btn-bg:    #7572B7;
+  --btn-text:  #FFFFFF;
+  --btn-hover: #8885C8;
+  --chip-bg:   #252233;
+  --chip-hover:#302D42;
+  --accent:     #9B98C8;
+  --accent-mid: #7572B7;
+  --accent-dim: #252233;
+  --shadow:    0 1px 3px rgba(0,0,0,0.3);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.25);
+}}
+:root.dark {
+  --bg:        #0F0E13;
+  --bg-app:    #1A1820;
+  --bg-hover:  rgba(180,175,220,0.07);
+  --bg-active: rgba(180,175,220,0.13);
+  --text-primary:    #E8E6F0;
+  --text-secondary:  #B8B5C8;
+  --text-tertiary:   #9B98C8;
+  --text-quaternary: #5A5870;
+  --border:       #2E2B3A;
+  --border-inner: #252233;
+  --btn-bg:    #7572B7;
+  --btn-text:  #FFFFFF;
+  --btn-hover: #8885C8;
+  --chip-bg:   #252233;
+  --chip-hover:#302D42;
+  --accent:     #9B98C8;
+  --accent-mid: #7572B7;
+  --accent-dim: #252233;
+  --shadow:    0 1px 3px rgba(0,0,0,0.3);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.25);
+}
+.dark .site-header { background: rgba(15,14,19,0.96) !important; }
+
+/* ── RESET ─────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; font-family: var(--font); -webkit-tap-highlight-color: transparent; }
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 120px;  /* sticky header + jump nav — used by all hash-link scrolls */
+  -webkit-text-size-adjust: 100%;
+  background: var(--bg);
+}
+html, body { width: 100%; min-height: 100dvh; overscroll-behavior: none; }
+body { color: var(--text-primary); letter-spacing: -0.01em; background: var(--bg); -webkit-font-smoothing: antialiased; }
+::selection { background: rgba(91,75,168,0.15); }
+a, button, input, select { touch-action: manipulation; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.13); border-radius: 9999px; }
+
+/* ── HEADER ─────────────────────────────────── */
+.site-header {
+  position: sticky; top: 0; z-index: 200;
+  background: rgba(253,252,255,0.96);
+  backdrop-filter: saturate(160%) blur(16px);
+  -webkit-backdrop-filter: saturate(160%) blur(16px);
+  padding: max(10px, var(--safe-top)) 12px 0;
+}
+.header-top {
+  display: flex; align-items: center; justify-content: space-between;
+  padding-bottom: 10px; gap: 10px;
+  max-width: min(96vw, 1920px); margin: 0 auto;
+}
+.jump-wrap {
+  padding: 8px 0 10px;
+  border-top: 1px solid var(--border-inner);
+  max-width: min(96vw, 1920px); margin: 0 auto;
+}
+.logo-link {
+  font-size: 0.95rem; font-weight: 800; letter-spacing: -0.01em;
+  color: #FFFFFF; text-decoration: none;
+  background: var(--btn-bg); border: 1px solid transparent;
+  border-radius: var(--radius-sm); padding: 0 14px; height: 36px;
+  display: inline-flex; align-items: center;
+  transition: var(--transition);
+}
+.logo-link:hover { background: var(--btn-hover); }
+.hdr-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  height: 36px; padding: 0 12px; gap: 6px;
+  background: var(--bg-app); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); font-size: var(--text-sm);
+  font-weight: 600; color: var(--text-secondary); cursor: pointer;
+  font-family: var(--font); text-decoration: none; transition: var(--transition);
+  white-space: nowrap;
+}
+.hdr-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+.header-label { font-size: var(--text-sm); font-weight: 600; color: var(--text-tertiary); }
+
+/* Jump nav — simple dropdown */
+.jump-select {
+  width: 100%; height: 36px;
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 0 32px 0 12px;
+  font-size: var(--text-sm); font-weight: 600; color: var(--text-secondary);
+  font-family: var(--font); cursor: pointer; outline: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%23AEAEAC' d='M5 6L0 0h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 12px center;
+  transition: var(--transition);
+}
+.jump-select:hover { border-color: var(--border-hover); }
+.jump-select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
+
+/* ── PAGE LAYOUT ────────────────────────────── */
+.page-wrap { max-width: min(96vw, 1920px); margin: 0 auto; padding: 36px 12px calc(4rem + var(--safe-bottom)); }
+.page-header { margin-bottom: 32px; }
+.page-title { font-size: var(--text-hero); font-weight: 800; color: var(--text-primary); letter-spacing: -0.03em; line-height: 1; margin-bottom: 6px; }
+.page-sub { font-size: var(--text-base); color: var(--text-tertiary); font-weight: 400; }
+
+/* ── SECTION LABELS ─────────────────────────── */
+.section-label {
+  font-size: var(--text-xs); font-weight: 700; color: var(--text-quaternary);
+  text-transform: uppercase; letter-spacing: 0.08em;
+  margin: 32px 0 12px; padding-top: 4px;
+  border-top: 1px solid var(--border);
+}
+.section-label:first-of-type { margin-top: 0; border-top: none; }
+
+/* ── GRID (masonry via CSS columns) ─────────── */
+/* column-count acts as a maximum, column-width as a minimum.
+   This formula lets the grid flow up to 6 columns on ultrawide displays
+   while keeping cards at least 340px wide. Mobile = 1 column, naturally. */
+.tools-grid {
+  columns: 6 340px;
+  column-gap: 18px;
+}
+.tools-grid > * {
+  break-inside: avoid;
+  -webkit-column-break-inside: avoid;
+  margin-bottom: 18px;
+  display: inline-block;
+  width: 100%;
+}
+.tools-grid > .section-label {
+  column-span: all;
+  display: block;
+}
+
+/* ── CARD ───────────────────────────────────── */
+.app-card {
+  background: var(--bg-app); border-radius: var(--radius);
+  border: 1px solid var(--border); padding: 26px;
+  display: flex; flex-direction: column;
+  scroll-margin-top: 130px;   /* account for sticky header + jump nav */
+  transition: box-shadow 0.18s ease, transform 0.18s ease;
+}
+.app-card:hover { background: var(--bg-hover); }
+.card-title { font-size: var(--text-xl); font-weight: 800; color: var(--text-primary); letter-spacing: -0.02em; margin-bottom: 3px; }
+.card-desc  { font-size: var(--text-sm); color: var(--text-tertiary); font-weight: 400; margin-bottom: 22px; line-height: 1.45; }
+
+/* ── INPUTS ─────────────────────────────────── */
+.input-group { margin-bottom: 14px; }
+.input-label { display: block; font-size: var(--text-xs); font-weight: 700; color: var(--text-tertiary); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.06em; }
+.input-wrapper { position: relative; }
+.input-field {
+  width: 100%; background: var(--bg-hover); border: 1.5px solid transparent;
+  border-radius: var(--radius-sm); padding: 10px 13px;
+  font-size: var(--text-base); color: var(--text-primary); font-family: var(--font);
+  font-weight: 500; transition: var(--transition); outline: none; -webkit-appearance: none;
+}
+.input-field:focus { border-color: var(--accent); background: var(--bg-app); box-shadow: 0 0 0 3px var(--accent-dim); }
+.input-field::placeholder { color: var(--text-quaternary); font-weight: 400; }
+select.input-field {
+  appearance: none; cursor: pointer;
+  background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%23AEAEAC' d='M5 6L0 0h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 11px center; padding-right: 30px;
+}
+.sym { position: absolute; top: 50%; transform: translateY(-50%); color: var(--text-quaternary); font-weight: 500; pointer-events: none; z-index: 1; font-size: var(--text-sm); }
+.sym-l { left: 13px; }
+.sym-r { right: 13px; }
+.pad-l { padding-left: 26px !important; }
+.pad-r { padding-right: 26px !important; }
+.num-r  { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* ── BUTTONS ────────────────────────────────── */
+.calc-btn-primary {
+  width: 100%; height: 48px; padding: 0;
+  background: var(--btn-bg); color: var(--btn-text);
+  border: none; border-radius: var(--radius-sm);
+  font-size: var(--text-sm); font-weight: 600; cursor: pointer;
+  transition: var(--transition); display: flex; align-items: center; justify-content: center;
+  letter-spacing: -0.01em; margin-top: 6px; font-family: var(--font);
+}
+.calc-btn-primary:hover { background: var(--btn-hover); }
+.calc-btn-primary:active { transform: scale(0.97); }
+
+/* ── RESULTS ────────────────────────────────── */
+.results { display: none; margin-top: 22px; padding-top: 22px; border-top: 1px solid var(--border-inner); }
+.results.show { display: block; animation: up 0.28s cubic-bezier(0.16,1,0.3,1) both; }
+@keyframes up { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
+
+.main-result { text-align: center; margin-bottom: 16px; padding: 18px 14px; background: var(--accent-dim); border-radius: var(--radius-sm); }
+.main-number { font-size: clamp(1.9rem,4.5vw,2.4rem); font-weight: 900; color: var(--accent); line-height: 1; margin-bottom: 4px; font-variant-numeric: tabular-nums; word-break: break-word; letter-spacing: -0.03em; }
+.main-label  { font-size: var(--text-xs); color: var(--text-tertiary); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+
+/* Progress */
+.prog-wrap { margin: 14px 0; }
+.prog-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 7px; }
+.prog-pct  { font-size: var(--text-2xl); font-weight: 800; color: var(--text-primary); letter-spacing: -0.025em; }
+.prog-lbl  { font-size: var(--text-xs); color: var(--text-tertiary); font-weight: 500; }
+.prog-track { width: 100%; height: 4px; background: var(--border); border-radius: 9999px; overflow: hidden; }
+.prog-fill  { height: 100%; background: var(--accent); border-radius: 9999px; transition: width 0.8s cubic-bezier(0.16,1,0.3,1); }
+.prog-fill.warn { background: #C8A000; }
+.prog-fill.bad  { background: #B83020; }
+
+/* Metrics */
+.metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+.metric   { text-align: center; padding: 13px 10px; background: var(--bg); border-radius: var(--radius-sm); border: 1px solid var(--border-inner); }
+.m-val    { font-size: var(--text-lg); font-weight: 800; color: var(--text-primary); margin-bottom: 3px; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; word-break: break-word; }
+.m-lbl    { font-size: var(--text-xs); color: var(--text-tertiary); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+
+/* Status pill */
+.status-pill { text-align: center; font-size: var(--text-sm); font-weight: 600; padding: 11px 14px; border-radius: var(--radius-sm); }
+.s-go   { background: var(--go-bg);   color: var(--go-text); }
+.s-warn { background: var(--warn-bg); color: var(--warn-text); }
+.s-crit { background: var(--crit-bg); color: var(--crit-text); }
+
+/* ── CHANNEL MARGIN ─────────────────────────── */
+.chart-lbl { font-size: var(--text-xs); font-weight: 700; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 9px; }
+.stack-bar { width: 100%; height: 30px; background: var(--border); border-radius: var(--radius-sm); display: flex; overflow: hidden; margin-bottom: 18px; }
+.seg { height: 100%; display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: var(--text-xs); transition: width 0.28s ease; overflow: hidden; white-space: nowrap; }
+.seg-oem   { background: var(--c-oem); }
+.seg-disty { background: var(--c-disty); }
+.seg-var   { background: var(--c-var); }
+.seg-si    { background: var(--c-si); }
+.seg-err   { background: #B83020 !important; }
+
+.slider-grp { margin-bottom: 13px; }
+.slider-head { display: flex; justify-content: space-between; font-size: var(--text-sm); font-weight: 600; color: var(--text-secondary); margin-bottom: 5px; }
+input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; margin: 3px 0; }
+input[type=range]:focus { outline: none; }
+input[type=range]::-webkit-slider-runnable-track { height: 3px; background: var(--border); border-radius: 9999px; }
+input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 18px; width: 18px; border-radius: 50%; background: var(--bg-app); border: 2px solid var(--text-secondary); margin-top: -7.5px; box-shadow: 0 1px 3px rgba(0,0,0,0.14); }
+input[type=range]::-moz-range-track { height: 3px; background: var(--border); border-radius: 9999px; }
+input[type=range]::-moz-range-thumb  { height: 18px; width: 18px; border-radius: 50%; background: var(--bg-app); border: 2px solid var(--text-secondary); }
+.wf-sub { font-size: var(--text-xs); color: var(--text-tertiary); font-weight: 500; }
+
+/* ── BID/NO-BID ─────────────────────────────── */
+.score-rows { display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px; }
+.score-row  { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px; }
+.score-label { font-size: var(--text-sm); font-weight: 600; color: var(--text-secondary); }
+.score-sub   { font-size: var(--text-xs); color: var(--text-tertiary); }
+.score-stars { display: flex; gap: 4px; }
+.star-btn {
+  width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--border);
+  background: var(--bg); cursor: pointer; font-size: 0.75rem; font-weight: 700;
+  color: var(--text-tertiary); transition: var(--transition);
+  display: flex; align-items: center; justify-content: center; font-family: var(--font);
+}
+.star-btn.active { background: var(--btn-bg); color: white; border-color: transparent; }
+.star-btn:hover  { background: var(--bg-active); }
+.star-btn.active:hover { background: var(--btn-hover); }
+.bnb-verdict { text-align: center; padding: 22px 16px; border-radius: var(--radius-sm); margin-bottom: 14px; }
+.verdict-word { font-size: 1.9rem; font-weight: 900; letter-spacing: -0.03em; margin-bottom: 4px; }
+.verdict-score { font-size: var(--text-sm); color: var(--text-tertiary); font-weight: 500; }
+
+/* ── RING TIMER ────────────────────────────── */
+.timer-display {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 24px 16px 16px; background: var(--bg); border-radius: var(--radius-sm);
+  border: 1px solid var(--border); margin-bottom: 16px;
+}
+.timer-ring-wrap {
+  position: relative; width: clamp(170px, 44vw, 220px); height: clamp(170px, 44vw, 220px);
+}
+.timer-ring-svg { width: 100%; height: 100%; }
+.timer-ring-bg { fill: none; stroke: #E8E8E6; stroke-width: 16; }
+.timer-ring-fg { fill: none; stroke: #D42B1E; stroke-width: 16; stroke-linecap: round; transition: stroke-dashoffset 0.4s ease; }
+.timer-ring-fg.ready { stroke: transparent; }
+.timer-ring-center {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 2px;
+}
+.timer-digits {
+  font-size: clamp(2.2rem, 6vw, 3rem); font-weight: 900; letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums; color: var(--text-primary); line-height: 1;
+}
+.timer-digits.expired { color: #D42B1E; }
+.timer-phase {
+  font-size: 0.65rem; color: var(--text-tertiary); font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.06em; margin-top: 2px;
+}
+.timer-presets { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.preset-btn {
+  flex: 1; min-width: 60px; height: 34px; background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); font-size: var(--text-sm); font-weight: 600;
+  color: var(--text-secondary); cursor: pointer; transition: var(--transition); font-family: var(--font);
+}
+.preset-btn:hover { background: var(--bg-hover); }
+.preset-btn.active { background: var(--btn-bg); color: white; border-color: var(--btn-bg); }
+.timer-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.timer-action {
+  height: 42px; border: none; border-radius: var(--radius-sm); font-size: var(--text-sm);
+  font-weight: 600; cursor: pointer; transition: var(--transition); font-family: var(--font);
+  display: flex; align-items: center; justify-content: center;
+}
+.timer-start { background: var(--btn-bg); color: white; }
+.timer-start:hover { background: var(--btn-hover); }
+.timer-start:active { transform: scale(0.97); }
+.timer-reset { background: var(--bg); color: var(--text-secondary); border: 1px solid var(--border); }
+.timer-reset:hover { background: var(--bg-hover); }
+
+/* ── FED FY CLOCK ───────────────────────────── */
+.fy-board { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+.fy-cell  { background: var(--bg); border: 1px solid var(--border-inner); border-radius: var(--radius-sm); padding: 14px 12px; text-align: center; }
+.fy-big   { font-size: var(--text-2xl); font-weight: 900; color: var(--text-primary); letter-spacing: -0.025em; line-height: 1; margin-bottom: 3px; }
+.fy-sub   { font-size: var(--text-xs); color: var(--text-tertiary); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+.fy-bar-wrap { margin-top: 14px; }
+.fy-bar-lbl { display: flex; justify-content: space-between; font-size: var(--text-xs); color: var(--text-tertiary); font-weight: 500; margin-bottom: 6px; }
+
+/* ── CALCULATOR ─────────────────────────────── */
+.calc-display {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 14px 14px 12px;
+  margin-bottom: 10px; text-align: right; min-height: 68px;
+  display: flex; flex-direction: column; justify-content: flex-end;
+}
+.calc-expr { font-size: var(--text-sm); color: var(--text-quaternary); min-height: 17px; font-variant-numeric: tabular-nums; word-break: break-all; }
+.calc-val  { font-size: clamp(1.5rem,4vw,2.1rem); font-weight: 800; color: var(--text-primary); letter-spacing: -0.03em; font-variant-numeric: tabular-nums; word-break: break-all; line-height: 1.1; }
+.kpad { display: grid; grid-template-columns: repeat(4,1fr); gap: 6px; }
+.k {
+  height: 50px; border: none; border-radius: var(--radius-sm);
+  font-size: var(--text-base); font-weight: 600; cursor: pointer;
+  transition: var(--transition); font-family: var(--font);
+  display: flex; align-items: center; justify-content: center;
+}
+.k:active { transform: scale(0.93); }
+.k-num { background: var(--bg-app); color: var(--text-primary); border: 1px solid var(--border); }
+.k-num:hover { background: var(--bg-hover); }
+.k-op  { background: var(--accent-dim); color: var(--accent); border: 1px solid var(--border-inner); }
+.k-op:hover  { background: var(--chip-hover); color: var(--btn-bg); }
+.k-fn  { background: var(--bg); color: var(--text-secondary); border: 1px solid var(--border); font-size: var(--text-sm); }
+.k-fn:hover  { background: var(--bg-hover); }
+.k-eq  { background: var(--btn-bg); color: white; border: none; }
+.k-eq:hover  { background: var(--btn-hover); }
+.k-pct { background: rgba(0,0,0,0.05); color: var(--text-secondary); border: 1px solid var(--border); }
+.k-pct:hover { background: var(--bg-active); }
+.k-wide { grid-column: span 2; }
+
+/* ── TOAST ──────────────────────────────────── */
+.toast-wrap { position: fixed; bottom: 20px; right: 14px; z-index: 999; display: flex; flex-direction: column; gap: 7px; pointer-events: none; }
+.toast { background: var(--bg-app); color: var(--text-primary); border: 1px solid var(--border); padding: 10px 14px; border-radius: var(--radius-sm); box-shadow: var(--shadow); font-weight: 600; font-size: var(--text-sm); transform: translateX(110%); opacity: 0; transition: all 0.25s cubic-bezier(0.16,1,0.3,1); pointer-events: auto; max-width: 280px; }
+.toast.show { transform: translateX(0); opacity: 1; }
+.toast.err  { border-left: 3px solid #B83020; }
+.toast.ok   { border-left: 3px solid #1A6E31; }
+
+/* ── FOOTER ─────────────────────────────────── */
+.site-footer { border-top: 1px solid var(--border); padding: 26px 12px calc(1.5rem + var(--safe-bottom)); max-width: min(96vw, 1920px); margin: 16px auto 0; display: flex; flex-direction: column; align-items: center; gap: 5px; }
+.footer-back { font-size: var(--text-sm); font-weight: 500; color: var(--accent); text-decoration: none; }
+.footer-back:hover { opacity: 0.72; }
+.footer-copy { font-size: var(--text-xs); color: var(--text-quaternary); }
+
+/* ── MOBILE ─────────────────────────────────── */
+@media (max-width: 640px) {
+  .page-wrap { padding: 20px 12px calc(3rem + var(--safe-bottom)); }
+  .site-footer { padding-left: 12px; padding-right: 12px; }
+  .tools-grid { gap: 10px; }
+  .app-card { padding: 20px 12px; }
+  .header-label { display: none; }
+  .toast-wrap { bottom: 14px; left: 10px; right: 10px; }
+  .toast { transform: translateY(110%); max-width: 100%; }
+  .toast.show { transform: translateY(0); }
+}
+.hidden { display: none !important; }
+
+/* ── AI TOOLS ─────────────────────────────── */
+.ai-textarea {
+  width: 100%; background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 11px 13px;
+  font-size: var(--text-base); color: var(--text-primary); font-family: var(--font);
+  font-weight: 400; transition: var(--transition); outline: none;
+  resize: vertical; min-height: 96px; line-height: 1.55;
+}
+.ai-textarea:focus { border-color: var(--accent); background: var(--bg-app); box-shadow: 0 0 0 3px var(--accent-dim); }
+.ai-textarea::placeholder { color: var(--text-quaternary); }
+
+.ai-submit-btn { position: relative; }
+.ai-spinner {
+  width: 16px; height: 16px; border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff;
+  animation: spin 0.7s linear infinite; display: inline-block;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.ai-loading { font-size: var(--text-sm); color: var(--text-tertiary); font-style: italic; margin-top: 10px; text-align: center; }
+
+.ai-result { margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border-inner); animation: up 0.28s cubic-bezier(0.16,1,0.3,1) both; }
+.ai-result-label { font-size: var(--text-xs); font-weight: 700; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; }
+
+.ai-result-box {
+  background: var(--bg); border: 1px solid var(--border-inner);
+  border-radius: var(--radius-sm); padding: 14px;
+  font-size: var(--text-sm); color: var(--text-secondary);
+  line-height: 1.65; white-space: pre-wrap; word-break: break-word;
+  max-height: 320px; overflow-y: auto; margin-bottom: 10px;
+}
+
+.ai-copy-btn {
+  width: 100%; height: 38px; background: var(--bg); color: var(--text-secondary);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  font-size: var(--text-sm); font-weight: 600; cursor: pointer;
+  transition: var(--transition); font-family: var(--font);
+  display: flex; align-items: center; justify-content: center; margin-top: 4px;
+}
+.ai-copy-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+.ai-copy-btn:active { transform: scale(0.97); }
+.ai-copy-btn.copied { background: var(--go-bg); color: var(--go-text); border-color: transparent; }
+
+.ai-plan-grid { display: flex; flex-direction: column; gap: 10px; }
+.ai-plan-row { background: var(--bg); border: 1px solid var(--border-inner); border-radius: var(--radius-sm); padding: 12px 13px; }
+.ai-plan-row-label { font-size: var(--text-xs); font-weight: 700; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+.ai-plan-row-val { font-size: var(--text-sm); color: var(--text-secondary); line-height: 1.55; }
+.ai-plan-two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+.ai-error { margin-top: 14px; padding: 12px 14px; background: var(--crit-bg); color: var(--crit-text); border-radius: var(--radius-sm); font-size: var(--text-sm); font-weight: 600; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-spinner { animation: none; }
+}
+
+/* ── JOB DORKER ──────────────────────────────── */
+/* Full-width card that spans all masonry columns on desktop.
+   Inside the card, the 3 steps lay out side-by-side on desktop and stack on mobile. */
+.app-card.sdr-wide {
+  column-span: all;
+  -webkit-column-span: all;
+  break-inside: avoid;
+  margin-top: 18px;
+  margin-bottom: 18px;
+}
+@media (max-width: 640px) {
+  .app-card.sdr-wide {
+    margin-top: 10px;
+    margin-bottom: 10px;
+  }
+}
+.sdr-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 22px;
+}
+@media (min-width: 880px) {
+  .sdr-grid {
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 28px;
+  }
+}
+.sdr-section {
+  min-width: 0; /* allow children to shrink in grid cells */
+}
+/* On desktop the three columns sit side-by-side, so we want left dividers
+   between them instead of top dividers between stacked rows. */
+.sdr-section + .sdr-section {
+  border-top: 1px solid var(--border-inner);
+  margin-top: 4px;
+  padding-top: 22px;
+}
+@media (min-width: 880px) {
+  .sdr-section + .sdr-section {
+    border-top: none;
+    margin-top: 0;
+    padding-top: 0;
+    border-left: 1px solid var(--border-inner);
+    padding-left: 28px;
+  }
+}
+.sdr-section-label {
+  font-size: var(--text-xs); font-weight: 700; color: var(--text-tertiary);
+  text-transform: uppercase; letter-spacing: 0.06em;
+  margin-bottom: 12px;
+  display: flex; align-items: center; gap: 8px;
+}
+.sdr-section-label .sdr-step-num {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: var(--btn-bg); color: #fff;
+  font-size: 0.66rem; font-weight: 800;
+}
+.sdr-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 2px; }
+.sdr-chip {
+  font-size: var(--text-xs); font-weight: 600;
+  padding: 6px 11px; border-radius: 9999px;
+  background: var(--chip-bg); color: var(--text-secondary);
+  border: 1px solid transparent;
+  cursor: pointer; transition: var(--transition);
+  font-family: var(--font); user-select: none;
+}
+.sdr-chip:hover { background: var(--chip-hover); }
+.sdr-chip.active {
+  background: var(--btn-bg); color: #fff;
+}
+.sdr-chip-hint {
+  font-size: var(--text-xs); color: var(--text-quaternary);
+  font-weight: 500; margin-top: 6px;
+}
+/* Result rows — give .results a guaranteed bottom margin so it can't visually
+   bleed into the next sibling section on slow layout passes / Safari. */
+.sdr-section .results {
+  margin-bottom: 4px;
+}
+.sdr-row {
+  display: grid; grid-template-columns: 1fr auto;
+  align-items: center; gap: 10px;
+  padding: 11px 13px;
+  background: var(--bg); border: 1px solid var(--border-inner);
+  border-radius: var(--radius-sm);
+  margin-bottom: 6px;
+  transition: var(--transition);
+  min-width: 0;
+}
+.sdr-row:hover { background: var(--bg-app); border-color: var(--border); }
+.sdr-row > div:first-child { min-width: 0; } /* allow long queries to wrap */
+.sdr-row-src {
+  font-size: 0.68rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--btn-bg); margin-bottom: 3px;
+}
+.sdr-row-q {
+  font-size: 0.75rem; color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  word-break: break-word; overflow-wrap: anywhere; line-height: 1.45;
+}
+.sdr-row-open {
+  font-size: var(--text-xs); font-weight: 700;
+  padding: 7px 12px; border-radius: 6px;
+  background: var(--btn-bg); color: #fff;
+  text-decoration: none; white-space: nowrap;
+  transition: var(--transition);
+}
+.sdr-row-open:hover { background: var(--btn-hover); }
+.sdr-empty {
+  padding: 22px 14px; text-align: center;
+  font-size: var(--text-sm); color: var(--text-tertiary);
+  background: var(--bg); border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+}
+.sdr-meta-row {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: var(--text-xs); color: var(--text-tertiary);
+  margin-bottom: 8px; font-weight: 500;
+}
+.sdr-meta-row strong { color: var(--text-primary); font-weight: 700; }
+.sdr-char-count {
+  font-size: var(--text-xs); color: var(--text-tertiary);
+  margin-top: 8px; font-variant-numeric: tabular-nums; font-weight: 500;
+}
+.sdr-char-count.warn { color: var(--crit-text); font-weight: 700; }
+.sdr-row-two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 420px) { .sdr-row-two { grid-template-columns: 1fr; } }
+
+/* Two-button row in the outreach step */
+.sdr-btn-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 6px;
+}
+@media (max-width: 380px) {
+  .sdr-btn-row { grid-template-columns: 1fr; }
+}
+.sdr-btn-secondary {
+  background: var(--bg-app) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border) !important;
+}
+.sdr-btn-secondary:hover {
+  background: var(--bg-hover) !important;
+}
+.sdr-btn-ai {
+  position: relative;
+}
+.sdr-btn-ai:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.sdr-btn-ai:disabled:hover {
+  background: var(--btn-bg);
+}
+.sdr-ai-hint {
+  font-size: var(--text-xs);
+  color: var(--text-quaternary);
+  font-weight: 500;
+  margin-top: 8px;
+  line-height: 1.45;
+}
+
+/* Company intel panel — sits above the message in the AI result */
+.sdr-ai-intel {
+  background: var(--accent-dim);
+  border: 1px solid var(--border-inner);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  margin-bottom: 14px;
+}
+.sdr-intel-label {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 6px;
+}
+.sdr-intel-row {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  line-height: 1.55;
+  margin-bottom: 4px;
+}
+.sdr-intel-row:last-child { margin-bottom: 0; }
+.sdr-intel-row strong {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+.sdr-subject {
+  background: var(--bg);
+  border: 1px solid var(--border-inner);
+  border-radius: var(--radius-sm);
+  padding: 10px 13px;
+  margin-bottom: 10px;
+  font-size: var(--text-sm);
+}
+.sdr-subject-label {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 3px;
+}
+.sdr-subject-val {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* Collapsible "more filters" disclosure */
+.sdr-details {
+  margin-bottom: 14px;
+  border-top: 1px dashed var(--border);
+  padding-top: 12px;
+}
+.sdr-details > summary {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  user-select: none;
+  transition: color 0.15s ease;
+}
+.sdr-details > summary::-webkit-details-marker { display: none; }
+.sdr-details > summary:hover { color: var(--text-secondary); }
+.sdr-details > summary::after {
+  content: '▾';
+  font-size: 9px;
+  transition: transform 0.2s ease;
+  display: inline-block;
+  color: var(--text-quaternary);
+}
+.sdr-details[open] > summary::after { transform: rotate(180deg); }
+.sdr-details > .sdr-details-body {
+  margin-top: 12px;
+  animation: sdrFadeIn 0.2s ease both;
+}
+@keyframes sdrFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.sdr-details .input-group:last-child { margin-bottom: 4px; }
+
+</style>
+</head>
+<body>
+
+<div class="toast-wrap" id="toastWrap"></div>
+
+<!-- HEADER -->
+<header class="site-header">
+  <div class="header-top">
+    <a href="/" class="logo-link">Fedhoo.</a>
+    <div style="flex:1;"></div>
+    <button class="hdr-btn" id="darkToggleBtn" onclick="toggleDark()" title="Toggle dark mode" aria-label="Toggle dark mode">
+      <svg id="darkToggleIcon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+    </button>
+  </div>
+  <div class="jump-wrap">
+    <select class="jump-select" id="jumpSelect">
+      <option value="" disabled selected>Jump to tool…</option>
+      <optgroup label="Time & Pacing">
+        <option value="fedfy">Fed FY Clock</option>
+        <option value="timer">Meeting Timer</option>
+        <option value="runrate">Run Rate</option>
+      </optgroup>
+      <optgroup label="Deal Math">
+        <option value="pipeline">Pipeline Coverage</option>
+        <option value="channel">Channel Margin</option>
+        <option value="discount">Discount Impact</option>
+        <option value="bnb">Bid / No-Bid Scorer</option>
+      </optgroup>
+      <optgroup label="Money">
+        <option value="commission">Net Take-Home</option>
+        <option value="ote">OTE / Quota Check</option>
+        <option value="fire">FIRE Calculator</option>
+        <option value="tip">Business Dinner Tip</option>
+      </optgroup>
+      <optgroup label="AI & Search">
+        <option value="prompt">Prompt Maker</option>
+        <option value="sidehustle">Side Hustle Slingshot</option>
+        <option value="dorker">Job Dorker</option>
+      </optgroup>
+      <optgroup label="Utilities">
+        <option value="calc">Quick Calculator</option>
+      </optgroup>
+    </select>
+  </div>
+</header>
+<div class="page-wrap">
+  <div class="page-header">
+    <h1 class="page-title">Fedhoo Tools</h1>
+    <p class="page-sub">Free tools for Sellers and Sales Managers.</p>
+  </div>
+
+  <!-- ════ TOOLS GRID ════ -->
+  <div class="tools-grid">
+
+    <!-- 1. FED FY CLOCK -->
+    <div class="app-card" id="fedfy">
+      <h2 class="card-title">Fed FY Clock</h2>
+      <p class="card-desc">Helps you figure out when to push those deals into next Quarter.</p>
+      <div class="fy-board" id="fyBoard">
+        <div class="fy-cell"><div class="fy-big" id="fy-year">—</div><div class="fy-sub">Federal FY</div></div>
+        <div class="fy-cell"><div class="fy-big" id="fy-quarter">—</div><div class="fy-sub">Current Quarter</div></div>
+        <div class="fy-cell"><div class="fy-big" id="fy-days-q">—</div><div class="fy-sub">Days Left in Qtr</div></div>
+        <div class="fy-cell"><div class="fy-big" id="fy-days-fy">—</div><div class="fy-sub">Days Left in FY</div></div>
+      </div>
+      <div class="fy-bar-wrap">
+        <div class="fy-bar-lbl"><span id="fy-qname">Q1</span><span id="fy-qpct">0% complete</span></div>
+        <div class="prog-track"><div class="prog-fill" id="fy-bar" style="width:0%"></div></div>
+      </div>
+      <div class="fy-bar-wrap" style="margin-top:10px;">
+        <div class="fy-bar-lbl"><span>Full Federal FY</span><span id="fy-ypct">0% complete</span></div>
+        <div class="prog-track"><div class="prog-fill" id="fy-ybar" style="width:0%;background:var(--text-quaternary)"></div></div>
+      </div>
+      <div class="status-pill" id="fy-alert" style="margin-top:14px;display:none;"></div>
+    </div>
+
+    <!-- 2. MEETING TIMER -->
+    <div class="app-card" id="timer">
+      <h2 class="card-title">Meeting Timer</h2>
+      <p class="card-desc">You'll know exactly when to say "Great work. I gotta jump!"</p>
+      <div class="timer-display">
+        <div class="timer-ring-wrap">
+          <svg class="timer-ring-svg" viewBox="0 0 120 120" id="timerSvg">
+            <!-- Background ring (light gray = remaining) -->
+            <circle class="timer-ring-bg" cx="60" cy="60" r="50" />
+            <!-- Foreground ring (red = elapsed) -->
+            <circle class="timer-ring-fg" id="timerRing" cx="60" cy="60" r="50"
+              stroke-dasharray="314.159" stroke-dashoffset="0"
+              transform="rotate(-90 60 60)" />
+          </svg>
+          <div class="timer-ring-center">
+            <div class="timer-digits" id="timerClock">30:00</div>
+          </div>
+        </div>
+      </div>
+      <div class="timer-presets">
+        <button class="preset-btn" data-min="5" onclick="setTimer(this,5)">5 min</button>
+        <button class="preset-btn" data-min="15" onclick="setTimer(this,15)">15 min</button>
+        <button class="preset-btn active" data-min="30" onclick="setTimer(this,30)">30 min</button>
+        <button class="preset-btn" data-min="60" onclick="setTimer(this,60)">60 min</button>
+      </div>
+      <div class="input-group">
+        <label class="input-label">Custom Minutes</label>
+        <input type="number" class="input-field" id="timerCustom" placeholder="e.g. 20" min="1" max="240"
+          oninput="setTimerCustom(this.value)">
+      </div>
+      <div class="timer-btns">
+        <button class="timer-action timer-start" id="timerStartBtn" onclick="toggleTimer()">Start</button>
+        <button class="timer-action timer-reset" onclick="resetTimer()">Reset</button>
+      </div>
+    </div>
+
+    <!-- 3. DAILY RUN RATE -->
+    <div class="app-card" id="runrate">
+      <h2 class="card-title">Daily Run Rate Gap</h2>
+      <p class="card-desc">Shows how much you need to close each day to hit your number. Oh my gosh!</p>
+      <div class="input-group">
+        <label class="input-label">Target / Quota</label>
+        <div class="input-wrapper"><span class="sym sym-l">$</span><input type="text" inputmode="decimal" class="input-field pad-l num-r format-cur" id="rr-quota" placeholder="500,000"></div>
+      </div>
+      <div class="input-group">
+        <label class="input-label">Closed Won (Current)</label>
+        <div class="input-wrapper"><span class="sym sym-l">$</span><input type="text" inputmode="decimal" class="input-field pad-l num-r format-cur" id="rr-current" placeholder="125,000"></div>
+      </div>
+      <div class="input-group">
+        <label class="input-label">Time Frame</label>
+        <select class="input-field" id="rr-period"><option value="quarter">This Quarter (~30 working days)</option><option value="year">This Year (~120 working days)</option></select>
+      </div>
+      <button class="calc-btn-primary" onclick="calcRunRate()">Calculate Run Rate</button>
+      <div class="results" id="rr-results">
+        <div class="main-result"><div class="main-number" id="rr-daily">$0</div><div class="main-label">Required Per Day</div></div>
+        <div class="prog-wrap">
+          <div class="prog-head"><span class="prog-pct" id="rr-perc">0%</span><span class="prog-lbl">of quota achieved</span></div>
+          <div class="prog-track"><div class="prog-fill" id="rr-bar" style="width:0%"></div></div>
+        </div>
+        <div class="metrics">
+          <div class="metric"><div class="m-val" id="rr-rem">$0</div><div class="m-lbl">Remaining Gap</div></div>
+          <div class="metric"><div class="m-val" id="rr-days">0</div><div class="m-lbl">Working Days Left</div></div>
+        </div>
+        <div class="status-pill" id="rr-status"></div>
+      </div>
+    </div>
+
+    
+
+    <!-- 5. CHANNEL MARGIN -->
+    <div class="app-card" id="channel">
+      <h2 class="card-title">Channel Margin</h2>
+      <p class="card-desc">Shows where your margin actually goes. Helpful when you’re wondering why everyone else is making money except you.</p>
+      <div class="input-group">
+        <label class="input-label">Target Price to Gov</label>
+        <div class="input-wrapper"><span class="sym sym-l">$</span><input type="text" inputmode="decimal" class="input-field pad-l num-r format-cur" id="wf-gov" value="1,000,000"></div>
+      </div>
+      <div class="input-group">
+        <label class="input-label">OEM Floor Cost</label>
+        <div class="input-wrapper"><span class="sym sym-l">$</span><input type="text" inputmode="decimal" class="input-field pad-l num-r format-cur" id="wf-oem" value="750,000"></div>
+      </div>
+      <div class="chart-lbl" style="margin-top:6px;">Revenue Distribution</div>
+      <div class="stack-bar">
+        <div class="seg seg-oem" id="wf-bar-oem">OEM</div>
+        <div class="seg seg-disty" id="wf-bar-disty"></div>
+        <div class="seg seg-var" id="wf-bar-var"></div>
+        <div class="seg seg-si" id="wf-bar-si">SI</div>
+      </div>
+      <div class="slider-grp">
+        <div class="slider-head"><span style="color:var(--c-disty)">Distributor Margin</span><span id="wf-lbl-disty">3.0%</span></div>
+        <input type="range" id="wf-slide-disty" min="0" max="10" step="0.5" value="3.0">
+      </div>
+      <div class="slider-grp">
+        <div class="slider-head"><span style="color:var(--c-var)">VAR Margin</span><span id="wf-lbl-var">5.0%</span></div>
+        <input type="range" id="wf-slide-var" min="0" max="25" step="0.5" value="5.0">
+      </div>
+      <div class="slider-grp" style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--border);">
+        <div class="slider-head"><span style="color:var(--c-si)">SI / Prime (Auto)</span><span id="wf-lbl-si">17.0%</span></div>
+      </div>
+      <div class="metrics" style="margin-top:14px;margin-bottom:0;">
+        <div class="metric" style="padding:10px 8px;"><div style="font-size:var(--text-xs);color:var(--text-tertiary);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px;">OEM</div><div class="m-val" style="font-size:var(--text-base);" id="wf-val-oem">$0</div><div class="wf-sub" id="wf-pct-oem">0%</div></div>
+        <div class="metric" style="padding:10px 8px;"><div style="font-size:var(--text-xs);color:var(--text-tertiary);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px;">Disty</div><div class="m-val" style="font-size:var(--text-base);" id="wf-val-disty">$0</div><div class="wf-sub" id="wf-sub-disty">3%</div></div>
+        <div class="metric" style="padding:10px 8px;"><div style="font-size:var(--text-xs);color:var(--text-tertiary);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px;">VAR</div><div class="m-val" style="font-size:var(--text-base);" id="wf-val-var">$0</div><div class="wf-sub" id="wf-sub-var">5%</div></div>
+        <div class="metric" id="wf-card-si" style="padding:10px 8px;"><div style="font-size:var(--text-xs);color:var(--text-tertiary);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px;" id="wf-title-si">SI / Prime</div><div class="m-val" style="font-size:var(--text-base);" id="wf-val-si">$0</div><div class="wf-sub" id="wf-sub-si">17%</div></div>
+      </div>
+    </div>
+<!-- 7. NET TAKE-HOME -->
+    <div class="app-card" id="commission">
+      <h2 class="card-title">Commissions Take-Home</h2>
+      <p class="card-desc">Suddenly you've become a concerned citizen.</p>
+      <div class="input-group">
+        <label class="input-label">Deal Size / Gross Revenue</label>
+        <div class="input-wrapper"><span class="sym sym-l">$</span><input type="text" inputmode="decimal" class="input-field pad-l num-r format-cur" id="nc-deal" placeholder="200,000"></div>
+      </div>
+      <div class="input-group">
+        <label class="input-label">Your Commission Rate</label>
+        <div class="input-wrapper"><span class="sym sym-r">%</span><input type="text" inputmode="decimal" class="input-field pad-r num-r" id="nc-rate" placeholder="2" oninput="this.value=this.value.replace(/[^0-9.]/g,'')"></div>
+      </div>
+      <div class="input-group">
+        <label class="input-label">Tax Profile</label>
+        <select class="input-field" id="nc-tax">
+          <option value="0.30">Standard W-2 (~30% withheld)</option>
+          <option value="0.40">High-Earner Bracket (~40% withheld)</option>
+          <option value="0.20">1099 Contractor (~20% estimated)</option>
+        </select>
+      </div>
+      <button class="calc-btn-primary" onclick="calcComm()">Calculate Take-Home</button>
+      <div class="results" id="nc-results">
+        <div class="main-result"><div class="main-number" id="nc-net">$0</div><div class="main-label">Net Take-Home Pay</div></div>
+        <div class="metrics" style="margin-top:14px;">
+          <div class="metric"><div class="m-val" id="nc-gross">$0</div><div class="m-lbl">Gross Commission</div></div>
+          <div class="metric"><div class="m-val" id="nc-deduct">$0</div><div class="m-lbl">Taxes Withheld</div></div>
+        </div>
+        <div class="status-pill s-go">Payout locked and calculated.</div>
+      </div>
+    </div>
+<!-- 4. PIPELINE COVERAGE -->
+    <div class="app-card" id="pipeline">
+      <h2 class="card-title">Pipeline Coverage</h2>
+      <p class="card-desc">How much new pipeline do you really need to hit quota? 5X is the new 3X!</p>
+      <div class="input-group">
+        <label class="input-label">Target / Quota</label>
+        <div class="input-wrapper"><span class="sym sym-l">$</span><input type="text" inputmode="decimal" class="input-field pad-l num-r format-cur" id="pg-target" placeholder="1,000,000"></div>
+      </div>
+      <div class="input-group">
+        <label class="input-label">Total Pipeline (Unweighted)</label>
+        <div class="input-wrapper"><span class="sym sym-l">$</span><input type="text" inputmode="decimal" class="input-field pad-l num-r format-cur" id="pg-pipe" placeholder="2,500,000"></div>
+      </div>
+      <div class="input-group">
+        <label class="input-label">Sales Motion</label>
+        <select class="input-field" id="pg-motion">
+          <option value="0.20">Federal / GovCon (20% Win Rate)</option>
+          <option value="0.25">Enterprise SaaS (25% Win Rate)</option>
+          <option value="0.33">SMB / Velocity (33% Win Rate)</option>
+        </select>
+      </div>
+      <button class="calc-btn-primary" onclick="calcPipeline()">Analyze Pipeline</button>
+      <div class="results" id="pg-results">
+        <div class="main-result"><div class="main-number" id="pg-gap">$0</div><div class="main-label">New Pipeline Needed Today</div></div>
+        <div class="prog-wrap">
+          <div class="prog-head"><span class="prog-pct" id="pg-cov">0x</span><span class="prog-lbl">Current Coverage</span></div>
+          <div class="prog-track"><div class="prog-fill" id="pg-bar" style="width:0%"></div></div>
+        </div>
+        <div class="metrics">
+          <div class="metric"><div class="m-val" id="pg-proj">$0</div><div class="m-lbl">Projected Finish</div></div>
+          <div class="metric"><div class="m-val" id="pg-req">0x</div><div class="m-lbl">Ratio Needed</div></div>
+        </div>
+        <div class="status-pill" id="pg-status"></div>
+      </div>
+    </div>
+    <!-- 6. BID / NO-BID -->
+    <div class="app-card" id="bnb">
+      <h2 class="card-title">Bid / No-Bid Scorer</h2>
+      <p class="card-desc">Helps you decide if it's a good idea to pursue an opportunity. Your boss will probably tell you to pursue it anyway.</p>
+      <div class="score-rows">
+        <div class="score-row">
+          <div><div class="score-label">Incumbent Awareness</div><div class="score-sub">Do you know who holds it and are they beatable?</div></div>
+          <div class="score-stars" data-key="incumbent" data-weight="3"></div>
+        </div>
+        <div class="score-row">
+          <div><div class="score-label">Buyer Relationship</div><div class="score-sub">Have you met the CO or end-user recently?</div></div>
+          <div class="score-stars" data-key="relationship" data-weight="3"></div>
+        </div>
+        <div class="score-row">
+          <div><div class="score-label">Competitive Position</div><div class="score-sub">Win probability vs. known competitors?</div></div>
+          <div class="score-stars" data-key="compete" data-weight="2"></div>
+        </div>
+        <div class="score-row">
+          <div><div class="score-label">Requirements Fit</div><div class="score-sub">Does your solution match ≥80% of the PWS?</div></div>
+          <div class="score-stars" data-key="fit" data-weight="2"></div>
+        </div>
+        <div class="score-row">
+          <div><div class="score-label">Teaming / Past Perf</div><div class="score-sub">Do you have the PPVs and teammates locked?</div></div>
+          <div class="score-stars" data-key="teaming" data-weight="2"></div>
+        </div>
+        <div class="score-row">
+          <div><div class="score-label">Timing &amp; Capacity</div><div class="score-sub">Can your BD and proposal team handle this now?</div></div>
+          <div class="score-stars" data-key="capacity" data-weight="1"></div>
+        </div>
+      </div>
+      <button class="calc-btn-primary" onclick="calcBnb()">Score this Opportunity</button>
+      <div class="results" id="bnb-results">
+        <div class="bnb-verdict" id="bnb-verdict">
+          <div class="verdict-word" id="bnb-word">—</div>
+          <div class="verdict-score" id="bnb-score"></div>
+        </div>
+        <div class="metrics">
+          <div class="metric"><div class="m-val" id="bnb-raw">0</div><div class="m-lbl">Weighted Score</div></div>
+          <div class="metric"><div class="m-val" id="bnb-pct">0%</div><div class="m-lbl">of Max Possible</div></div>
+        </div>
+        <div class="status-pill" id="bnb-pill"></div>
+      </div>
+    </div>
+
+    
+    <!-- 8. OTE CHECK -->
+    <div class="app-card" id="ote">
+      <h2 class="card-title">Is My Quota Crazy?</h2>
+      <p class="card-desc">Is this quota achievable, or are you just expected to be optimistic about it?</p>
+      <div class="input-group">
+        <label class="input-label">Base Salary</label>
+        <div class="input-wrapper"><span class="sym sym-l">$</span><input type="text" inputmode="decimal" class="input-field pad-l num-r format-cur" id="ote-base" placeholder="120,000"></div>
+      </div>
+      <div class="input-group">
+        <label class="input-label">Target Variable / Commission (at 100%)</label>
+        <div class="input-wrapper"><span class="sym sym-l">$</span><input type="text" inputmode="decimal" class="input-field pad-l num-r format-cur" id="ote-var" placeholder="80,000"></div>
+      </div>
+      <div class="input-group">
+        <label class="input-label">Your Quota</label>
+        <div class="input-wrapper"><span class="sym sym-l">$</span><input type="text" inputmode="decimal" class="input-field pad-l num-r format-cur" id="ote-quota" placeholder="1,000,000"></div>
+      </div>
+      <button class="calc-btn-primary" onclick="calcOte()">Check the Math</button>
+      <div class="results" id="ote-results">
+        <div class="main-result"><div class="main-number" id="ote-multiple">0×</div><div class="main-label">Quota / OTE Multiple</div></div>
+        <div class="metrics">
+          <div class="metric"><div class="m-val" id="ote-total">$0</div><div class="m-lbl">Total OTE</div></div>
+          <div class="metric"><div class="m-val" id="ote-ratio">0%</div><div class="m-lbl">Variable % of OTE</div></div>
+        </div>
+        <div class="status-pill" id="ote-status"></div>
+      </div>
+    </div>
+
+    <!-- 9. DISCOUNT IMPACT -->
+    <div class="app-card" id="discount">
+      <h2 class="card-title">They Want a Discount</h2>
+      <p class="card-desc">Watch your commission evaporate every time someone asks you to sharpen your pencil.</p>
+      <div class="input-group">
+        <label class="input-label">Full List Price</label>
+        <div class="input-wrapper"><span class="sym sym-l">$</span><input type="text" inputmode="decimal" class="input-field pad-l num-r format-cur" id="di-list" placeholder="500,000"></div>
+      </div>
+      <div class="input-group">
+        <label class="input-label">Discount %</label>
+        <div class="input-wrapper"><span class="sym sym-r">%</span><input type="text" inputmode="decimal" class="input-field pad-r num-r" id="di-disc" placeholder="10" oninput="this.value=this.value.replace(/[^0-9.]/g,'')"></div>
+      </div>
+      <div class="input-group">
+        <label class="input-label">Company Gross Margin %</label>
+        <div class="input-wrapper"><span class="sym sym-r">%</span><input type="text" inputmode="decimal" class="input-field pad-r num-r" id="di-margin" placeholder="65" oninput="this.value=this.value.replace(/[^0-9.]/g,'')"></div>
+      </div>
+      <div class="input-group">
+        <label class="input-label">Your Commission Rate %</label>
+        <div class="input-wrapper"><span class="sym sym-r">%</span><input type="text" inputmode="decimal" class="input-field pad-r num-r" id="di-rate" placeholder="2" oninput="this.value=this.value.replace(/[^0-9.]/g,'')"></div>
+      </div>
+      <button class="calc-btn-primary" onclick="calcDiscount()">Calculate Impact</button>
+      <div class="results" id="di-results">
+        <div class="main-result"><div class="main-number" id="di-lost">$0</div><div class="main-label">Revenue Walk-Away</div></div>
+        <div class="metrics">
+          <div class="metric"><div class="m-val" id="di-discounted">$0</div><div class="m-lbl">Discounted Price</div></div>
+          <div class="metric"><div class="m-val" id="di-comm-lost">$0</div><div class="m-lbl">Commission Lost</div></div>
+          <div class="metric"><div class="m-val" id="di-margin-lost">$0</div><div class="m-lbl">Margin Lost</div></div>
+          <div class="metric"><div class="m-val" id="di-new-margin">0%</div><div class="m-lbl">New Margin %</div></div>
+        </div>
+        <div class="status-pill" id="di-status"></div>
+      </div>
+    </div>
+
+    <!-- 10. FIRE -->
+    <div class="app-card" id="fire">
+      <h2 class="card-title">FIRE Calculator</h2>
+      <p class="card-desc">When can you finally leave your boss on read? Assumes a 7% annual return and the 25× rule. Don't include your home value or that mint-graded Pokemon card. (Not Financial Advice.)</p>
+      <div class="input-group">
+        <label class="input-label">Current Portfolio / Investable Assets</label>
+        <div class="input-wrapper"><span class="sym sym-l">$</span><input type="text" inputmode="decimal" class="input-field pad-l num-r format-cur" id="fire-port" placeholder="150,000"></div>
+      </div>
+      <div class="input-group">
+        <label class="input-label">Annual Savings Contribution</label>
+        <div class="input-wrapper"><span class="sym sym-l">$</span><input type="text" inputmode="decimal" class="input-field pad-l num-r format-cur" id="fire-save" placeholder="30,000"></div>
+      </div>
+      <div class="input-group">
+        <label class="input-label">Target Annual Spend in Retirement</label>
+        <select class="input-field" id="fire-spend">
+          <option value="60000">Lean FIRE — $60k/year</option>
+          <option value="100000" selected>Standard FIRE — $100k/year</option>
+          <option value="150000">Chubby FIRE — $150k/year</option>
+          <option value="200000">Fat FIRE — $200k/year</option>
+        </select>
+      </div>
+      <button class="calc-btn-primary" onclick="calcFire()">Calculate Freedom</button>
+      <div class="results" id="fire-results">
+        <div class="main-result"><div class="main-number" id="fire-years">0</div><div class="main-label">Years Until Financial Independence</div></div>
+        <div class="metrics" style="margin-top:14px;">
+          <div class="metric"><div class="m-val" id="fire-target">$0</div><div class="m-lbl">Your FIRE Number</div></div>
+          <div class="metric"><div class="m-val">7%</div><div class="m-lbl">Assumed Real Return</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 11. DINNER TIP -->
+    <div class="app-card" id="tip">
+      <h2 class="card-title">Split the Check, Please!</h2>
+      <p class="card-desc">Quick split and tip calculator. "Who ordered the Snow Crab Tower?!"</p>
+      <div class="input-group">
+        <label class="input-label">Total Bill Amount</label>
+        <div class="input-wrapper"><span class="sym sym-l">$</span><input type="text" inputmode="decimal" class="input-field pad-l num-r format-cur" id="tip-bill" placeholder="350"></div>
+      </div>
+      <div class="input-group">
+        <label class="input-label">Number of People Splitting</label>
+        <div class="input-wrapper"><span class="sym sym-l">#</span><input type="text" inputmode="numeric" class="input-field pad-l" id="tip-split" placeholder="1" oninput="this.value=this.value.replace(/[^0-9]/g,'')"></div>
+      </div>
+      <div class="input-group">
+        <label class="input-label">Tip Percentage</label>
+        <select class="input-field" id="tip-rate">
+          <option value="0.15">15% — C'mon now</option>
+          <option value="0.18">18% — Ok</option>
+          <option value="0.20" selected>20% — Nice</option>
+          <option value="0.25">25% — Big Bank Hank</option>
+        </select>
+      </div>
+      <button class="calc-btn-primary" onclick="calcTip()">Calculate Total</button>
+      <div class="results" id="tip-results">
+        <div class="main-result"><div class="main-number" id="tip-total">$0</div><div class="main-label">Total with Tip</div></div>
+        <div class="metrics" style="margin-top:14px;">
+          <div class="metric"><div class="m-val" id="tip-amount">$0</div><div class="m-lbl">Tip Amount</div></div>
+          <div class="metric"><div class="m-val" id="tip-person">$0</div><div class="m-lbl">Per Person</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 13. PROMPT MAKER -->
+    <div class="app-card" id="prompt">
+      <h2 class="card-title">Prompt Monster</h2>
+      <p class="card-desc">Paste a few words about what you want the AI to do. Get back a structured prompt the will get much better results from Claude, ChatGPT, or Gemini.</p>
+      <div class="input-group">
+        <label class="input-label">What do you want the AI to help with?</label>
+        <textarea class="input-field ai-textarea" id="prompt-input" rows="4" placeholder="e.g. 'Build an account plan for zero-trust at VA' or 'Prep for an AWS GovCloud interview'"></textarea>
+      </div>
+      <button class="calc-btn-primary ai-submit-btn" id="prompt-btn" onclick="runPromptMaker()">
+        <span class="ai-btn-label">Make My Prompt Better</span>
+        <span class="ai-spinner hidden"></span>
+      </button>
+      <div class="ai-loading hidden" id="prompt-loading">Working on your prompt…</div>
+      <div class="ai-result hidden" id="prompt-result">
+        <div class="ai-result-label" id="prompt-why"></div>
+        <div class="ai-result-box" id="prompt-output"></div>
+        <div class="ai-result-improvements hidden" id="prompt-improvements"></div>
+        <button class="ai-copy-btn" onclick="aiCopy('prompt-output', this)">Copy Prompt</button>
+      </div>
+      <div class="ai-error hidden" id="prompt-error"></div>
+    </div>
+
+    <!-- 14. SIDE HUSTLE SLINGSHOT -->
+    <div class="app-card" id="sidehustle">
+      <h2 class="card-title">Side Hustle Ideas</h2>
+      <p class="card-desc">Describe your idea. Get back a product name, target customer, launch plan, success metrics, and a ready-to-use AI prompt to build your MVP. Don't quit your day job...yet.</p>
+      <div class="input-group">
+        <label class="input-label">Describe your big idea</label>
+        <textarea class="input-field ai-textarea" id="hustle-input" rows="4" placeholder="e.g. 'Help SMBs navigate FedRAMP' or 'A meal prep service for traveling sales reps'"></textarea>
+      </div>
+      <button class="calc-btn-primary ai-submit-btn" id="hustle-btn" onclick="runSideHustle()">
+        <span class="ai-btn-label">Get My Launch Plan</span>
+        <span class="ai-spinner hidden"></span>
+      </button>
+      <div class="ai-loading hidden" id="hustle-loading">Building your plan…</div>
+      <div class="ai-result hidden" id="hustle-result">
+        <div class="ai-plan-grid" id="hustle-plan"></div>
+        <div class="ai-result-label" style="margin-top:16px;">Ready-to-Use MVP Prompt</div>
+        <div class="ai-result-box" id="hustle-mvp"></div>
+        <button class="ai-copy-btn" onclick="aiCopy('hustle-mvp', this)">Copy MVP Prompt</button>
+      </div>
+      <div class="ai-error hidden" id="hustle-error"></div>
+    </div>
+
+    <!-- 15. QUICK CALCULATOR -->
+    <div class="app-card" id="calc">
+      <h2 class="card-title">Quick Calculator</h2>
+      <p class="card-desc">Great for calling out folks in OBRs and Pipeline Reviews.</p>
+      <div class="calc-display">
+        <div class="calc-expr" id="cExpr"></div>
+        <div class="calc-val"  id="cVal">0</div>
+      </div>
+      <div class="kpad">
+        <button class="k k-fn"  onclick="kf('clear')">C</button>
+        <button class="k k-fn"  onclick="kf('sign')">+/−</button>
+        <button class="k k-pct" onclick="kf('pct')">%</button>
+        <button class="k k-op"  onclick="kf('op','/')">÷</button>
+        <button class="k k-num" onclick="kf('num','7')">7</button>
+        <button class="k k-num" onclick="kf('num','8')">8</button>
+        <button class="k k-num" onclick="kf('num','9')">9</button>
+        <button class="k k-op"  onclick="kf('op','*')">×</button>
+        <button class="k k-num" onclick="kf('num','4')">4</button>
+        <button class="k k-num" onclick="kf('num','5')">5</button>
+        <button class="k k-num" onclick="kf('num','6')">6</button>
+        <button class="k k-op"  onclick="kf('op','-')">−</button>
+        <button class="k k-num" onclick="kf('num','1')">1</button>
+        <button class="k k-num" onclick="kf('num','2')">2</button>
+        <button class="k k-num" onclick="kf('num','3')">3</button>
+        <button class="k k-op"  onclick="kf('op','+')">+</button>
+        <button class="k k-num k-wide" onclick="kf('num','0')">0</button>
+        <button class="k k-num" onclick="kf('dot')">.</button>
+        <button class="k k-eq"  onclick="kf('eq')">=</button>
+      </div>
+    </div>
+
+    <!-- 16. JOB DORKER -->
+    <div class="app-card sdr-wide" id="dorker">
+      <h2 class="card-title">Job Dorker</h2>
+      <p class="card-desc">Google dorking is just using search operators like <code style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:0.85em;background:var(--bg);padding:1px 5px;border-radius:4px;">site:linkedin.com/jobs</code> to search a specific site directly through Google. It often surfaces fresher results than the site's own search, and it works for finding people too. You could always do this yourself — we've just made it a bit easier.</p>
+
+      <div class="sdr-grid">
+
+      <!-- ─── STEP 1: FIND JOBS ─── -->
+      <div class="sdr-section">
+        <div class="sdr-section-label"><span class="sdr-step-num">1</span>Find the Jobs</div>
+
+        <div class="input-group">
+          <label class="input-label">Role</label>
+          <input type="text" class="input-field" id="sdr-role" value='"Account Executive"' placeholder='Type anything — e.g. SDR, AE, Solutions Engineer, CSM'>
+          <div class="sdr-chips" id="sdr-role-chips">
+            <span class="sdr-chip" data-val="SDR">SDR</span>
+            <span class="sdr-chip" data-val="BDR">BDR</span>
+            <span class="sdr-chip" data-val='"Account Executive"'>AE</span>
+            <span class="sdr-chip" data-val='"Enterprise Account Executive"'>Enterprise AE</span>
+            <span class="sdr-chip" data-val='"Strategic Account Executive"'>Strategic AE</span>
+            <span class="sdr-chip" data-val='"Account Manager"'>AM</span>
+            <span class="sdr-chip" data-val='"Solutions Engineer"'>Solutions Eng</span>
+            <span class="sdr-chip" data-val='"Sales Engineer"'>Sales Eng</span>
+            <span class="sdr-chip" data-val='"Customer Success Manager"'>CSM</span>
+            <span class="sdr-chip" data-val='"Partner Manager"'>Partner Mgr</span>
+            <span class="sdr-chip" data-val='"Channel Manager"'>Channel Mgr</span>
+            <span class="sdr-chip" data-val='"Sales Manager"'>Sales Mgr</span>
+            <span class="sdr-chip" data-val='"Director of Sales"'>Director</span>
+            <span class="sdr-chip" data-val='"VP of Sales"'>VP Sales</span>
+          </div>
+        </div>
+
+        <div class="input-group">
+          <label class="input-label">Location</label>
+          <input type="text" class="input-field" id="sdr-location" placeholder="Remote, Florida, Tampa…">
+          <div class="sdr-chips" id="sdr-mode-chips">
+            <span class="sdr-chip active" data-val="">Any mode</span>
+            <span class="sdr-chip" data-val="remote">Remote</span>
+            <span class="sdr-chip" data-val="hybrid">Hybrid</span>
+            <span class="sdr-chip" data-val="onsite">Onsite</span>
+          </div>
+        </div>
+
+        <div class="input-group">
+          <label class="input-label">Industry / Vertical (optional)</label>
+          <div class="sdr-chips" id="sdr-industry-chips">
+            <span class="sdr-chip active" data-val="">Any</span>
+            <span class="sdr-chip" data-val="SaaS">SaaS</span>
+            <span class="sdr-chip" data-val='"cloud"'>Cloud / CSP</span>
+            <span class="sdr-chip" data-val="AWS">AWS</span>
+            <span class="sdr-chip" data-val="Azure">Azure</span>
+            <span class="sdr-chip" data-val='"Google Cloud"'>GCP</span>
+            <span class="sdr-chip" data-val="cybersecurity">Cyber</span>
+            <span class="sdr-chip" data-val="fintech">Fintech</span>
+            <span class="sdr-chip" data-val="AI">AI / ML</span>
+            <span class="sdr-chip" data-val="devtools">DevTools</span>
+            <span class="sdr-chip" data-val="data">Data / Analytics</span>
+            <span class="sdr-chip" data-val="observability">Observability</span>
+            <span class="sdr-chip" data-val='"federal"'>Federal</span>
+            <span class="sdr-chip" data-val="GovTech">GovTech</span>
+          </div>
+        </div>
+
+        <details class="sdr-details">
+          <summary>More filters</summary>
+          <div class="sdr-details-body">
+            <div class="input-group">
+              <label class="input-label">Posted Within</label>
+              <select class="input-field" id="sdr-recency">
+                <option value="m" selected>Past 30 days (default)</option>
+                <option value="w">Past week</option>
+                <option value="d">Past 24 hours</option>
+              </select>
+            </div>
+
+            <div class="input-group">
+              <label class="input-label">Seniority</label>
+              <div class="sdr-chips" id="sdr-seniority-chips">
+                <span class="sdr-chip active" data-val="">Any</span>
+                <span class="sdr-chip" data-val="entry level">Entry</span>
+                <span class="sdr-chip" data-val="junior">Junior</span>
+                <span class="sdr-chip" data-val="senior">Senior</span>
+                <span class="sdr-chip" data-val="lead">Lead</span>
+              </div>
+            </div>
+
+            <div class="input-group">
+              <label class="input-label">Extra Keywords</label>
+              <input type="text" class="input-field" id="sdr-keywords" placeholder='e.g. "base + commission"'>
+            </div>
+          </div>
+        </details>
+
+        <button class="calc-btn-primary" onclick="SDRJobs.generate()">Generate Job Dorks</button>
+
+        <div class="results" id="sdr-job-results-wrap">
+          <div class="sdr-meta-row">
+            <div><strong>Google dorks</strong> → LinkedIn Jobs</div>
+            <div><strong id="sdr-ats-count">0</strong> queries</div>
+          </div>
+          <div id="sdr-job-results"></div>
+        </div>
+      </div>
+
+      <!-- ─── STEP 2: FIND MANAGERS ─── -->
+      <div class="sdr-section">
+        <div class="sdr-section-label"><span class="sdr-step-num">2</span>Find the Managers</div>
+
+        <div class="input-group">
+          <label class="input-label">Target Company (optional — falls back to Step 1 scope)</label>
+          <input type="text" class="input-field" id="sdr-target-co" placeholder="Gong, Apollo, Outreach…">
+        </div>
+
+        <div class="input-group">
+          <label class="input-label">Target Titles</label>
+          <div class="sdr-chips" id="sdr-title-chips">
+            <span class="sdr-chip active" data-val="Sales Manager">Sales Manager</span>
+            <span class="sdr-chip active" data-val="Director of Sales">Director of Sales</span>
+            <span class="sdr-chip active" data-val="VP of Sales">VP Sales</span>
+          </div>
+          <details class="sdr-details" style="margin-top:10px;border-top:none;padding-top:0;">
+            <summary>More titles</summary>
+            <div class="sdr-details-body">
+              <div class="sdr-chips" id="sdr-title-chips-more">
+                <span class="sdr-chip" data-val="SDR Manager">SDR Manager</span>
+                <span class="sdr-chip" data-val="RVP">RVP</span>
+                <span class="sdr-chip" data-val="Chief Revenue Officer">CRO</span>
+                <span class="sdr-chip" data-val="Head of Sales">Head of Sales</span>
+                <span class="sdr-chip" data-val="Sales Recruiter">Sales Recruiter</span>
+                <span class="sdr-chip" data-val="Technical Recruiter">Tech Recruiter</span>
+                <span class="sdr-chip" data-val="Talent Acquisition">Talent Acq.</span>
+              </div>
+            </div>
+          </details>
+          <div class="sdr-chip-hint">Tap to toggle. Multi-select — each generates its own dork.</div>
+        </div>
+
+        <button class="calc-btn-primary" onclick="SDRJobs.findPeople()">Generate Manager Dorks</button>
+
+        <div class="results" id="sdr-people-results-wrap">
+          <div class="sdr-meta-row">
+            <div><strong>Google dorks</strong> → LinkedIn profiles</div>
+            <div><strong id="sdr-ppl-count">0</strong> queries</div>
+          </div>
+          <div id="sdr-people-results"></div>
+        </div>
+      </div>
+
+      <!-- ─── STEP 3: OUTREACH ─── -->
+      <div class="sdr-section">
+        <div class="sdr-section-label"><span class="sdr-step-num">3</span>Send the Message</div>
+
+        <div class="sdr-row-two">
+          <div class="input-group">
+            <label class="input-label">Your Name</label>
+            <input type="text" class="input-field" id="sdr-msg-name" placeholder="Alex Rivera">
+          </div>
+          <div class="input-group">
+            <label class="input-label">Manager's First Name</label>
+            <input type="text" class="input-field" id="sdr-msg-manager" placeholder="Jamie">
+          </div>
+        </div>
+        <div class="sdr-row-two">
+          <div class="input-group">
+            <label class="input-label">Target Company</label>
+            <input type="text" class="input-field" id="sdr-msg-company" placeholder="Gong">
+          </div>
+          <div class="input-group">
+            <label class="input-label">Your One-Line Edge</label>
+            <input type="text" class="input-field" id="sdr-msg-edge" placeholder="140% quota 3 quarters in a row">
+          </div>
+        </div>
+
+        <div class="input-group">
+          <label class="input-label">Channel</label>
+          <div class="sdr-chips" id="sdr-channel-chips">
+            <span class="sdr-chip active" data-val="connect">Connect Note (300 char)</span>
+            <span class="sdr-chip" data-val="inmail">InMail / DM</span>
+            <span class="sdr-chip" data-val="email">Email</span>
+          </div>
+        </div>
+
+        <div class="input-group">
+          <label class="input-label">Angle</label>
+          <div class="sdr-chips" id="sdr-angle-chips">
+            <span class="sdr-chip active" data-val="direct">Direct</span>
+            <span class="sdr-chip" data-val="curious">Curious</span>
+            <span class="sdr-chip" data-val="value">Value-First</span>
+          </div>
+        </div>
+
+        <div class="sdr-btn-row">
+          <button class="calc-btn-primary sdr-btn-secondary" onclick="SDRJobs.generateMessage()">Draft Message</button>
+          <button class="calc-btn-primary sdr-btn-ai" id="sdr-ai-btn" onclick="SDRJobs.generateMessageAI()">
+            <span class="ai-btn-label">Draft with AI</span>
+            <span class="ai-spinner hidden"></span>
+          </button>
+        </div>
+        <div class="sdr-ai-hint" id="sdr-ai-hint">Static drafts are instant and private. AI drafts are tailored — fill in Company at minimum.</div>
+
+        <div class="ai-result hidden" id="sdr-msg-result">
+          <div class="sdr-ai-intel hidden" id="sdr-ai-intel"></div>
+          <div class="ai-result-label">Your Message</div>
+          <div class="ai-result-box" id="sdr-msg-output"></div>
+          <div class="sdr-char-count" id="sdr-char-count"></div>
+          <button class="ai-copy-btn" onclick="aiCopy('sdr-msg-output', this)">Copy Message</button>
+        </div>
+        <div class="ai-error hidden" id="sdr-msg-error"></div>
+      </div>
+
+      </div><!-- /sdr-grid -->
+    </div>
+
+  </div><!-- /tools-grid -->
+</div><!-- /page-wrap -->
+
+<footer class="site-footer">
+  <a href="../" class="footer-back">← Back to Fedhoo</a>
+  <div class="footer-copy">© 2026 Fedhoo.com — Federal Market Intelligence for BD &amp; Sales Teams</div>
+</footer>
+
+<script>
+/* ── UTILITIES ── */
+const $  = id => document.getElementById(id);
+const parseCur = v => parseFloat((v||'').toString().replace(/[$,]/g,''))||0;
+const fmtCur   = n => new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(n);
+const fmtComp  = n => { const a=Math.abs(n); if(a>=1e6) return '$'+(n/1e6).toFixed(2)+'M'; if(a>=1e3) return '$'+(n/1e3).toFixed(1)+'k'; return fmtCur(n); };
+const fmtPct   = n => n.toFixed(1)+'%';
+
+document.querySelectorAll('.format-cur').forEach(el => {
+  el.addEventListener('input', e => {
+    const v = e.target.value.replace(/[^0-9]/g,'');
+    e.target.value = v ? parseInt(v).toLocaleString('en-US') : '';
+  });
+});
+
+/* ── JUMP NAV — header-aware scroll ── */
+(function() {
+  const sel = $('jumpSelect');
+  if (!sel) return;
+  sel.addEventListener('change', function() {
+    const id = this.value;
+    if (!id) return;
+    const target = document.getElementById(id);
+    if (!target) return;
+    // Blur the select first so the mobile picker collapses before we scroll
+    this.blur();
+    // Defer the scroll a frame so the picker has time to dismiss on iOS
+    requestAnimationFrame(() => {
+      const header = document.querySelector('.site-header');
+      const offset = (header ? header.offsetHeight : 110) + 12;
+      const top = target.getBoundingClientRect().top + window.pageYOffset - offset;
+      window.scrollTo({ top, behavior: 'smooth' });
+    });
+    // Reset selection so the same option can be picked again next time
+    setTimeout(() => { this.selectedIndex = 0; }, 400);
+  });
+})();
+
+/* ── DEEP-LINK HASH HANDLER ── */
+/* When someone arrives at /tools/#dorker (or any other tool ID), the browser's
+   initial scroll happens before our layout fully settles. This re-scrolls
+   correctly once the page is loaded, accounting for the real sticky-header
+   height. scroll-padding-top on <html> handles smooth in-page clicks; this
+   handles the initial page load. */
+(function() {
+  function scrollToHash(smooth) {
+    if (!location.hash || location.hash.length < 2) return;
+    const id = location.hash.slice(1);
+    const target = document.getElementById(id);
+    if (!target) return;
+    const header = document.querySelector('.site-header');
+    const offset = (header ? header.offsetHeight : 110) + 12;
+    const top = target.getBoundingClientRect().top + window.pageYOffset - offset;
+    window.scrollTo({ top, behavior: smooth ? 'smooth' : 'auto' });
+  }
+  // Re-scroll after load in case the initial browser scroll landed off
+  if (location.hash) {
+    // No smooth — snap to position so it matches where the browser tried to land
+    window.addEventListener('load', () => scrollToHash(false));
+    // Also re-run once after fonts swap in, since header height can shift slightly
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(() => scrollToHash(false));
+    }
+  }
+  // Also handle manual hash changes (e.g. user pastes a new URL with #something)
+  window.addEventListener('hashchange', () => scrollToHash(true));
+})();
+
+let toastLock = false;
+function toast(msg, type='err') {
+  if(toastLock) return; toastLock=true;
+  const w = $('toastWrap'), t = document.createElement('div');
+  t.className=`toast ${type}`; t.textContent=msg;
+  w.appendChild(t); t.offsetHeight; t.classList.add('show');
+  setTimeout(()=>{ t.classList.remove('show'); t.addEventListener('transitionend',()=>{ t.remove(); toastLock=false; },{once:true}); },3000);
+}
+
+/* ── 1. BID / NO-BID ── */
+document.querySelectorAll('.score-stars').forEach(container => {
+  const key = container.dataset.key;
+  for(let i=1;i<=5;i++) {
+    const b = document.createElement('button');
+    b.className='star-btn'; b.textContent=i; b.dataset.val=i;
+    b.onclick = () => {
+      container.querySelectorAll('.star-btn').forEach(s=>s.classList.remove('active'));
+      for(let j=0;j<i;j++) container.querySelectorAll('.star-btn')[j].classList.add('active');
+      container.dataset.score=i;
+    };
+    container.appendChild(b);
+  }
+});
+
+function calcBnb() {
+  const rows = document.querySelectorAll('.score-stars');
+  let total=0, maxTotal=0;
+  rows.forEach(r => {
+    const w=parseInt(r.dataset.weight), s=parseInt(r.dataset.score||0);
+    total+=w*s; maxTotal+=w*5;
+  });
+  const pct = (total/maxTotal)*100;
+  let word, cls, pillCls, note;
+  if(pct>=70){ word='Go'; cls='go'; pillCls='s-go'; note='Strong opportunity. Commit resources and begin capture planning.'; }
+  else if(pct>=45){ word='Caution'; cls='warn'; pillCls='s-warn'; note='Proceed only if gaps can be closed before proposal kick-off.'; }
+  else { word='No-Bid'; cls='crit'; pillCls='s-crit'; note='Too many gaps. Redeploy resources to stronger opportunities.'; }
+  const v=$('bnb-verdict');
+  v.style.background = cls==='go'?'var(--go-bg)':cls==='warn'?'var(--warn-bg)':'var(--crit-bg)';
+  $('bnb-word').textContent=word;
+  $('bnb-word').style.color = cls==='go'?'var(--go-text)':cls==='warn'?'var(--warn-text)':'var(--crit-text)';
+  $('bnb-score').textContent=`Weighted score: ${total} / ${maxTotal}`;
+  $('bnb-raw').textContent=total+' / '+maxTotal;
+  $('bnb-pct').textContent=Math.round(pct)+'%';
+  const pill=$('bnb-pill'); pill.className=`status-pill ${pillCls}`; pill.textContent=note;
+  $('bnb-results').classList.add('show');
+}
+
+/* ── 2. FED FY CLOCK ── */
+function renderFyClock() {
+  const now = new Date();
+  const m=now.getMonth(), d=now.getDate(), y=now.getFullYear();
+  // FY starts Oct 1; if month >= 9 (Oct=9) it's FY next year
+  const fy = m>=9 ? y+1 : y;
+  const fyStart = new Date(fy-1,9,1);  // Oct 1 of prior year
+  const fyEnd   = new Date(fy,8,30);   // Sep 30 of FY year
+  const msDay   = 86400000;
+  const daysInFy= Math.round((fyEnd-fyStart)/msDay)+1;
+  const dayOfFy = Math.round((now-fyStart)/msDay)+1;
+  const daysLeftFy = Math.max(0, daysInFy-dayOfFy);
+  const fyPct = Math.min((dayOfFy/daysInFy)*100,100);
+
+  // Quarter
+  let qNum, qStart, qEnd;
+  if(m>=9){      qNum=1; qStart=new Date(fy-1,9,1);  qEnd=new Date(fy-1,11,31); }
+  else if(m<=0){ qNum=2; qStart=new Date(fy-1,12,1); qEnd=new Date(fy,2,31); }
+  else if(m<=2){ qNum=2; qStart=new Date(fy-1,12,1); qEnd=new Date(fy,2,31); }
+  else if(m<=5){ qNum=3; qStart=new Date(fy,3,1);    qEnd=new Date(fy,5,30); }
+  else          { qNum=4; qStart=new Date(fy,6,1);    qEnd=new Date(fy,8,30); }
+  // Recalc quarter properly
+  if(m===9||m===10||m===11){ qNum=1; qStart=new Date(fy-1,9,1); qEnd=new Date(fy-1,11,31); }
+  else if(m===0||m===1||m===2){ qNum=2; qStart=new Date(fy,0,1); qEnd=new Date(fy,2,31); }
+  else if(m===3||m===4||m===5){ qNum=3; qStart=new Date(fy,3,1); qEnd=new Date(fy,5,30); }
+  else { qNum=4; qStart=new Date(fy,6,1); qEnd=new Date(fy,8,30); }
+
+  const daysInQ  = Math.round((qEnd-qStart)/msDay)+1;
+  const dayOfQ   = Math.round((now-qStart)/msDay)+1;
+  const daysLeftQ= Math.max(0,daysInQ-dayOfQ);
+  const qPct     = Math.min((dayOfQ/daysInQ)*100,100);
+  const qNames   = ['','Q1 (Oct–Dec)','Q2 (Jan–Mar)','Q3 (Apr–Jun)','Q4 (Jul–Sep)'];
+
+  $('fy-year').textContent    = 'FY'+fy;
+  $('fy-quarter').textContent = 'FY Q'+qNum;
+  $('fy-days-q').textContent  = daysLeftQ;
+  $('fy-days-fy').textContent = daysLeftFy;
+  $('fy-qname').textContent   = qNames[qNum];
+  $('fy-qpct').textContent    = Math.round(qPct)+'% complete';
+  $('fy-bar').style.width     = qPct+'%';
+  $('fy-ypct').textContent    = Math.round(fyPct)+'% complete';
+  $('fy-ybar').style.width    = fyPct+'%';
+
+  const alert=$('fy-alert');
+  if(qNum===4 && daysLeftQ<=60){
+    alert.style.display='block';
+    alert.className='status-pill s-crit';
+    alert.textContent=`Q4 budget flush — ${daysLeftQ} days left. This is the highest-velocity buying period of the federal year.`;
+  } else if(qNum===4){
+    alert.style.display='block';
+    alert.className='status-pill s-warn';
+    alert.textContent='FY Q4 is active. Federal buyers are executing end-of-year budgets.';
+  } else if(daysLeftQ<=20){
+    alert.style.display='block';
+    alert.className='status-pill s-warn';
+    alert.textContent=`${daysLeftQ} days left in the quarter. Accelerate pipeline and close activity.`;
+  } else {
+    alert.style.display='none';
+  }
+}
+renderFyClock();
+setInterval(renderFyClock, 60000);
+
+/* ── 3. MEETING TIMER ── */
+let timerSecs=1800, timerTotal=1800, timerRunning=false, timerInterval=null;
+function setTimer(btn, mins) {
+  document.querySelectorAll('.preset-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  $('timerCustom').value='';
+  timerTotal=mins*60; timerSecs=timerTotal;
+  renderTimer();
+}
+function setTimerCustom(val) {
+  const m=parseInt(val);
+  if(!m||m<1) return;
+  document.querySelectorAll('.preset-btn').forEach(b=>b.classList.remove('active'));
+  timerTotal=m*60; timerSecs=timerTotal;
+  renderTimer();
+}
+function renderTimer() {
+  const m = Math.floor(Math.max(0, timerSecs) / 60);
+  const s = Math.max(0, timerSecs) % 60;
+  const expired = timerSecs <= 0 && timerRunning === false && timerTotal !== timerSecs;
+  const isRunning = timerRunning && !expired;
+
+  // Digits
+  const clock = $('timerClock');
+  clock.textContent = String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+  clock.className = 'timer-digits' + (expired ? ' expired' : '');
+
+  // Ring — red fills clockwise as time elapses
+  const ring = $('timerRing');
+  if (ring) {
+    const circumference = 2 * Math.PI * 50; // r=50
+    const remaining = timerTotal > 0 ? timerSecs / timerTotal : 1;
+    ring.style.strokeDashoffset = circumference * (1 - remaining);
+    ring.className.baseVal = 'timer-ring-fg' + (expired ? ' ready' : '');
+  }
+
+}
+function toggleTimer() {
+  if(timerSecs<=0){ resetTimer(); return; }
+  timerRunning=!timerRunning;
+  $('timerStartBtn').textContent=timerRunning?'Pause':'Resume';
+  if(timerRunning){
+    timerInterval=setInterval(()=>{
+      timerSecs--;
+      renderTimer();
+      if(timerSecs<=0){ clearInterval(timerInterval); timerRunning=false; $('timerStartBtn').textContent='Start'; }
+    },1000);
+  } else {
+    clearInterval(timerInterval);
+  }
+}
+function resetTimer() {
+  clearInterval(timerInterval); timerRunning=false;
+  timerSecs=timerTotal; $('timerStartBtn').textContent='Start'; renderTimer();
+}
+renderTimer();
+
+/* ── 4. RUN RATE ── */
+function calcRunRate() {
+  const quota=parseCur($('rr-quota').value), current=parseCur($('rr-current').value), period=$('rr-period').value;
+  if(!quota) return toast('Please enter your Target/Quota.');
+  const days=period==='quarter'?30:120, rem=Math.max(0,quota-current), daily=days>0?rem/days:0, pct=Math.min((current/quota)*100,100);
+  $('rr-daily').textContent=fmtComp(daily); $('rr-rem').textContent=fmtComp(rem); $('rr-days').textContent=days; $('rr-perc').textContent=Math.round(pct)+'%';
+  const bar=$('rr-bar'); bar.style.width=pct+'%'; bar.className='prog-fill'+(pct<50?' bad':pct<80?' warn':'');
+  const st=$('rr-status');
+  if(current>=quota){st.className='status-pill s-go';st.textContent='Quota achieved. Well done.';}
+  else if(pct>=75){st.className='status-pill s-go';st.textContent='On track. Keep pushing.';}
+  else{st.className='status-pill s-warn';st.textContent='Behind pace. Increase daily close volume.';}
+  $('rr-results').classList.add('show');
+}
+
+/* ── 5. PIPELINE ── */
+function calcPipeline() {
+  const target=parseCur($('pg-target').value), pipe=parseCur($('pg-pipe').value), win=parseFloat($('pg-motion').value);
+  if(!target) return toast('Please enter a Target Quota.');
+  const proj=pipe*win, gap=target-proj, need=gap>0?gap/win:0, cov=(pipe/target).toFixed(1), req=(1/win).toFixed(1);
+  $('pg-gap').textContent=fmtComp(need); $('pg-proj').textContent=fmtComp(proj); $('pg-cov').textContent=cov+'x'; $('pg-req').textContent=req+'x';
+  const pct=Math.min((parseFloat(cov)/parseFloat(req))*100,100), bar=$('pg-bar'), st=$('pg-status');
+  bar.style.width=pct+'%';
+  if(gap<=0){bar.className='prog-fill';st.className='status-pill s-go';st.textContent='Pipeline is healthy. Focus on closing.';$('pg-gap').textContent='$0';}
+  else if(pct>70){bar.className='prog-fill warn';st.className='status-pill s-warn';st.textContent='Pipeline is thin. Prospecting required.';}
+  else{bar.className='prog-fill bad';st.className='status-pill s-crit';st.textContent='Critical shortage. Stop everything and source.';}
+  $('pg-results').classList.add('show');
+}
+
+/* ── 6. DISCOUNT IMPACT ── */
+function calcDiscount() {
+  const list=parseCur($('di-list').value), disc=parseFloat($('di-disc').value)||0, margin=parseFloat($('di-margin').value)||0, rate=parseFloat($('di-rate').value)||0;
+  if(!list) return toast('Please enter the full list price.');
+  if(disc<=0||disc>=100) return toast('Enter a discount between 1 and 99%.');
+  const discounted = list*(1-disc/100);
+  const revLost    = list-discounted;
+  const commFull   = list*(rate/100), commDisc=discounted*(rate/100), commLost=commFull-commDisc;
+  const marginFull = list*(margin/100), marginDisc=discounted*(margin/100), marginLost=marginFull-marginDisc;
+  const newMarginPct = margin-disc > 0 ? (margin-disc) : 0;
+  $('di-discounted').textContent = fmtComp(discounted);
+  $('di-lost').textContent       = fmtComp(revLost);
+  $('di-comm-lost').textContent  = '−'+fmtComp(commLost);
+  $('di-margin-lost').textContent= '−'+fmtComp(marginLost);
+  $('di-new-margin').textContent = fmtPct(newMarginPct);
+  const st=$('di-status');
+  if(disc<=5){st.className='status-pill s-go';st.textContent='Manageable. Within normal negotiation range.';}
+  else if(disc<=15){st.className='status-pill s-warn';st.textContent='Meaningful discount. Ensure it is matched by a clear commitment or scope reduction.';}
+  else{st.className='status-pill s-crit';st.textContent='Large discount. Requires executive approval and a written concession.';}
+  $('di-results').classList.add('show');
+}
+
+/* ── 7. CHANNEL MARGIN ── */
+function calcWaterfall() {
+  const gov=parseCur($('wf-gov').value), oem=parseCur($('wf-oem').value);
+  if(!gov) return;
+  const pd=parseFloat($('wf-slide-disty').value)||0, pv=parseFloat($('wf-slide-var').value)||0;
+  const dd=gov*(pd/100), dv=gov*(pv/100), ds=gov-oem-dd-dv, ps=(ds/gov)*100, po=(oem/gov)*100;
+  $('wf-lbl-disty').textContent=pd.toFixed(1)+'%'; $('wf-lbl-var').textContent=pv.toFixed(1)+'%'; $('wf-lbl-si').textContent=ps.toFixed(1)+'%';
+  $('wf-sub-disty').textContent=pd.toFixed(1)+'%'; $('wf-sub-var').textContent=pv.toFixed(1)+'%'; $('wf-sub-si').textContent=ps.toFixed(1)+'%';
+  $('wf-pct-oem').textContent=po.toFixed(1)+'%'; $('wf-val-oem').textContent=fmtComp(oem); $('wf-val-disty').textContent=fmtComp(dd); $('wf-val-var').textContent=fmtComp(dv); $('wf-val-si').textContent=fmtComp(ds);
+  $('wf-bar-oem').style.width=Math.max(0,po)+'%'; $('wf-bar-disty').style.width=pd+'%'; $('wf-bar-var').style.width=pv+'%';
+  const bsi=$('wf-bar-si'), csi=$('wf-card-si'), tsi=$('wf-lbl-si'), ttsi=$('wf-title-si');
+  if(ds<0){bsi.style.width='0%';bsi.classList.add('seg-err');csi.style.background='rgba(180,40,20,0.07)';tsi.style.color='#B83020';ttsi.style.color='#B83020';toast('Margin alert: SI/Prime is negative.');}
+  else{bsi.style.width=ps+'%';bsi.classList.remove('seg-err');csi.style.background='';tsi.style.color='var(--c-si)';ttsi.style.color='';}
+  $('wf-bar-oem').textContent=po>10?'OEM':''; $('wf-bar-disty').textContent=pd>5?'Disty':''; $('wf-bar-var').textContent=pv>8?'VAR':''; bsi.textContent=ps>8?'SI/Prime':'';
+}
+$('wf-gov').addEventListener('input',calcWaterfall); $('wf-oem').addEventListener('input',calcWaterfall);
+$('wf-slide-disty').addEventListener('input',calcWaterfall); $('wf-slide-var').addEventListener('input',calcWaterfall);
+calcWaterfall();
+
+/* ── 8. COMMISSION ── */
+function calcComm() {
+  const deal=parseCur($('nc-deal').value), rate=parseFloat($('nc-rate').value)||0, tax=parseFloat($('nc-tax').value);
+  if(!deal) return toast('Please enter the Deal Size.');
+  if(!rate) return toast('Please enter your Commission Rate.');
+  const gross=deal*(rate/100), ded=gross*tax, net=gross-ded;
+  $('nc-gross').textContent=fmtCur(gross); $('nc-deduct').textContent='−'+fmtCur(ded); $('nc-net').textContent=fmtCur(net);
+  $('nc-results').classList.add('show');
+}
+
+/* ── 9. OTE CHECK ── */
+function calcOte() {
+  const base=parseCur($('ote-base').value), variable=parseCur($('ote-var').value), quota=parseCur($('ote-quota').value);
+  if(!base||!variable||!quota) return toast('Please fill in all three fields.');
+  const ote=base+variable, multiple=quota/ote, varPct=(variable/ote)*100;
+  $('ote-total').textContent=fmtComp(ote);
+  $('ote-multiple').textContent=multiple.toFixed(1)+'×';
+  $('ote-ratio').textContent=Math.round(varPct)+'%';
+  const st=$('ote-status');
+  if(multiple < 3){
+    st.className='status-pill s-warn';
+    st.textContent=`${multiple.toFixed(1)}× OTE — Unusually low. Either a ramp quota, overlay role, or something's off.`;
+  }
+  else if(multiple <= 4){
+    st.className='status-pill s-go';
+    st.textContent=`${multiple.toFixed(1)}× OTE — Very favorable. Common for SMB/commercial or new territories.`;
+  }
+  else if(multiple <= 6){
+    st.className='status-pill s-go';
+    st.textContent=`${multiple.toFixed(1)}× OTE — Standard range. Typical for mid-market SaaS and CSP reps.`;
+  }
+  else if(multiple <= 8){
+    st.className='status-pill s-warn';
+    st.textContent=`${multiple.toFixed(1)}× OTE — Above average. Normal for enterprise reps at major CSPs. Requires strong pipeline.`;
+  }
+  else if(multiple <= 10){
+    st.className='status-pill s-warn';
+    st.textContent=`${multiple.toFixed(1)}× OTE — Aggressive. Typical for strategic/named account roles. Need 3-4× pipeline coverage.`;
+  }
+  else{
+    st.className='status-pill s-crit';
+    st.textContent=`${multiple.toFixed(1)}× OTE — Very aggressive. Common at AWS/Google/MSFT enterprise. Depends on large platform deals.`;
+  }
+  $('ote-results').classList.add('show');
+}
+/* ── 10. FIRE ── */
+function calcFire() {
+  const port=parseCur($('fire-port').value), save=parseCur($('fire-save').value), spend=parseCur($('fire-spend').value);
+  const target=spend*25, r=0.07; let yrs=0;
+  if(port>=target){yrs=0;}
+  else if(save<=0&&port<=0) return toast('You need savings to reach FIRE.');
+  else { const n=(target+(save/r))/(port+(save/r)); yrs=Math.log(n)/Math.log(1+r); }
+  $('fire-target').textContent=fmtComp(target);
+  const ye=$('fire-years');
+  if(yrs<=0){ye.textContent='Now';} else{ye.textContent=yrs.toFixed(1);}
+  $('fire-results').classList.add('show');
+}
+
+/* ── 11. TIP ── */
+function calcTip() {
+  const bill=parseCur($('tip-bill').value), split=parseInt($('tip-split').value)||1, rate=parseFloat($('tip-rate').value);
+  if(!bill) return toast('Please enter the bill amount.');
+  const tipAmt=bill*rate, total=bill+tipAmt;
+  $('tip-total').textContent=fmtCur(total); $('tip-amount').textContent=fmtCur(tipAmt); $('tip-person').textContent=fmtCur(total/split);
+  $('tip-results').classList.add('show');
+}
+
+/* ── 12. CALCULATOR ── */
+const cs={val:'0',expr:'',op:null,prev:null,fresh:false};
+function cRender(){ $('cVal').textContent=cs.val; $('cExpr').textContent=cs.expr; }
+function kf(t,a){
+  if(t==='num'){
+    if(cs.fresh){cs.val='';cs.fresh=false;}
+    if(a==='0'&&cs.val==='0') return;
+    if(cs.val==='0'&&a!=='.') cs.val='';
+    if(cs.val.replace('-','').length>=12) return;
+    cs.val+=a;
+  } else if(t==='dot'){
+    if(cs.fresh){cs.val='0';cs.fresh=false;}
+    if(!cs.val.includes('.')) cs.val+='.';
+  } else if(t==='clear'){
+    cs.val='0';cs.expr='';cs.op=null;cs.prev=null;cs.fresh=false;
+  } else if(t==='sign'){
+    if(cs.val!=='0') cs.val=cs.val.startsWith('-')?cs.val.slice(1):'-'+cs.val;
+  } else if(t==='pct'){
+    const n=parseFloat(cs.val); if(!isNaN(n)) cs.val=String(cs.prev!==null?cs.prev*n/100:n/100);
+  } else if(t==='op'){
+    if(cs.op&&!cs.fresh){const r=cEval(cs.prev,parseFloat(cs.val),cs.op);cs.val=cFmt(r);cs.prev=r;}
+    else cs.prev=parseFloat(cs.val);
+    cs.op=a; cs.expr=cs.val+' '+{'+':'+','-':'−','*':'×','/':'÷'}[a]; cs.fresh=true;
+  } else if(t==='eq'){
+    if(!cs.op) return;
+    const r=cEval(cs.prev,parseFloat(cs.val),cs.op);
+    cs.expr=cs.expr+' '+cs.val+' ='; cs.val=cFmt(r); cs.prev=null; cs.op=null; cs.fresh=true;
+  }
+  cRender();
+}
+function cEval(a,b,op){ if(op==='+') return a+b; if(op==='-') return a-b; if(op==='*') return a*b; if(op==='/') return b?a/b:0; return b; }
+function cFmt(n){ return isFinite(n)?String(parseFloat(n.toPrecision(10))):'0'; }
+cRender();
+
+/* ── AI TOOLS ── */
+const GOVHOO_ENDPOINT = 'https://76unm1rlj0.execute-api.us-east-1.amazonaws.com/default/grumpy2';
+
+function aiSetLoading(btnId, loadingId, on) {
+  const btn = $(btnId), loading = loadingId ? $(loadingId) : null;
+  if (!btn) return;
+  const label = btn.querySelector('.ai-btn-label'), spinner = btn.querySelector('.ai-spinner');
+  btn.disabled = on;
+  if (label)   label.classList.toggle('hidden', on);
+  if (spinner) spinner.classList.toggle('hidden', !on);
+  if (loading) loading.classList.toggle('hidden', !on);
+}
+
+// Also fix the aiCopy button-label restore so it works for the Job Dorker too
+function aiCopy(sourceId, btn) {
+  const text = $(sourceId).textContent.trim();
+  // Capture the original label before we replace it
+  const originalLabel = btn.dataset.originalLabel || btn.textContent;
+  if (!btn.dataset.originalLabel) btn.dataset.originalLabel = originalLabel;
+  navigator.clipboard?.writeText(text).then(() => {
+    btn.textContent = 'Copied!'; btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = btn.dataset.originalLabel; btn.classList.remove('copied'); }, 2500);
+  }).catch(() => toast('Copy failed — select text manually.'));
+}
+
+async function runPromptMaker() {
+  const input = $('prompt-input').value.trim();
+  if (!input) return toast('Please describe what you want the AI to help with.');
+  if (input.length > 2500) return toast('Please shorten your input to under 2500 characters.');
+
+  $('prompt-result').classList.add('hidden');
+  $('prompt-error').classList.add('hidden');
+  aiSetLoading('prompt-btn', 'prompt-loading', true);
+
+  try {
+    const res = await fetch(GOVHOO_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ request_type: 'prompt_improvement', situation: input })
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.error || 'Request failed');
+
+    const why = $('prompt-why');
+    if (data.why_better || data.original_problem) {
+      why.textContent = data.original_problem || data.why_better || '';
+      why.classList.remove('hidden');
+    }
+    $('prompt-output').textContent = data.improved_prompt || '';
+
+    const impEl = $('prompt-improvements');
+    if (data.key_improvements?.length) {
+      impEl.innerHTML = '<div class="ai-result-label" style="margin-top:14px;">What changed</div>' +
+        data.key_improvements.map(i => `<div style="font-size:var(--text-sm);color:var(--text-tertiary);padding:3px 0;">· ${i}</div>`).join('');
+      impEl.classList.remove('hidden');
+    }
+
+    $('prompt-result').classList.remove('hidden');
+    $('prompt-result').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  } catch (err) {
+    const el = $('prompt-error');
+    el.textContent = err.message?.includes('timed out') ? 'Request timed out — please try again.' : 'Something went wrong. Please try again in a moment.';
+    el.classList.remove('hidden');
+  } finally {
+    aiSetLoading('prompt-btn', 'prompt-loading', false);
+  }
+}
+
+async function runSideHustle() {
+  const input = $('hustle-input').value.trim();
+  if (!input) return toast('Please describe your idea.');
+
+  $('hustle-result').classList.add('hidden');
+  $('hustle-error').classList.add('hidden');
+  aiSetLoading('hustle-btn', 'hustle-loading', true);
+
+  try {
+    const res = await fetch(GOVHOO_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ request_type: 'mvp_launch_plan', situation: input })
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.error || 'Request failed');
+
+    // AskArti lambda wraps in data.launchPlan; fedhoo returns flat
+    const plan = data.launchPlan || data;
+    const s = plan.strategy || {};
+    const tl = plan.timeline || {};
+    const sm = plan.successMetrics || {};
+
+    $('hustle-plan').innerHTML = `
+      ${plan.productName ? `<div class="ai-plan-row"><div class="ai-plan-row-label">Product Name</div><div class="ai-plan-row-val" style="font-weight:700;font-size:var(--text-base);color:var(--text-primary);">${plan.productName}</div></div>` : ''}
+      ${s.whatYoureBuilding ? `<div class="ai-plan-row"><div class="ai-plan-row-label">What You're Building</div><div class="ai-plan-row-val">${s.whatYoureBuilding}</div></div>` : ''}
+      ${s.targetCustomer ? `<div class="ai-plan-row"><div class="ai-plan-row-label">Target Customer</div><div class="ai-plan-row-val">${s.targetCustomer}</div></div>` : ''}
+      ${s.valueProposition ? `<div class="ai-plan-row"><div class="ai-plan-row-label">Value Proposition</div><div class="ai-plan-row-val">${s.valueProposition}</div></div>` : ''}
+      ${s.validationGoal ? `<div class="ai-plan-row"><div class="ai-plan-row-label">Validation Goal</div><div class="ai-plan-row-val">${s.validationGoal}</div></div>` : ''}
+      ${(tl.day1 || tl.day2) ? `<div class="ai-plan-row"><div class="ai-plan-row-label">Quick-Start Timeline</div><div class="ai-plan-two"><div><div style="font-size:var(--text-xs);font-weight:700;color:var(--text-quaternary);margin-bottom:3px;">DAY 1</div><div class="ai-plan-row-val">${tl.day1||''}</div></div><div><div style="font-size:var(--text-xs);font-weight:700;color:var(--text-quaternary);margin-bottom:3px;">DAY 2</div><div class="ai-plan-row-val">${tl.day2||''}</div></div></div></div>` : ''}
+      ${(sm.week1 || sm.pivotSignal) ? `<div class="ai-plan-row"><div class="ai-plan-row-label">Success Metrics</div><div class="ai-plan-row-val">${sm.week1 ? `Week 1: ${sm.week1}` : ''}${sm.pivotSignal ? `<br>Pivot signal: ${sm.pivotSignal}` : ''}</div></div>` : ''}
+      ${plan.realityCheck ? `<div class="ai-plan-row"><div class="ai-plan-row-label">Reality Check</div><div class="ai-plan-row-val">${plan.realityCheck}</div></div>` : ''}
+    `;
+
+    $('hustle-mvp').textContent = plan.mvpPrompt || '';
+    $('hustle-result').classList.remove('hidden');
+    $('hustle-result').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  } catch (err) {
+    const el = $('hustle-error');
+    el.textContent = err.message?.includes('timed out') ? 'Request timed out — please try again.' : 'Something went wrong. Please try again in a moment.';
+    el.classList.remove('hidden');
+  } finally {
+    aiSetLoading('hustle-btn', 'hustle-loading', false);
+  }
+}
+
+/* ── SDR JOB DORKER ── */
+const SDRJobs = (() => {
+  const state = {
+    seniority: '',
+    mode: '',
+    industry: '',
+    channel: 'connect',
+    angle: 'direct',
+    titles: new Set(['Sales Manager','Director of Sales','VP of Sales']),
+  };
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  }
+
+  function singleSelect(groupId, key) {
+    const group = document.getElementById(groupId);
+    if (!group) return;
+    group.querySelectorAll('.sdr-chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        group.querySelectorAll('.sdr-chip').forEach(c => c.classList.remove('active'));
+        chip.classList.add('active');
+        state[key] = chip.dataset.val;
+      });
+    });
+  }
+
+  function multiSelect(groupId, set) {
+    const group = document.getElementById(groupId);
+    if (!group) return;
+    group.querySelectorAll('.sdr-chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        const v = chip.dataset.val;
+        if (set.has(v)) { set.delete(v); chip.classList.remove('active'); }
+        else { set.add(v); chip.classList.add('active'); }
+      });
+    });
+  }
+
+  function getConfig() {
+    return {
+      role: ($('sdr-role').value || '').trim() || '"Account Executive"',
+      location: ($('sdr-location').value || '').trim(),
+      keywords: ($('sdr-keywords').value || '').trim(),
+      recency: $('sdr-recency').value,
+      seniority: state.seniority,
+      mode: state.mode,
+      industry: state.industry,
+    };
+  }
+
+  function buildBase(cfg) {
+    const parts = [cfg.role];
+    if (cfg.seniority) parts.push(cfg.seniority);
+    if (cfg.mode) parts.push(cfg.mode);
+    if (cfg.location) parts.push(`"${cfg.location}"`);
+    if (cfg.industry) parts.push(cfg.industry);
+    if (cfg.keywords) parts.push(cfg.keywords);
+    return parts.filter(Boolean).join(' ');
+  }
+
+  function googleUrl(q, recency) {
+    let url = 'https://www.google.com/search?q=' + encodeURIComponent(q);
+    if (recency) url += '&tbs=qdr:' + recency;
+    return url;
+  }
+
+  function rowHtml(src, q, url) {
+    return `
+      <div class="sdr-row">
+        <div>
+          <div class="sdr-row-src">${escapeHtml(src)}</div>
+          <div class="sdr-row-q">${escapeHtml(q)}</div>
+        </div>
+        <a class="sdr-row-open" href="${url}" target="_blank" rel="noopener">Open ↗</a>
+      </div>`;
+  }
+
+  function generate() {
+    const cfg = getConfig();
+    const base = buildBase(cfg);
+    const roleBare = cfg.role.replace(/"/g,'');
+
+    const dorks = [
+      { src: 'LinkedIn Jobs · all posts',            q: `site:linkedin.com/jobs ${base}` },
+      { src: 'LinkedIn Jobs · "View Job"',           q: `site:linkedin.com/jobs/view ${base}` },
+      { src: 'LinkedIn Jobs · exact title',          q: `site:linkedin.com/jobs intitle:"${roleBare}" ${[cfg.location && `"${cfg.location}"`, cfg.industry].filter(Boolean).join(' ')}` },
+      { src: 'LinkedIn Jobs · "be among the first"', q: `site:linkedin.com/jobs ${base} "be among the first"` },
+      { src: 'LinkedIn Posts · "we\'re hiring"',     q: `site:linkedin.com/posts "we're hiring" ${base}` },
+      { src: 'LinkedIn Posts · "just posted"',       q: `site:linkedin.com/posts "just posted" ${base}` },
+      { src: 'LinkedIn Posts · "join our team"',     q: `site:linkedin.com/posts "join our team" ${base}` },
+      { src: 'LinkedIn Jobs · fresh (under 10 apps)', q: `site:linkedin.com/jobs ${base} -"30+ applicants" -"100+ applicants" -"200+ applicants"` },
+    ];
+
+    $('sdr-job-results').innerHTML = dorks.map(d => rowHtml(d.src, d.q, googleUrl(d.q, cfg.recency))).join('');
+    $('sdr-ats-count').textContent = dorks.length;
+    $('sdr-job-results-wrap').classList.add('show');
+    toast(`${dorks.length} job dorks ready`, 'ok');
+  }
+
+  function findPeople() {
+    const cfg = getConfig();
+    const co = ($('sdr-target-co').value || '').trim();
+    const scopeParts = [];
+    if (co) scopeParts.push(`"${co}"`);
+    else {
+      if (cfg.industry) scopeParts.push(cfg.industry);
+      if (cfg.location) scopeParts.push(`"${cfg.location}"`);
+    }
+    const scope = scopeParts.join(' ');
+
+    const titles = Array.from(state.titles);
+    if (!titles.length) {
+      toast('Pick at least one title');
+      return;
+    }
+
+    const roleBare = cfg.role.replace(/"/g,'');
+    const rows = titles.map(t => {
+      const q = `site:linkedin.com/in "${t}" ${scope}`.trim();
+      return { src: t, q, url: googleUrl(q, cfg.recency) };
+    });
+    const hiringQ = `site:linkedin.com/in ${scope} "hiring" "${roleBare}"`.trim();
+    rows.push({ src: 'Managers actively posting "hiring"', q: hiringQ, url: googleUrl(hiringQ, cfg.recency) });
+
+    $('sdr-people-results').innerHTML = rows.map(r => rowHtml(r.src, r.q, r.url)).join('');
+    $('sdr-ppl-count').textContent = rows.length;
+    $('sdr-people-results-wrap').classList.add('show');
+    toast(`${rows.length} manager dorks ready`, 'ok');
+  }
+
+  // Cache for AI-generated messages so the chip toggles can flip between
+  // angles/channels without firing a new API call. Keyed by channel.
+  const aiCache = {
+    connect: null,
+    inmail: null,
+    email: null,
+    company_intel: null,
+    last_inputs_key: null  // a hash of inputs — invalidates cache when inputs change
+  };
+
+  // Track which mode the user last rendered in, so chip toggles know what to do
+  let lastRenderMode = null;  // 'static' | 'ai' | null
+
+  function getInputs() {
+    return {
+      name: ($('sdr-msg-name').value || '').trim(),
+      mgr:  ($('sdr-msg-manager').value || '').trim(),
+      co:   ($('sdr-msg-company').value || '').trim(),
+      edge: ($('sdr-msg-edge').value || '').trim(),
+      role: (($('sdr-role').value || '').trim() || 'Account Executive').replace(/"/g,''),
+      channel: state.channel,
+      angle: state.angle,
+    };
+  }
+
+  function inputsKey(inp) {
+    // Excludes channel and angle — those don't invalidate the cache,
+    // they just pick which message to display
+    return [inp.name, inp.mgr, inp.co, inp.edge, inp.role].join('|');
+  }
+
+  function renderMessage(text) {
+    const len = text.length;
+    const max = state.channel === 'connect' ? 300 : null;
+    const warn = max && len > max;
+
+    $('sdr-msg-output').textContent = text;
+    const cc = $('sdr-char-count');
+    cc.textContent = max
+      ? `${len} / ${max} characters${warn ? ' — over LinkedIn connect note limit, trim it' : ''}`
+      : `${len} characters · ${text.split(/\s+/).length} words`;
+    cc.classList.toggle('warn', !!warn);
+    $('sdr-msg-result').classList.remove('hidden');
+    $('sdr-msg-error').classList.add('hidden');
+  }
+
+  function generateMessage() {
+    const inp = getInputs();
+    const name = inp.name || '[Your name]';
+    const mgr  = inp.mgr  || '[Manager]';
+    const co   = inp.co   || '[Company]';
+    const edge = inp.edge || '[your one-line edge]';
+    const role = inp.role;
+    const roleLower = role.toLowerCase();
+
+    const connectT = {
+      direct:  `${mgr} — saw you're hiring for the ${role} role at ${co}. ${edge}. Not "exploring" — I want this seat. Worth a 15-min convo? — ${name}`,
+      curious: `${mgr} — quick one. What does the top 10% of your ${role} team at ${co} do differently? I'm a ${role} (${edge}) looking at my next move and only want to learn from the best. — ${name}`,
+      value:   `${mgr} — spent 20 min on ${co}'s GTM motion. Spotted 3 things I'd do differently in week one. ${edge}. Not asking for a job — 15 min to walk you through it. — ${name}`
+    };
+
+    const longT = {
+      direct:
+`${mgr} —
+
+I want the ${role} role at ${co}. Not "exploring opportunities" — I saw the opening and I'm going for it.
+
+Here's the short version: ${edge}. I found the role on LinkedIn before it hit 400 applicants, which is why I'm writing you directly instead of clicking Apply.
+
+Two questions:
+1. Is the role still open?
+2. Who makes the call on first-round interviews?
+
+Happy to send a 90-second Loom walking through how I'd approach ${co}'s ICP in the first 30 days.
+
+— ${name}`,
+
+      curious:
+`Hey ${mgr},
+
+Quick one. I've been digging into ${co} (not just the website — actual product reviews, G2, recent announcements) and I'm trying to figure out one thing:
+
+What does the top 10% of your ${roleLower} team do differently from the rest?
+
+Context: I'm a ${role} looking at my next move. ${edge}. Before I apply anywhere I'm only talking to teams where I know I can learn from the floor up.
+
+If you've got 10 minutes this week I'd trade you a Loom of how I'd approach ${co}'s market in exchange for your honest answer.
+
+— ${name}`,
+
+      value:
+`${mgr},
+
+Spent 30 minutes on ${co}'s website, LinkedIn, and recent product announcements before writing this. Three quick observations:
+
+1. Your GTM messaging leans heavy on features — there's room to lead with the customer outcome.
+2. I couldn't find evidence of a personalized outbound motion hitting accounts in my ICP (and I'm in it).
+3. You're hiring ${role}s, which means you're scaling, which means the playbook is still being written.
+
+I want to help write it. ${edge}.
+
+Not asking for a job. Asking for 15 minutes to walk you through how I'd approach ${co} in the first 30 days. If it's useless, you've lost 15 minutes. If it's good, you know where to find me.
+
+— ${name}`
+    };
+
+    const text = state.channel === 'connect' ? connectT[state.angle] : longT[state.angle];
+    // Hide the AI intel panel when rendering static
+    $('sdr-ai-intel').classList.add('hidden');
+    lastRenderMode = 'static';
+    renderMessage(text);
+  }
+
+  async function generateMessageAI() {
+    const inp = getInputs();
+    if (!inp.co) {
+      toast('Please enter a target company first.');
+      return;
+    }
+
+    const key = inputsKey(inp);
+    // Cache hit — no need to call the API again
+    if (aiCache.last_inputs_key === key && aiCache[inp.channel] && aiCache[inp.channel][inp.angle]) {
+      lastRenderMode = 'ai';
+      renderAIResult(inp.channel, inp.angle);
+      return;
+    }
+
+    // Cache miss — call the lambda
+    const btn = $('sdr-ai-btn');
+    aiSetLoading('sdr-ai-btn', null, true);
+    $('sdr-msg-error').classList.add('hidden');
+
+    try {
+      const res = await fetch(GOVHOO_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          request_type: 'job_outreach',
+          role: inp.role,
+          company: inp.co,
+          manager_name: inp.mgr,
+          your_name: inp.name,
+          edge: inp.edge,
+          channel: inp.channel,
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || 'Request failed');
+
+      // Validate the shape
+      if (!data.messages || !data.company_intel) {
+        throw new Error('AI returned an unexpected response. Try again.');
+      }
+
+      // If the user changed inputs since the last call, blow away the cache
+      if (aiCache.last_inputs_key !== key) {
+        aiCache.connect = null;
+        aiCache.inmail = null;
+        aiCache.email = null;
+      }
+      aiCache.last_inputs_key = key;
+      aiCache[inp.channel] = data.messages;
+      aiCache.company_intel = data.company_intel;
+      aiCache.subject_lines = data.subject_lines || null;
+
+      lastRenderMode = 'ai';
+      renderAIResult(inp.channel, inp.angle);
+    } catch (err) {
+      const el = $('sdr-msg-error');
+      el.textContent = err.message?.includes('timed out')
+        ? 'AI request timed out — try again, or use the Draft Message button for an instant version.'
+        : (err.message || 'Something went wrong. Try the Draft Message button for an instant version.');
+      el.classList.remove('hidden');
+    } finally {
+      aiSetLoading('sdr-ai-btn', null, false);
+    }
+  }
+
+  function renderAIResult(channel, angle) {
+    const messages = aiCache[channel];
+    const intel = aiCache.company_intel;
+    const subjects = aiCache.subject_lines;
+    if (!messages || !messages[angle]) return;
+
+    // Render the company intel panel
+    const intelEl = $('sdr-ai-intel');
+    if (intel) {
+      const co = ($('sdr-msg-company').value || '').trim() || 'this company';
+      let html = `<div class="sdr-intel-label">What we know about ${escapeHtml(co)}</div>`;
+      if (intel.category) html += `<div class="sdr-intel-row"><strong>Category:</strong> ${escapeHtml(intel.category)}</div>`;
+      if (intel.icp)      html += `<div class="sdr-intel-row"><strong>Sells to:</strong> ${escapeHtml(intel.icp)}</div>`;
+      if (intel.angle_for_role) html += `<div class="sdr-intel-row"><strong>Angle:</strong> ${escapeHtml(intel.angle_for_role)}</div>`;
+      // Show subject line if email mode
+      if (channel === 'email' && subjects && subjects[angle]) {
+        html += `<div class="sdr-subject" style="margin-top:10px;"><div class="sdr-subject-label">Suggested Subject</div><div class="sdr-subject-val">${escapeHtml(subjects[angle])}</div></div>`;
+      }
+      intelEl.innerHTML = html;
+      intelEl.classList.remove('hidden');
+    } else {
+      intelEl.classList.add('hidden');
+    }
+
+    renderMessage(messages[angle]);
+  }
+
+  // When the user toggles channel or angle chips AFTER they've generated a
+  // message, re-render in whatever mode they last used (static or AI).
+  function onChipChange() {
+    if (lastRenderMode === 'ai') {
+      const inp = getInputs();
+      // If we have this channel cached, switch instantly. If not, fetch it.
+      if (aiCache.last_inputs_key === inputsKey(inp) && aiCache[inp.channel] && aiCache[inp.channel][inp.angle]) {
+        renderAIResult(inp.channel, inp.angle);
+      } else {
+        // Channel cache miss — fetch the new channel from the API
+        generateMessageAI();
+      }
+    } else if (lastRenderMode === 'static') {
+      generateMessage();
+    }
+    // If nothing has been rendered yet, do nothing — the buttons handle first render
+  }
+
+  // Update the AI button enabled/disabled state based on whether Company is filled
+  function updateAIButtonState() {
+    const co = ($('sdr-msg-company').value || '').trim();
+    const btn = $('sdr-ai-btn');
+    if (!btn) return;
+    btn.disabled = !co;
+    const hint = $('sdr-ai-hint');
+    if (hint) {
+      hint.textContent = co
+        ? 'AI tailors the message to the company. Static drafts are instant and stay in your browser.'
+        : 'Static drafts are instant and private. AI drafts are tailored — fill in Company at minimum.';
+    }
+  }
+
+  function init() {
+    singleSelect('sdr-seniority-chips', 'seniority');
+    singleSelect('sdr-mode-chips', 'mode');
+    singleSelect('sdr-industry-chips', 'industry');
+    singleSelect('sdr-channel-chips', 'channel');
+    singleSelect('sdr-angle-chips', 'angle');
+    multiSelect('sdr-title-chips', state.titles);
+    multiSelect('sdr-title-chips-more', state.titles);
+
+    // Role preset chips populate the free-text input
+    const roleInput = $('sdr-role');
+    document.querySelectorAll('#sdr-role-chips .sdr-chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        roleInput.value = chip.dataset.val;
+        roleInput.focus();
+      });
+    });
+
+    // After a message has been generated, channel/angle chip changes should
+    // re-render automatically in the same mode (static or AI).
+    document.querySelectorAll('#sdr-channel-chips .sdr-chip, #sdr-angle-chips .sdr-chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        // Defer one tick so the singleSelect handler runs first and updates state
+        setTimeout(onChipChange, 0);
+      });
+    });
+
+    // Wire up AI button enable/disable based on Company field
+    const coInput = $('sdr-msg-company');
+    if (coInput) {
+      coInput.addEventListener('input', updateAIButtonState);
+      updateAIButtonState();  // initial state
+    }
+  }
+
+  // Init on DOM ready (script is at end of body so DOM already exists)
+  init();
+
+  return { generate, findPeople, generateMessage, generateMessageAI };
+})();
+
+
+
+function toggleDark() {
+  var isDark = document.documentElement.classList.toggle('dark');
+  try { localStorage.setItem('fedhoo_dark', isDark ? '1' : '0'); } catch(e) {}
+  var icon = document.getElementById('darkToggleIcon');
+  if (!icon) return;
+  icon.innerHTML = isDark
+    ? '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>'
+    : '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
+}
+</script>
+</body>
+</html>
