@@ -399,6 +399,62 @@ a, button, input, select { touch-action: manipulation; }
 .hero-cta:hover { background: var(--btn-hover); }
 .hero-cta-note { font-size: var(--text-sm); color: var(--text-tertiary); font-weight: 600; }
 
+/* ── HERO SCREENSHOT ────────────────────────────
+   A real money-flow capture, shown as proof below the CTA. The figure keeps
+   a fixed ~1.16:1 aspect box so layout never jumps when the image loads.
+   `.is-placeholder` shows a labelled holding box; it's removed by the img's
+   onload handler once the real screenshot is in place. */
+.hero-shot {
+  margin: 28px 0 0;
+  max-width: 680px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  background: var(--bg-app);
+  box-shadow: var(--shadow);
+}
+.hero-shot-img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 685 / 590;   /* matches the captured diagram */
+  object-fit: cover;
+  object-position: top center;
+}
+.hero-shot-cap {
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+}
+/* Placeholder state — visible until a real image loads. The img is collapsed
+   to zero height (so it doesn't double the box) and a labelled holding box is
+   drawn via ::before at the correct aspect ratio. */
+.hero-shot.is-placeholder {
+  position: relative;
+}
+.hero-shot.is-placeholder .hero-shot-img {
+  height: 0;
+  aspect-ratio: auto;
+  visibility: hidden;
+}
+.hero-shot.is-placeholder::before {
+  content: "Money-flow diagram \00A0\2014\00A0 add screenshot at images/flow.png";
+  display: flex; align-items: center; justify-content: center;
+  aspect-ratio: 685 / 590;
+  text-align: center; padding: 24px;
+  font-size: var(--text-sm); font-weight: 600;
+  color: var(--text-tertiary);
+  background:
+    repeating-linear-gradient(
+      45deg,
+      var(--accent-dim),
+      var(--accent-dim) 12px,
+      var(--bg-app) 12px,
+      var(--bg-app) 24px
+    );
+}
+
 /* ── GUARANTEE ──────────────────────────────── */
 .guarantee {
   margin-top: 22px;
@@ -515,6 +571,17 @@ a, button, input, select { touch-action: manipulation; }
       <a class="hero-cta" href="https://calendly.com/markflournoy/workshop" target="_blank" rel="noopener" data-cta="hero">Book the free Pipeline Session</a>
       <span class="hero-cta-note">Two hours &middot; your real territory &middot; no cost, no slide deck</span>
     </div>
+
+    <!-- Money-flow screenshot. To go live: drop the real image at the path
+         below (recommended ~1200px wide, ~1.16:1 ratio to match the capture)
+         and remove the `is-placeholder` class from the <figure>. Until then it
+         renders a labelled placeholder box so it can't ship blank by accident. -->
+    <figure class="hero-shot is-placeholder">
+      <img class="hero-shot-img" src="images/flow.png"
+           alt="Money flow diagram — Navy contracting offices on the left flowing to top vendors like Lockheed Martin and Electric Boat on the right, sized by dollar volume."
+           loading="lazy" onload="this.closest('.hero-shot').classList.remove('is-placeholder')">
+      <figcaption class="hero-shot-cap">A real session output &mdash; where the money flows, from agency to vendor.</figcaption>
+    </figure>
   </div>
 
   <!-- INTRO / WHAT'S IN THE DATA -->
