@@ -17,33 +17,33 @@
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='96 96 448 448'%3E%3Cstyle%3Epath%7Bfill:%232C2B28%7D .arrow%7Bfill:%23FFFFFF%7D @media (prefers-color-scheme:dark)%7B.arrow%7Bfill:%23DCD8D0%7D%7D%3C/style%3E%3Cpath d='M480 96C515.3 96 544 124.7 544 160L544 480C544 515.3 515.3 544 480 544L160 544C124.7 544 96 515.3 96 480L96 160C96 124.7 124.7 96 160 96L480 96z'/%3E%3Cpath class='arrow' d='M368 360C368 373.3 378.7 384 392 384C405.3 384 416 373.3 416 360L416 248C416 234.7 405.3 224 392 224L280 224C266.7 224 256 234.7 256 248C256 261.3 266.7 272 280 272L334.1 272L231.1 375C221.7 384.4 221.7 399.6 231.1 408.9C240.5 418.2 255.7 418.3 265 408.9L368 305.9L368 360z'/%3E%3C/svg%3E">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="manifest" href="/manifest.json">
-<title>The Federal Pipeline Session | Ranked Target Accounts for Your Team — Fedmo</title>
-<meta name="title" content="The Federal Pipeline Session | Ranked Target Accounts for Your Team — Fedmo">
-<meta name="description" content="A free 2-hour working session that turns your federal territory into a ranked call list — target accounts, recompete hit list, partner map. See the work before you pay for anything.">
+<title>Federal Pipeline Session | Ranked Target Accounts for Your Team | Fedmo</title>
+<meta name="title" content="Federal Pipeline Session | Ranked Target Accounts for Your Team | Fedmo">
+<meta name="description" content="A free 45-minute working session that turns your federal territory into a ranked call list: target accounts, recompete hit list, partner map. See the work before you pay for anything.">
 <meta name="keywords" content="federal pipeline, federal target account list, government sales prospecting, federal recompete tracking, channel partner mapping, federal sales coaching, free sales consultation">
 <link rel="canonical" href="https://fedmo.com/consulting/">
 <!-- OpenGraph -->
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://fedmo.com/consulting/">
-<meta property="og:title" content="The Federal Pipeline Session — Ranked Target Accounts for Your Team">
-<meta property="og:description" content="A free 2-hour working session turns your federal territory into a ranked call list your reps can work Monday. See the work before you pay for anything.">
+<meta property="og:title" content="Federal Pipeline Session | Ranked Target Accounts for Your Team">
+<meta property="og:description" content="A free 45-minute working session turns your federal territory into a ranked call list your reps can work Monday. See the work before you pay for anything.">
 <meta property="og:image" content="https://fedmo.com/consulting.png">
 <!-- Twitter -->
 <meta property="twitter:card" content="summary_large_image">
-<meta property="twitter:title" content="The Federal Pipeline Session — Ranked Target Accounts for Your Team">
-<meta property="twitter:description" content="A free 2-hour working session turns your federal territory into a ranked call list your reps can work Monday. See the work first.">
+<meta property="twitter:title" content="Federal Pipeline Session | Ranked Target Accounts for Your Team">
+<meta property="twitter:description" content="A free 45-minute working session turns your federal territory into a ranked call list your reps can work Monday. See the work first.">
 <!-- Structured Data -->
 <script type="application/ld+json">
 {
 "@context":"https://schema.org",
 "@type":"Service",
-"name":"The Federal Pipeline Session",
+"name":"Federal Pipeline Session",
 "url":"https://fedmo.com/consulting/",
-"description":"A free 2-hour working session that turns a federal sales territory into a ranked target account list, recompete hit list, and partner map. Optional month-to-month coaching.",
+"description":"A free 45-minute working session that turns a federal sales territory into a ranked target account list, recompete hit list, and partner map. Optional month-to-month coaching.",
 "serviceType":"Sales consulting and pipeline development",
 "areaServed":"US",
 "provider":{"@type":"Person","name":"Mark Flournoy"},
-"offers":{"@type":"Offer","price":"0","priceCurrency":"USD","description":"The Federal Pipeline Session — free 2-hour team working session"}
+"offers":{"@type":"Offer","price":"0","priceCurrency":"USD","description":"Federal Pipeline Session: free 45-minute team working session"}
 }
 </script>
 <!-- Fonts -->
@@ -273,7 +273,7 @@ a, button, input, select { touch-action: manipulation; }
   background: var(--accent); border-radius: 999px;
   padding: 3px 10px; margin-bottom: 14px;
 }
-/* Green "No cost" flag — signals free without looking cheap. */
+/* Green "No cost" flag. Signals free without looking cheap. */
 .tier-flag-free { background: var(--go-text); }
 
 /* Free-session block: the offer card sits beside a plain "why free" column.
@@ -440,7 +440,7 @@ a, button, input, select { touch-action: manipulation; }
   border-top: 1px solid var(--border);
   background: var(--bg);
 }
-/* Placeholder state — visible until a real image loads. The img is collapsed
+/* Placeholder state, visible until a real image loads. The img is collapsed
    to zero height (so it doesn't double the box) and a labelled holding box is
    drawn via ::before at the correct aspect ratio. */
 .hero-shot.is-placeholder {
@@ -516,6 +516,56 @@ a, button, input, select { touch-action: manipulation; }
 .cred strong { color: var(--text-primary); font-weight: 700; }
 .cred a { color: var(--accent); font-weight: 600; }
 
+/* ── ABOUT MARK (photo + text) ───────────────── */
+.cred-about {
+  display: flex; gap: 22px; align-items: flex-start;
+}
+@media (max-width: 560px) {
+  .cred-about { flex-direction: column; align-items: center; text-align: center; }
+}
+.about-photo {
+  flex-shrink: 0;
+  width: 132px; height: 132px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--bg-app);
+  border: 3px solid var(--bg-app);
+  box-shadow: var(--shadow);
+}
+.about-photo-img {
+  display: block;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  object-position: center top;
+}
+/* Placeholder until /images/mark.jpg is in place: a labelled circle so it
+   can't ship blank. Removed automatically by the img's onload handler. */
+.about-photo.is-placeholder { position: relative; }
+.about-photo.is-placeholder .about-photo-img { visibility: hidden; }
+.about-photo.is-placeholder::before {
+  content: "Add photo \2192 /images/mark.jpg";
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  text-align: center; padding: 12px;
+  font-size: 0.66rem; font-weight: 600; line-height: 1.4;
+  color: var(--text-tertiary);
+  background:
+    repeating-linear-gradient(45deg,
+      var(--accent-dim), var(--accent-dim) 8px,
+      var(--bg-app) 8px, var(--bg-app) 16px);
+}
+.about-text { flex: 1; }
+.about-name {
+  font-size: var(--text-lg); font-weight: 800; color: var(--text-primary);
+  letter-spacing: -0.02em;
+}
+.about-role {
+  font-size: var(--text-sm); font-weight: 600; color: var(--text-tertiary);
+  margin-bottom: 12px;
+}
+.about-text p { margin-bottom: 10px; }
+.about-text p:last-child { margin-bottom: 0; }
+
 /* ── FINAL CTA ──────────────────────────────── */
 .final {
   margin-top: 40px; text-align: center;
@@ -579,10 +629,10 @@ a, button, input, select { touch-action: manipulation; }
   <div class="hero">
     <div class="hero-eyebrow">Work with Mark</div>
     <h1 class="hero-title">There's a map for federal pipeline. <br class="hero-title-br">Let me show you.</h1>
-    <p class="hero-sub">Who's buying, which contracts are expiring, which partners are already inside the agency &mdash; it's all in public data, and it's genuinely useful once someone walks you through it. I'll do that with your team, on your real territory, in a free working session. You'll leave with a call list and a clear sense of what's worth your time.</p>
+    <p class="hero-sub">Who's buying, which contracts are expiring, which partners are already inside the agency. It's all in public data, and it's genuinely useful once someone walks you through it. I'll do that with your team, on your real territory, in a free working session. You'll leave with a call list and a clear sense of what's worth your time.</p>
     <div class="hero-cta-row">
       <a class="hero-cta" href="https://calendly.com/markflournoy/workshop" target="_blank" rel="noopener" data-cta="hero">Book the free Pipeline Session</a>
-      <span class="hero-cta-note">Two hours &middot; your real territory &middot; no cost, no slide deck</span>
+      <span class="hero-cta-note">45 minutes on your real territory, at no cost, with no slide deck</span>
     </div>
 
     <!-- Money-flow screenshot. To go live: drop the real image at the path
@@ -591,44 +641,64 @@ a, button, input, select { touch-action: manipulation; }
          renders a labelled placeholder box so it can't ship blank by accident. -->
     <figure class="hero-shot is-placeholder">
       <img class="hero-shot-img" src="/images/flow.png"
-           alt="Money flow diagram — Navy contracting offices on the left flowing to top vendors like Lockheed Martin and Electric Boat on the right, sized by dollar volume."
+           alt="Money flow diagram: Navy contracting offices on the left flowing to top vendors like Lockheed Martin and Electric Boat on the right, sized by dollar volume."
            loading="lazy" onload="this.closest('.hero-shot').classList.remove('is-placeholder')">
-      <figcaption class="hero-shot-cap">A real session output &mdash; where the money flows, from agency to vendor.</figcaption>
+      <figcaption class="hero-shot-cap">A real session output, showing where the money flows from agency to vendor.</figcaption>
     </figure>
   </div>
 
   <!-- INTRO / WHAT'S IN THE DATA -->
   <div class="section-label">What's actually in there</div>
   <p class="pitch">
-    Federal buying leaves a paper trail &mdash; every award, every recompete, every partner relationship is public record. The trouble is it's scattered across a dozen sites and none of them were built for a seller in a hurry. So most teams skim the surface and move on, which is completely fair. There's just a lot more in that data than people realize, and once you know where to look, it points pretty clearly at where your next conversations should be. That's the whole thing I do &mdash; and the easiest way to show you is to do it together, on accounts you actually care about.
+    Federal buying leaves a paper trail. Every award, every recompete, every partner relationship is public record. The trouble is it's scattered across a dozen sites and none of them were built for a seller in a hurry. So most teams skim the surface and move on, which is completely fair. There's just a lot more in that data than people realize, and once you know where to look, it points pretty clearly at where your next conversations should be. That's the whole thing I do, and the easiest way to show you is to do it together, on accounts you actually care about.
   </p>
 
   <!-- THE FREE SESSION -->
-  <div class="section-label">Start here &mdash; free</div>
+  <div class="section-label">Start here, free</div>
   <div class="offer-lead">
     <div class="offer-free-card">
       <span class="tier-flag tier-flag-free">No cost</span>
-      <div class="tier-name">The Federal Pipeline Session</div>
+      <div class="tier-name">Federal Pipeline Session</div>
       <div class="tier-price">
         <span class="tier-price-amount">Free</span>
-        <span class="tier-price-unit">2 hours &middot; your whole team</span>
+        <span class="tier-price-unit">45 minutes for your whole team</span>
       </div>
-      <p class="tier-tagline">A relaxed working session &mdash; not a demo, not a webinar. We sit down with your real territory and dig through it together, and your reps leave with something useful in hand.</p>
+      <p class="tier-tagline">A relaxed working session, not a demo or a webinar. We sit down with your real territory and dig through it together, and your reps leave with something useful in hand.</p>
       <ul class="tier-list">
-        <li><strong>A ranked target account list</strong> for your territory &mdash; sized, scored, and ready to call</li>
-        <li><strong>An expiring-contract hit list</strong> &mdash; recompetes worth a look in the next couple of quarters</li>
-        <li><strong>A partner map</strong> &mdash; the primes and resellers already working inside your target agencies</li>
-        <li><strong>The method, shown openly</strong> &mdash; so your team can do this themselves afterward, not just receive a report</li>
+        <li><strong>A ranked target account list</strong> for your territory, sized, scored, and ready to call</li>
+        <li><strong>An expiring-contract hit list</strong>, the recompetes worth a look in the next couple of quarters</li>
+        <li><strong>A partner map</strong> showing the primes and resellers already working inside your target agencies</li>
+        <li><strong>The method, shown openly</strong>, so your team can do this themselves afterward, not just receive a report</li>
       </ul>
       <a class="tier-cta tier-cta-primary" href="https://calendly.com/markflournoy/workshop" target="_blank" rel="noopener" data-cta="workshop">Book the free session</a>
       <div class="tier-foot">Free because the easiest way to explain what I do is to just show you.</div>
     </div>
     <div class="offer-why">
       <div class="offer-why-h">Why is it free?</div>
-      <p>Honestly, because telling you about this never lands as well as doing it with you. A slide deck wouldn't mean much &mdash; the data on your own territory will.</p>
-      <p>You bring two hours and the accounts you care about. I bring the tour. You walk away with a real list and a feel for how it's done.</p>
-      <p>If it's helpful and you'd like it kept current, there's a monthly option below. If a one-time session is all you need, that's genuinely fine &mdash; the list is yours either way.</p>
+      <p>Honestly, because telling you about this never lands as well as doing it with you. A slide deck wouldn't mean much. The data on your own territory will.</p>
+      <p>You bring 45 minutes and the accounts you care about. I bring the tour. You walk away with a real list and a feel for how it's done.</p>
+      <p>If it's helpful and you'd like it kept current, there's a monthly option below. If a one-time session is all you need, that's genuinely fine. The list is yours either way.</p>
     </div>
+  </div>
+
+  <!-- THE $99 WORKING SESSION (individuals) -->
+  <div class="section-label">Just you? Bring me a problem</div>
+  <div class="tier tier-wide">
+    <span class="tier-flag">One-on-one</span>
+    <div class="tier-name">1:1 Working Session</div>
+    <div class="tier-price">
+      <span class="tier-price-amount">$99</span>
+      <span class="tier-price-unit">1 hour, one-on-one with Mark over Google Meet</span>
+    </div>
+    <p class="tier-tagline">The free session is built for a team. This one's for a single seller. It's a practical hour to work through whatever's actually in front of you. Bring an agency, a vendor, a market, or any sales problem, and we'll turn it into a clear next step.</p>
+    <ul class="tier-list tier-list-2col">
+      <li>Bring anything: an account, a partner, a market, a stuck deal</li>
+      <li>We walk through it together, start to finish</li>
+      <li>You leave with clear actions you can take this week</li>
+      <li>Everything we discuss stays confidential</li>
+    </ul>
+    <a class="tier-cta tier-cta-ghost" href="https://calendly.com/markflournoy/deepdive" target="_blank" rel="noopener" data-cta="working-session">Book the $99 Working Session</a>
+    <div class="tier-foot">Good for one person with one real problem. Easy to expense, easy to book.</div>
   </div>
 
   <!-- THE RETAINER -->
@@ -638,18 +708,18 @@ a, button, input, select { touch-action: manipulation; }
     <div class="tier-name">Monthly Pipeline &amp; Partner Coaching</div>
     <div class="tier-price">
       <span class="tier-price-amount">from $2,500</span>
-      <span class="tier-price-unit">per month &middot; scoped to your team's size</span>
+      <span class="tier-price-unit">per month, scoped to your team's size</span>
     </div>
-    <p class="tier-tagline">The free session is a snapshot. Some teams like having it kept fresh &mdash; the targeting refreshed each month, and a steady hand helping turn the list into a real partner motion. That's what this is.</p>
+    <p class="tier-tagline">The free session is a snapshot. Some teams like having it kept fresh, with the targeting refreshed each month and a steady hand helping turn the list into a real partner motion. That's what this is.</p>
     <ul class="tier-list tier-list-2col">
       <li>Refreshed target and recompete lists every month</li>
       <li>Co-sell plans for the partners worth your reps' time</li>
-      <li>Regular pipeline reviews &mdash; coverage and a forecast you can trust</li>
-      <li>Direct access to me &mdash; the same person who ran your session</li>
-      <li>Month to month &mdash; no contract, cancel whenever it stops being useful</li>
+      <li>Regular pipeline reviews, with coverage and a forecast you can trust</li>
+      <li>Direct access to me, the same person who ran your session</li>
+      <li>Month to month, no contract, cancel whenever it stops being useful</li>
     </ul>
-    <a class="tier-cta tier-cta-ghost" href="https://calendly.com/markflournoy/deepdive" target="_blank" rel="noopener" data-cta="retainer">Book a 20-minute call to talk it through</a>
-    <div class="tier-foot">No need to decide now &mdash; most teams have the free session first, then see how they feel.</div>
+    <a class="tier-cta tier-cta-ghost" href="https://calendly.com/markflournoy/chat-with-mark" target="_blank" rel="noopener" data-cta="retainer">Book a 20-minute call to talk it through</a>
+    <div class="tier-foot">No need to decide now. Most teams have the free session first, then see how they feel.</div>
   </div>
 
   <!-- MONTH TO MONTH -->
@@ -658,8 +728,8 @@ a, button, input, select { touch-action: manipulation; }
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
     </div>
     <div class="guarantee-text">
-      <div class="guarantee-h">Month to month &mdash; cancel anytime.</div>
-      <p>No contract, no minimum, nothing to sign your name to for a year. Stay as long as it's genuinely useful, and step away the moment it isn't &mdash; just give me a heads-up and we'll prorate to your last day. You should only ever be paying for help you're actually glad to have.</p>
+      <div class="guarantee-h">Month to month, cancel anytime.</div>
+      <p>No contract, no minimum, nothing to sign your name to for a year. Stay as long as it's genuinely useful, and step away the moment it isn't. Just give me a heads-up and we'll prorate to your last day. You should only ever be paying for help you're actually glad to have.</p>
     </div>
   </div>
 
@@ -674,19 +744,30 @@ a, button, input, select { touch-action: manipulation; }
     <div class="step">
       <div class="step-num">2</div>
       <div class="step-title">We dig in together</div>
-      <div class="step-text">We go through your real accounts side by side &mdash; building the ranked list, the recompete picks, and the partner map as we go.</div>
+      <div class="step-text">We go through your real accounts side by side, building the ranked list, the recompete picks, and the partner map as we go.</div>
     </div>
     <div class="step">
       <div class="step-num">3</div>
       <div class="step-title">You take it from there</div>
-      <div class="step-text">The list and the method are yours to keep. If you'd like ongoing help, we can talk about it &mdash; and if not, no worries at all.</div>
+      <div class="step-text">The list and the method are yours to keep. If you'd like ongoing help, we can talk about it. And if not, no worries at all.</div>
     </div>
   </div>
 
   <!-- ABOUT MARK -->
-  <div class="section-label">A bit about me</div>
-  <div class="cred">
-    <strong>I'm a federal seller, not a consultant by trade.</strong> I built <a href="/">Fedmo</a> and the Fedmo sales tools because I wanted them for my own deals &mdash; and other federal sellers use them now for exactly this kind of digging. The session isn't a framework off a slide; it's just the way I work through pipeline, shown to your team on your own data. I'd rather be useful first and let you decide what comes after.
+  <div class="section-label">Built by a seller</div>
+  <div class="cred cred-about">
+    <figure class="about-photo is-placeholder">
+      <img class="about-photo-img" src="/images/mark.jpg"
+           alt="Mark Flournoy, founder of Fedmo"
+           loading="lazy" onload="this.closest('.about-photo').classList.remove('is-placeholder')">
+    </figure>
+    <div class="about-text">
+      <div class="about-name">Mark Flournoy</div>
+      <div class="about-role">Founder of Fedmo</div>
+      <p>Hi, I'm Mark. Before building Fedmo I used to spend hours before every pipeline review digging through FPDS ezSearch, USASpending, SAM.gov, and industry day decks just trying to answer a few basic questions: how big is this market, who owns the workshare, and is there actually an opening.</p>
+      <p>I've sold at AWS, F5, and Red Hat, served as a DISA COTR, and spent 20 years in the Marines. <a href="/">Fedmo</a> is the tool I wished I had at every one of those jobs. Pull it up before a customer meeting, during a QBR, or when your boss asks why you're chasing what you're chasing. Everyone in the room can see the same picture in seconds and align on where to focus.</p>
+      <p>The sessions on this page are the same thing, just done together. Bring a territory or a target account, and we'll pull the data on a call so you can see how to read the signals, size the market, and prep for your next meeting in minutes.</p>
+    </div>
   </div>
 
   <!-- FAQ -->
@@ -698,11 +779,11 @@ a, button, input, select { touch-action: manipulation; }
     </div>
     <div class="faq-item">
       <div class="faq-q">&ldquo;My reps already prospect.&rdquo;</div>
-      <div class="faq-a">For sure &mdash; this isn't about working harder. It's a different angle on <em>where</em> to point the same effort, and a couple of hours is usually enough to see if it's useful for your territory.</div>
+      <div class="faq-a">For sure. This isn't about working harder. It's a different angle on <em>where</em> to point the same effort, and 45 minutes is usually enough to see if it's useful for your territory.</div>
     </div>
     <div class="faq-item">
       <div class="faq-q">&ldquo;We've sat through sales training before.&rdquo;</div>
-      <div class="faq-a">Understood &mdash; and this isn't training. It's a working session on <em>your</em> accounts that produces <em>your</em> list. The useful output is the point; the rest is just how we get there.</div>
+      <div class="faq-a">Understood. This isn't training. It's a working session on <em>your</em> accounts that produces <em>your</em> list. The useful output is the point; the rest is just how we get there.</div>
     </div>
     <div class="faq-item">
       <div class="faq-q">&ldquo;Do we have to commit to anything?&rdquo;</div>
@@ -713,9 +794,9 @@ a, button, input, select { touch-action: manipulation; }
   <!-- FINAL CTA -->
   <div class="final">
     <div class="final-h">Come take the tour.</div>
-    <div class="final-sub">Two free hours on your own territory. You'll leave with a useful list &mdash; and whatever you do next is up to you.</div>
+    <div class="final-sub">45 free minutes on your own territory. You'll leave with a useful list, and whatever you do next is up to you.</div>
     <a class="final-cta" href="https://calendly.com/markflournoy/workshop" target="_blank" rel="noopener" data-cta="final">Book the free Pipeline Session</a>
-    <div class="final-note">Rather just chat about the monthly option? <a href="https://calendly.com/markflournoy/deepdive" target="_blank" rel="noopener" data-cta="final-call">Grab a 20-minute call.</a></div>
+    <div class="final-note">Rather just chat about the monthly option? <a href="https://calendly.com/markflournoy/chat-with-mark" target="_blank" rel="noopener" data-cta="final-call">Grab a 20-minute call.</a></div>
   </div>
 
 </div><!-- /page-wrap -->
@@ -726,7 +807,7 @@ a, button, input, select { touch-action: manipulation; }
     <a href="/tools/">Tools</a>
   </div>
   <a href="/" class="footer-back">&larr; Back to Fedmo</a>
-  <div class="footer-copy">&copy; 2026 Fedmo.com &mdash; Federal Market Intelligence for BD &amp; Sales Teams</div>
+  <div class="footer-copy">&copy; 2026 Fedmo.com, Federal Market Intelligence for BD &amp; Sales Teams</div>
 </footer>
 
 <script>
