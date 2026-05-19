@@ -223,8 +223,16 @@ a, button, input, select { touch-action: manipulation; }
 }
 .hero-title {
   font-size: var(--text-hero); font-weight: 800; color: var(--text-primary);
-  letter-spacing: -0.03em; line-height: 1.05; margin-bottom: 14px;
-  max-width: 18ch;
+  letter-spacing: -0.03em; line-height: 1.1; margin-bottom: 14px;
+  max-width: 30ch;   /* room for the headline to sit on two lines */
+}
+/* The <br> forces a clean two-line break on desktop. On narrow phones the
+   first sentence alone is too wide for one line, so we drop the break and
+   let the text flow naturally. */
+.hero-title-br { display: none; }
+@media (min-width: 600px) {
+  .hero-title-br { display: inline; }
+  .hero-title { max-width: none; }
 }
 .hero-sub {
   font-size: var(--text-lg); color: var(--text-secondary); font-weight: 400;
@@ -416,9 +424,8 @@ a, button, input, select { touch-action: manipulation; }
 .hero-shot-img {
   display: block;
   width: 100%;
-  aspect-ratio: 685 / 590;   /* matches the captured diagram */
-  object-fit: cover;
-  object-position: top center;
+  height: auto;          /* image keeps its own true aspect ratio */
+  object-fit: contain;   /* never crop the screenshot */
 }
 .hero-shot-cap {
   font-size: var(--text-sm);
@@ -439,7 +446,7 @@ a, button, input, select { touch-action: manipulation; }
   visibility: hidden;
 }
 .hero-shot.is-placeholder::before {
-  content: "Money-flow diagram \00A0\2014\00A0 add screenshot at images/flow.png";
+  content: "Money-flow diagram \00A0\2014\00A0 add screenshot at /images/flow.png";
   display: flex; align-items: center; justify-content: center;
   aspect-ratio: 685 / 590;
   text-align: center; padding: 24px;
@@ -565,7 +572,7 @@ a, button, input, select { touch-action: manipulation; }
   <!-- HERO -->
   <div class="hero">
     <div class="hero-eyebrow">Work with Mark</div>
-    <h1 class="hero-title">There's a map for federal pipeline. Let me show you.</h1>
+    <h1 class="hero-title">There's a map for federal pipeline.<br class="hero-title-br">Let me show you.</h1>
     <p class="hero-sub">Who's buying, which contracts are expiring, which partners are already inside the agency &mdash; it's all in public data, and it's genuinely useful once someone walks you through it. I'll do that with your team, on your real territory, in a free working session. You'll leave with a call list and a clear sense of what's worth your time.</p>
     <div class="hero-cta-row">
       <a class="hero-cta" href="https://calendly.com/markflournoy/workshop" target="_blank" rel="noopener" data-cta="hero">Book the free Pipeline Session</a>
