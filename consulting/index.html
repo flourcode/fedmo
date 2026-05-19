@@ -324,14 +324,20 @@ a, button, input, select { touch-action: manipulation; }
   font-size: var(--text-xl); font-weight: 800; color: var(--text-primary);
   letter-spacing: -0.02em; margin-bottom: 4px;
 }
+/* Price block: amount stacked over its unit/descriptor. Stacking (rather than
+   a baseline flex row) keeps the small unit text from wrapping awkwardly
+   alongside the big number on narrow screens. */
 .tier-price {
-  display: flex; align-items: baseline; gap: 7px; margin-bottom: 4px;
+  display: flex; flex-direction: column; gap: 2px; margin-bottom: 4px;
 }
 .tier-price-amount {
   font-size: var(--text-2xl); font-weight: 800; color: var(--text-primary);
-  letter-spacing: -0.03em;
+  letter-spacing: -0.03em; line-height: 1.1;
 }
-.tier-price-unit { font-size: var(--text-sm); color: var(--text-tertiary); font-weight: 600; }
+.tier-price-unit {
+  font-size: var(--text-sm); color: var(--text-tertiary); font-weight: 600;
+  line-height: 1.4;
+}
 .tier-price-note { font-size: var(--text-sm); color: var(--text-tertiary); font-weight: 600; }
 .tier-tagline {
   font-size: var(--text-base); color: var(--text-secondary);
@@ -464,7 +470,7 @@ a, button, input, select { touch-action: manipulation; }
 
 /* ── GUARANTEE ──────────────────────────────── */
 .guarantee {
-  margin-top: 22px;
+  margin-top: 32px;
   display: flex; gap: 18px; align-items: flex-start;
   background: var(--go-bg);
   border: 1px solid rgba(52,199,89,0.28);
@@ -572,7 +578,7 @@ a, button, input, select { touch-action: manipulation; }
   <!-- HERO -->
   <div class="hero">
     <div class="hero-eyebrow">Work with Mark</div>
-    <h1 class="hero-title">There's a map for federal pipeline.<br class="hero-title-br">Let me show you.</h1>
+    <h1 class="hero-title">There's a map for federal pipeline. <br class="hero-title-br">Let me show you.</h1>
     <p class="hero-sub">Who's buying, which contracts are expiring, which partners are already inside the agency &mdash; it's all in public data, and it's genuinely useful once someone walks you through it. I'll do that with your team, on your real territory, in a free working session. You'll leave with a call list and a clear sense of what's worth your time.</p>
     <div class="hero-cta-row">
       <a class="hero-cta" href="https://calendly.com/markflournoy/workshop" target="_blank" rel="noopener" data-cta="hero">Book the free Pipeline Session</a>
@@ -605,7 +611,7 @@ a, button, input, select { touch-action: manipulation; }
       <div class="tier-name">The Federal Pipeline Session</div>
       <div class="tier-price">
         <span class="tier-price-amount">Free</span>
-        <span class="tier-price-unit">/ 2 hours, your whole team</span>
+        <span class="tier-price-unit">2 hours &middot; your whole team</span>
       </div>
       <p class="tier-tagline">A relaxed working session &mdash; not a demo, not a webinar. We sit down with your real territory and dig through it together, and your reps leave with something useful in hand.</p>
       <ul class="tier-list">
@@ -632,7 +638,7 @@ a, button, input, select { touch-action: manipulation; }
     <div class="tier-name">Monthly Pipeline &amp; Partner Coaching</div>
     <div class="tier-price">
       <span class="tier-price-amount">from $2,500</span>
-      <span class="tier-price-unit">/ month &mdash; scoped to your team's size</span>
+      <span class="tier-price-unit">per month &middot; scoped to your team's size</span>
     </div>
     <p class="tier-tagline">The free session is a snapshot. Some teams like having it kept fresh &mdash; the targeting refreshed each month, and a steady hand helping turn the list into a real partner motion. That's what this is.</p>
     <ul class="tier-list tier-list-2col">
