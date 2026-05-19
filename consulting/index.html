@@ -212,6 +212,52 @@ a, button, input, select { touch-action: manipulation; }
 }
 .hdr-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
 
+/* ── Unified site navigation ──────────────────
+   Same markup on tools.html and consulting.html. Plain text links, except
+   "Work with Mark" which gets a tinted pill so the primary action stands out.
+   The current page is rendered as a non-clickable, muted <span>. */
+.site-nav {
+  display: flex; align-items: center; gap: 4px;
+  margin-right: 8px;
+}
+.nav-link {
+  display: inline-flex; align-items: center; gap: 5px;
+  height: 36px; padding: 0 12px;
+  font-family: var(--font); font-size: var(--text-sm); font-weight: 600;
+  color: var(--text-secondary); text-decoration: none;
+  border-radius: var(--radius-sm); white-space: nowrap;
+  transition: var(--transition);
+}
+.nav-link:hover { background: var(--bg-hover); color: var(--text-primary); }
+/* Current page: muted, not a link, no hover. */
+.nav-link.is-current {
+  color: var(--text-quaternary); cursor: default;
+}
+.nav-link.is-current:hover { background: none; color: var(--text-quaternary); }
+/* "Work with Mark" primary pill — tinted, with a small arrow that nudges on
+   hover. When it is the current page it loses the pill and behaves like the
+   other muted current-page items. */
+.nav-link-cta {
+  background: var(--accent-dim); color: var(--accent);
+}
+.nav-link-cta:hover { background: var(--chip-hover); color: var(--accent); }
+.nav-link-cta .nav-arrow {
+  transition: transform 0.15s ease;
+}
+.nav-link-cta:hover .nav-arrow { transform: translateX(2px); }
+.nav-link-cta.is-current {
+  background: none; color: var(--text-quaternary);
+}
+.nav-link-cta.is-current .nav-arrow { display: none; }
+
+/* Narrow screens: the logo + 3 links + toggle get tight. Trim padding and
+   the gap so the row still fits without wrapping on a phone. */
+@media (max-width: 560px) {
+  .site-nav { gap: 0; margin-right: 4px; }
+  .nav-link { padding: 0 8px; font-size: var(--text-xs); }
+  .logo-link { padding: 0 10px; }
+}
+
 /* ── PAGE LAYOUT ────────────────────────────── */
 .page-wrap { max-width: min(96vw, 1100px); margin: 0 auto; padding: 40px 12px calc(4rem + var(--safe-bottom)); }
 
@@ -600,6 +646,10 @@ a, button, input, select { touch-action: manipulation; }
   font-size: var(--text-sm); font-weight: 500;
   color: var(--accent); text-decoration: none;
 }
+.footer-links .is-current {
+  font-size: var(--text-sm); font-weight: 500;
+  color: var(--text-quaternary); cursor: default;
+}
 .footer-links a:hover, .footer-back:hover { opacity: 0.72; }
 .footer-copy { font-size: var(--text-xs); color: var(--text-quaternary); }
 
@@ -616,7 +666,11 @@ a, button, input, select { touch-action: manipulation; }
   <div class="header-top">
     <a href="/" class="logo-link">Fedmo.</a>
     <div style="flex:1;"></div>
-    <a href="/tools/" class="hdr-btn">Tools</a>
+    <nav class="site-nav">
+      <a href="/" class="nav-link">Ask Mo</a>
+      <a href="/tools/" class="nav-link">Tools</a>
+      <span class="nav-link nav-link-cta is-current" aria-current="page">Work with Mark</span>
+    </nav>
     <button class="hdr-btn" id="darkToggleBtn" onclick="toggleDark()" title="Toggle dark mode" aria-label="Toggle dark mode">
       <svg id="darkToggleIcon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
     </button>
@@ -802,11 +856,12 @@ a, button, input, select { touch-action: manipulation; }
 </div><!-- /page-wrap -->
 
 <footer class="site-footer">
-  <div class="footer-links">
+  <nav class="footer-links">
     <a href="/">Ask Mo</a>
     <a href="/tools/">Tools</a>
-  </div>
-  <a href="/" class="footer-back">&larr; Back to Fedmo</a>
+    <span class="is-current" aria-current="page">Work with Mark</span>
+  </nav>
+  <a href="/" class="footer-back">Back to Fedmo</a>
   <div class="footer-copy">&copy; 2026 Fedmo.com, Federal Market Intelligence for BD &amp; Sales Teams</div>
 </footer>
 
