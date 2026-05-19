@@ -143,8 +143,13 @@ a:hover { text-decoration: underline; }
   text-decoration: none;
   white-space: nowrap;
   transition: background 120ms;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
 }
 .mo-header-link:hover, .mo-header-link:active { background: var(--primary-40); }
+.mo-header-link-arrow { transition: transform 0.15s ease; }
+.mo-header-link:hover .mo-header-link-arrow { transform: translateX(2px); }
 
 /* Modal: production has an About modal explaining what Mo does, opened from
    the hamburger icon. */
@@ -1308,7 +1313,7 @@ a:hover { text-decoration: underline; }
 
 <header class="mo-header">
   <div class="mo-header-inner">
-    <a class="mo-header-link" href="/consulting/" data-cta="header-consulting">Work with Mark</a>
+    <a class="mo-header-link" href="/consulting/" data-cta="header-consulting">Work with Mark<svg class="mo-header-link-arrow" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a>
     <div class="mo-header-spacer"></div>
     <button class="mo-header-action" id="btnReset" aria-label="New conversation" title="New conversation">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
@@ -1402,10 +1407,10 @@ a:hover { text-decoration: underline; }
 
     <div class="mo-modal-actions">
       <a class="mo-modal-btn is-secondary" href="/tools/" id="btnAboutTools">Free Sales Tools</a>
-      <a class="mo-modal-btn is-secondary" href="/consulting/" id="btnAboutConsulting">Federal Prospecting with AI — Workshop</a>
+      <a class="mo-modal-btn is-secondary" href="/consulting/" id="btnAboutConsulting">Free Pipeline Session — Work with Mark</a>
       <a class="mo-modal-btn" href="https://calendly.com/markflournoy/chat-with-mark" target="_blank" rel="noopener" id="btnAboutCalendly">Chat with Mark</a>
     </div>
-    <div class="mo-modal-foot">Free intro chat above. For the paid AI prospecting workshop and team coaching, see Work with Mark.</div>
+    <div class="mo-modal-foot">Free intro chat above. For a free working session on your team's federal pipeline, see Work with Mark.</div>
   </div>
 </div>
 
