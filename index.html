@@ -451,6 +451,21 @@ a:hover { text-decoration: underline; }
     padding-top: 80px;
   }
 }
+/* On narrow phones, stack the avatar above the greeting so the text uses
+   the full screen width instead of squeezing into a tall, skinny column
+   beside the face. The avatar still introduces Mo, just doesn't compete
+   for horizontal space. */
+@media (max-width: 560px) {
+  .mo-greeting {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+  }
+  .mo-greeting-face {
+    width: 56px;
+    height: 56px;
+  }
+}
 .mo-greeting-face {
   flex-shrink: 0;
   width: 64px;
@@ -1420,7 +1435,7 @@ a:hover { text-decoration: underline; }
     <svg class="mo-greeting-face" viewBox="0 0 40 40"><use href="#icon-face-open"/></svg>
     <div class="mo-greeting-text">
       <div class="mo-greeting-hello">Hi, I'm Mo.</div>
-      <div class="mo-greeting-tagline">Ask me anything about federal contracts, SEC filings, or private capital. I pull live data from USASpending and SEC EDGAR so you can follow the money. Not sure where to start? Just tell me what you sell.</div>
+      <div class="mo-greeting-tagline">Ask me anything about federal contracts or private capital &mdash; like you'd ask a colleague, not a search box. I pull live data from USASpending and SEC EDGAR so you can follow the money. Not sure where to start? Just say what you sell.</div>
       <div class="mo-greeting-examples" id="greeting-examples"></div>
 
     </div>
