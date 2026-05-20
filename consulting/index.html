@@ -234,7 +234,7 @@ a, button, input, select { touch-action: manipulation; }
   color: var(--text-quaternary); cursor: default;
 }
 .nav-link.is-current:hover { background: none; color: var(--text-quaternary); }
-/* "Work with Mark" primary pill — tinted, with a small arrow that nudges on
+/* "Work with Mark" primary pill, tinted, with a small arrow that nudges on
    hover. When it is the current page it loses the pill and behaves like the
    other muted current-page items. */
 .nav-link-cta {
@@ -287,11 +287,32 @@ a, button, input, select { touch-action: manipulation; }
 
 /* ── PROBLEM / POSITIONING STRIP ────────────── */
 .pitch {
-  margin: 30px 0 36px;
+  margin: 30px 0 18px;
   font-size: var(--text-base); color: var(--text-secondary);
   line-height: 1.6; max-width: 62ch;
 }
+.pitch + .pitch-list { margin-top: 0; }
+.pitch-list + .pitch { margin-top: 18px; }
 .pitch strong { color: var(--text-primary); font-weight: 700; }
+.pitch-list {
+  list-style: none;
+  margin: 4px 0 18px;
+  padding: 0;
+  max-width: 62ch;
+  display: grid; gap: 6px;
+}
+.pitch-list li {
+  font-size: var(--text-base); color: var(--text-primary);
+  line-height: 1.5; padding-left: 22px; position: relative;
+  font-weight: 500;
+}
+.pitch-list li::before {
+  content: "";
+  position: absolute; left: 0; top: 9px;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
 
 /* ── TIER CARDS ─────────────────────────────── */
 .tiers {
@@ -419,6 +440,24 @@ a, button, input, select { touch-action: manipulation; }
 .tier-foot {
   font-size: var(--text-xs); color: var(--text-quaternary);
   text-align: center; margin-top: 10px; line-height: 1.4;
+}
+/* Subtle inset callout inside a tier card (e.g. "Good fit for"). Reads as
+   a sidebar note rather than competing with the main bullet list. */
+.tier-aside {
+  margin: 6px 0 18px;
+  padding: 14px 16px;
+  background: var(--accent-dim);
+  border-radius: var(--radius-xs);
+  border-left: 3px solid var(--accent-mid);
+}
+.tier-aside-h {
+  font-size: var(--text-xs); font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.07em;
+  color: var(--accent); margin-bottom: 5px;
+}
+.tier-aside p {
+  font-size: var(--text-sm); color: var(--text-secondary);
+  line-height: 1.5;
 }
 
 /* ── HOW IT WORKS ───────────────────────────── */
@@ -611,6 +650,15 @@ a, button, input, select { touch-action: manipulation; }
 }
 .about-text p { margin-bottom: 10px; }
 .about-text p:last-child { margin-bottom: 0; }
+/* The "this isn't a firm" closing paragraph. Slight visual lift via a left
+   border so it reads as a deliberate aside, not just another paragraph. */
+.about-text .about-honesty {
+  margin-top: 14px;
+  padding-left: 14px;
+  border-left: 3px solid var(--accent-mid);
+  color: var(--text-primary);
+  font-style: italic;
+}
 
 /* ── FINAL CTA ──────────────────────────────── */
 .final {
@@ -683,7 +731,7 @@ a, button, input, select { touch-action: manipulation; }
   <div class="hero">
     <div class="hero-eyebrow">Work with Mark</div>
     <h1 class="hero-title">There's a map for federal pipeline. <br class="hero-title-br">Let me show you.</h1>
-    <p class="hero-sub">Who's buying, which contracts are expiring, which partners are already inside the agency. It's all in public data, and it's genuinely useful once someone walks you through it. I'll do that with your team, on your real territory, in a free working session. You'll leave with a call list and a clear sense of what's worth your time.</p>
+    <p class="hero-sub">Federal growth strategy grounded in real spending data. I help sales and BD teams see where agencies are actually spending, which contracts are vulnerable, which partners already own the workshare, and where there's a realistic opening before competitors notice. Your territory, your accounts, a practical working session. No generic sales training, no recycled GovWin screenshots, no slide deck theater.</p>
     <div class="hero-cta-row">
       <a class="hero-cta" href="https://calendly.com/markflournoy/workshop" target="_blank" rel="noopener" data-cta="hero">Book the free Pipeline Session</a>
       <span class="hero-cta-note">45 minutes on your real territory, at no cost, with no slide deck</span>
@@ -701,10 +749,21 @@ a, button, input, select { touch-action: manipulation; }
     </figure>
   </div>
 
-  <!-- INTRO / WHAT'S IN THE DATA -->
-  <div class="section-label">What's actually in there</div>
+  <!-- INTRO / SIX QUESTIONS -->
+  <div class="section-label">The questions every federal seller wrestles with</div>
   <p class="pitch">
-    Federal buying leaves a paper trail. Every award, every recompete, every partner relationship is public record. The trouble is it's scattered across a dozen sites and none of them were built for a seller in a hurry. So most teams skim the surface and move on, which is completely fair. There's just a lot more in that data than people realize, and once you know where to look, it points pretty clearly at where your next conversations should be. That's the whole thing I do, and the easiest way to show you is to do it together, on accounts you actually care about.
+    Before every QBR, capture review, or partner meeting, the same six questions come up:
+  </p>
+  <ul class="pitch-list">
+    <li>How big is this market, really?</li>
+    <li>Who already owns the work?</li>
+    <li>Which contracts are expiring, and when?</li>
+    <li>Is there actually an opening here?</li>
+    <li>Which partners matter?</li>
+    <li>What should my team do next?</li>
+  </ul>
+  <p class="pitch">
+    The answers exist in public data. The trouble is they're scattered across FPDS, USASpending, SAM.gov, agency forecasts, and subcontracting records, and most teams don't have the hours to stitch them together. That's the part I do, and the easiest way to show you is to do it together, on accounts you actually care about.
   </p>
 
   <!-- THE FREE SESSION -->
@@ -717,13 +776,17 @@ a, button, input, select { touch-action: manipulation; }
         <span class="tier-price-amount">Free</span>
         <span class="tier-price-unit">45 minutes for your whole team</span>
       </div>
-      <p class="tier-tagline">A relaxed working session, not a demo or a webinar. We sit down with your real territory and dig through it together, and your reps leave with something useful in hand.</p>
+      <p class="tier-tagline">Not a webinar. Not a product demo. A working session on your real territory. We sit down with your actual accounts and dig through expiring contracts, incumbent vendors, partner ecosystems, and where the realistic openings sit.</p>
       <ul class="tier-list">
         <li><strong>A ranked target account list</strong> for your territory, sized, scored, and ready to call</li>
         <li><strong>An expiring-contract hit list</strong>, the recompetes worth a look in the next couple of quarters</li>
         <li><strong>A partner map</strong> showing the primes and resellers already working inside your target agencies</li>
         <li><strong>The method, shown openly</strong>, so your team can do this themselves afterward, not just receive a report</li>
       </ul>
+      <div class="tier-aside">
+        <div class="tier-aside-h">Good fit for</div>
+        <p>Federal sales and BD teams, commercial companies entering federal, SaaS teams building GTM plans, partner managers, capture managers, and AI startups trying to understand government.</p>
+      </div>
       <a class="tier-cta tier-cta-primary" href="https://calendly.com/markflournoy/workshop" target="_blank" rel="noopener" data-cta="workshop">Book the free session</a>
       <div class="tier-foot">Free because the easiest way to explain what I do is to just show you.</div>
     </div>
@@ -735,56 +798,31 @@ a, button, input, select { touch-action: manipulation; }
     </div>
   </div>
 
-  <!-- THE $99 WORKING SESSION (individuals) -->
-  <div class="section-label">Just you? Bring me a problem</div>
-  <div class="tier tier-wide">
-    <span class="tier-flag">One-on-one</span>
-    <div class="tier-name">1:1 Working Session</div>
-    <div class="tier-price">
-      <span class="tier-price-amount">$99</span>
-      <span class="tier-price-unit">1 hour, one-on-one with Mark over Google Meet</span>
-    </div>
-    <p class="tier-tagline">The free session is built for a team. This one's for a single seller. It's a practical hour to work through whatever's actually in front of you. Bring an agency, a vendor, a market, or any sales problem, and we'll turn it into a clear next step.</p>
-    <ul class="tier-list tier-list-2col">
-      <li>Bring anything: an account, a partner, a market, a stuck deal</li>
-      <li>We walk through it together, start to finish</li>
-      <li>You leave with clear actions you can take this week</li>
-      <li>Everything we discuss stays confidential</li>
-    </ul>
-    <a class="tier-cta tier-cta-ghost" href="https://calendly.com/markflournoy/deepdive" target="_blank" rel="noopener" data-cta="working-session">Book the $99 Working Session</a>
-    <div class="tier-foot">Good for one person with one real problem. Easy to expense, easy to book.</div>
-  </div>
+  <!-- WHAT MAKES THIS DIFFERENT -->
+  <div class="section-label">Why this is different</div>
+  <p class="pitch">
+    Most federal sales tools stop at data. A contract award by itself isn't useful. What matters is who keeps winning, where spending is consolidating, which contracting offices control the money, which primes are expanding, where follow-on work is likely, and where there's finally daylight for a challenger. That interpretation layer is the part most teams miss, and the part I work through with you on every session.
+  </p>
 
   <!-- THE RETAINER -->
-  <div class="section-label">If you'd like it kept current</div>
+  <div class="section-label">If we want to keep working together</div>
   <div class="tier tier-wide">
     <span class="tier-flag">Ongoing engagement</span>
     <div class="tier-name">Monthly Pipeline &amp; Partner Coaching</div>
     <div class="tier-price">
-      <span class="tier-price-amount">from $2,500</span>
+      <span class="tier-price-amount">from $3,500</span>
       <span class="tier-price-unit">per month, scoped to your team's size</span>
     </div>
-    <p class="tier-tagline">The free session is a snapshot. Some teams like having it kept fresh, with the targeting refreshed each month and a steady hand helping turn the list into a real partner motion. That's what this is.</p>
+    <p class="tier-tagline">I take on two or three teams at a time. The targeting stays current, the partner motion gets run, and your forecast gets steadier. No bloated consulting deliverables and no firm behind me, just me, working alongside your team.</p>
     <ul class="tier-list tier-list-2col">
       <li>Refreshed target and recompete lists every month</li>
       <li>Co-sell plans for the partners worth your reps' time</li>
       <li>Regular pipeline reviews, with coverage and a forecast you can trust</li>
       <li>Direct access to me, the same person who ran your session</li>
-      <li>Month to month, no contract, cancel whenever it stops being useful</li>
+      <li>Month to month. We work together while it's useful, and stop when it isn't.</li>
     </ul>
-    <a class="tier-cta tier-cta-ghost" href="https://calendly.com/markflournoy/chat-with-mark" target="_blank" rel="noopener" data-cta="retainer">Book a 20-minute call to talk it through</a>
-    <div class="tier-foot">No need to decide now. Most teams have the free session first, then see how they feel.</div>
-  </div>
-
-  <!-- MONTH TO MONTH -->
-  <div class="guarantee">
-    <div class="guarantee-badge">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
-    </div>
-    <div class="guarantee-text">
-      <div class="guarantee-h">Month to month, cancel anytime.</div>
-      <p>No contract, no minimum, nothing to sign your name to for a year. Stay as long as it's genuinely useful, and step away the moment it isn't. Just give me a heads-up and we'll prorate to your last day. You should only ever be paying for help you're actually glad to have.</p>
-    </div>
+    <a class="tier-cta tier-cta-ghost" href="https://calendly.com/markflournoy/chat-with-mark" target="_blank" rel="noopener" data-cta="retainer">See if we're a fit</a>
+    <div class="tier-foot">If the roster is full, I'll say so. Reach out anyway and I'll let you know when a slot opens.</div>
   </div>
 
   <!-- HOW IT WORKS -->
@@ -808,7 +846,7 @@ a, button, input, select { touch-action: manipulation; }
   </div>
 
   <!-- ABOUT MARK -->
-  <div class="section-label">Built by a seller</div>
+  <div class="section-label">Built by someone who actually carried a federal quota</div>
   <div class="cred cred-about">
     <figure class="about-photo is-placeholder">
       <img class="about-photo-img" src="/images/mark.jpg"
@@ -817,10 +855,11 @@ a, button, input, select { touch-action: manipulation; }
     </figure>
     <div class="about-text">
       <div class="about-name">Mark Flournoy</div>
-      <div class="about-role">Founder of Fedmo</div>
+      <div class="about-role">Founder of Fedmo, based in Palm Springs</div>
       <p>Hi, I'm Mark. Before building Fedmo I used to spend hours before every pipeline review digging through FPDS ezSearch, USASpending, SAM.gov, and industry day decks just trying to answer a few basic questions: how big is this market, who owns the workshare, and is there actually an opening.</p>
       <p>I've sold at AWS, F5, and Red Hat, served as a DISA COTR, and spent 20 years in the Marines. <a href="/">Fedmo</a> is the tool I wished I had at every one of those jobs. Pull it up before a customer meeting, during a QBR, or when your boss asks why you're chasing what you're chasing. Everyone in the room can see the same picture in seconds and align on where to focus.</p>
-      <p>The sessions on this page are the same thing, just done together. Bring a territory or a target account, and we'll pull the data on a call so you can see how to read the signals, size the market, and prep for your next meeting in minutes.</p>
+      <p>The sessions on this page are an extension of that. Bring a territory or a target account, and we'll pull the data on a call so you can see how to read the signals, size the market, and prep for your next meeting in minutes.</p>
+      <p class="about-honesty">This isn't a firm. It's the work I want to keep doing, with a small number of teams, on my own time. I work West Coast hours from Palm Springs and take a few engagements at a time. If we're a fit, we're a fit. If not, the free session still stands.</p>
     </div>
   </div>
 
