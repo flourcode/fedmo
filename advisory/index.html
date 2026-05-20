@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#FDFCFF">
+<meta name="color-scheme" content="light dark">
+<meta name="format-detection" content="telephone=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Fedmo Advisory">
+<meta name="mobile-web-app-capable" content="yes">
+
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='96 96 448 448'%3E%3Cstyle%3Epath%7Bfill:%232C2B28%7D .arrow%7Bfill:%23FFFFFF%7D @media (prefers-color-scheme:dark)%7B.arrow%7Bfill:%23DCD8D0%7D%7D%3C/style%3E%3Cpath d='M480 96C515.3 96 544 124.7 544 160L544 480C544 515.3 515.3 544 480 544L160 544C124.7 544 96 515.3 96 480L96 160C96 124.7 124.7 96 160 96L480 96z'/%3E%3Cpath class='arrow' d='M368 360C368 373.3 378.7 384 392 384C405.3 384 416 373.3 416 360L416 248C416 234.7 405.3 224 392 224L280 224C266.7 224 256 234.7 256 248C256 261.3 266.7 272 280 272L334.1 272L231.1 375C221.7 384.4 221.7 399.6 231.1 408.9C240.5 418.2 255.7 418.3 265 408.9L368 305.9L368 360z'/%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.json">
+
+<title>Advisory | Mark Flournoy | Fedmo</title>
+<meta name="title" content="Advisory | Mark Flournoy | Fedmo">
+<meta name="description" content="Fractional and board advisory work with founders and investors on federal go-to-market, partner strategy, and federal AI. Mark Flournoy, founder of Fedmo. Former AWS, F5, Red Hat.">
+<meta name="robots" content="noindex,follow">
+<link rel="canonical" href="https://fedmo.com/advisory/">
+
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://fedmo.com/advisory/">
+<meta property="og:title" content="Advisory | Mark Flournoy">
+<meta property="og:description" content="Fractional and board advisory work with founders and investors on federal go-to-market, partner strategy, and federal AI.">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,200..800;1,200..800&display=swap">
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,200..800;1,200..800&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<noscript><link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,200..800;1,200..800&display=swap" rel="stylesheet"></noscript>
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-R0CRXSQJL5"></script>
+<script>
+try {
+  var _fd = localStorage.getItem('fedmo_dark');
+  if (_fd==='1' || (_fd===null && window.matchMedia('(prefers-color-scheme:dark)').matches)) {
+    document.documentElement.classList.add('dark');
+  }
+} catch(e) {}
+window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-R0CRXSQJL5');
+</script>
+
+<style>
+/* ── Tokens (mirrors the rest of the site) ── */
+:root {
+  --bg:        #FDFCFF;
+  --bg-app:    #FFFFFF;
+  --bg-hover:  rgba(70,68,110,0.06);
+  --bg-active: rgba(70,68,110,0.11);
+
+  --text-primary:    #393640;
+  --text-secondary:  #535059;
+  --text-tertiary:   #7572B7;
+  --text-quaternary: #ACAAD4;
+
+  --border:       #DEDCD4;
+  --border-inner: #E3E3F1;
+
+  --btn-bg:    #46446E;
+  --btn-text:  #FFFFFF;
+  --btn-hover: #5E5B92;
+
+  --chip-bg:   #E3E3F1;
+  --chip-hover:#ACAAD4;
+
+  --accent:     #46446E;
+  --accent-mid: #5E5B92;
+  --accent-dim: #E3E3F1;
+
+  --radius:    12px;
+  --radius-sm: 12px;
+  --radius-xs: 8px;
+  --shadow:    0 1px 3px rgba(44,41,51,0.06);
+  --shadow-sm: 0 1px 2px rgba(44,41,51,0.05);
+  --shadow-lift: 0 4px 18px rgba(44,41,51,0.10);
+  --font: 'Atkinson Hyperlegible Next', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --transition: all 0.16s cubic-bezier(0.4,0,0.2,1);
+  --safe-top:    env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+
+  --text-xs:   0.72rem;
+  --text-sm:   0.85rem;
+  --text-base: 0.9375rem;
+  --text-lg:   1.1rem;
+  --text-xl:   1.35rem;
+  --text-2xl:  1.65rem;
+  --text-hero: clamp(1.85rem, 4vw, 2.4rem);
+}
+
+@media (prefers-color-scheme: dark) { :root:not(.light) {
+  --bg:        #0F0E13;
+  --bg-app:    #1A1820;
+  --bg-hover:  rgba(180,175,220,0.07);
+  --bg-active: rgba(180,175,220,0.13);
+  --text-primary:    #E8E6F0;
+  --text-secondary:  #B8B5C8;
+  --text-tertiary:   #9B98C8;
+  --text-quaternary: #5A5870;
+  --border:       #2E2B3A;
+  --border-inner: #252233;
+  --btn-bg:    #7572B7;
+  --btn-text:  #FFFFFF;
+  --btn-hover: #8885C8;
+  --chip-bg:   #252233;
+  --chip-hover:#302D42;
+  --accent:     #9B98C8;
+  --accent-mid: #7572B7;
+  --accent-dim: #252233;
+  --shadow:    0 1px 3px rgba(0,0,0,0.3);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.25);
+  --shadow-lift: 0 4px 18px rgba(0,0,0,0.4);
+}}
+:root.dark {
+  --bg:        #0F0E13;
+  --bg-app:    #1A1820;
+  --bg-hover:  rgba(180,175,220,0.07);
+  --bg-active: rgba(180,175,220,0.13);
+  --text-primary:    #E8E6F0;
+  --text-secondary:  #B8B5C8;
+  --text-tertiary:   #9B98C8;
+  --text-quaternary: #5A5870;
+  --border:       #2E2B3A;
+  --border-inner: #252233;
+  --btn-bg:    #7572B7;
+  --btn-text:  #FFFFFF;
+  --btn-hover: #8885C8;
+  --chip-bg:   #252233;
+  --chip-hover:#302D42;
+  --accent:     #9B98C8;
+  --accent-mid: #7572B7;
+  --accent-dim: #252233;
+  --shadow:    0 1px 3px rgba(0,0,0,0.3);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.25);
+  --shadow-lift: 0 4px 18px rgba(0,0,0,0.4);
+}
+.dark .site-header { background: rgba(15,14,19,0.96) !important; }
+
+/* ── Reset ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; font-family: var(--font); -webkit-tap-highlight-color: transparent; }
+html { scroll-behavior: smooth; scroll-padding-top: 90px; -webkit-text-size-adjust: 100%; background: var(--bg); }
+html, body { width: 100%; min-height: 100dvh; overscroll-behavior: none; }
+body { color: var(--text-primary); letter-spacing: -0.01em; background: var(--bg); -webkit-font-smoothing: antialiased; }
+::selection { background: rgba(91,75,168,0.15); }
+a, button { touch-action: manipulation; }
+
+/* ── Header (matches tools + consulting) ── */
+.site-header {
+  position: sticky; top: 0; z-index: 200;
+  background: rgba(253,252,255,0.96);
+  backdrop-filter: saturate(160%) blur(16px);
+  -webkit-backdrop-filter: saturate(160%) blur(16px);
+  padding: max(10px, var(--safe-top)) 12px 0;
+}
+.header-top {
+  display: flex; align-items: center; justify-content: space-between;
+  padding-bottom: 10px; gap: 10px;
+  max-width: min(96vw, 1100px); margin: 0 auto;
+}
+.logo-link {
+  font-size: 0.95rem; font-weight: 800; letter-spacing: -0.01em;
+  color: #FFFFFF; text-decoration: none;
+  background: var(--btn-bg); border: 1px solid transparent;
+  border-radius: var(--radius-sm); padding: 0 14px; height: 36px;
+  display: inline-flex; align-items: center;
+  transition: var(--transition);
+}
+.logo-link:hover { background: var(--btn-hover); }
+.hdr-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  height: 36px; padding: 0 12px; gap: 6px;
+  background: var(--bg-app); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); font-size: var(--text-sm);
+  font-weight: 600; color: var(--text-secondary); cursor: pointer;
+  font-family: var(--font); text-decoration: none; transition: var(--transition);
+  white-space: nowrap;
+}
+.hdr-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+/* Nav (matches other pages exactly so the chrome is uniform) */
+.site-nav { display: flex; align-items: center; gap: 4px; margin-right: 8px; }
+.nav-link {
+  display: inline-flex; align-items: center; gap: 5px;
+  height: 36px; padding: 0 12px;
+  font-family: var(--font); font-size: var(--text-sm); font-weight: 600;
+  color: var(--text-secondary); text-decoration: none;
+  border-radius: var(--radius-sm); white-space: nowrap;
+  transition: var(--transition);
+}
+.nav-link:hover { background: var(--bg-hover); color: var(--text-primary); }
+.nav-link.is-current { color: var(--text-quaternary); cursor: default; }
+.nav-link.is-current:hover { background: none; color: var(--text-quaternary); }
+.nav-link-cta { background: var(--accent-dim); color: var(--accent); }
+.nav-link-cta:hover { background: var(--chip-hover); color: var(--accent); }
+.nav-link-cta .nav-arrow { transition: transform 0.15s ease; }
+.nav-link-cta:hover .nav-arrow { transform: translateX(2px); }
+@media (max-width: 560px) {
+  .site-nav { gap: 0; margin-right: 4px; }
+  .nav-link { padding: 0 8px; font-size: var(--text-xs); }
+  .logo-link { padding: 0 10px; }
+}
+
+/* ── Page layout ── */
+.page-wrap { max-width: min(96vw, 880px); margin: 0 auto; padding: 48px 12px calc(4rem + var(--safe-bottom)); }
+
+/* ── Hero ── */
+.hero { margin-bottom: 36px; }
+.hero-eyebrow {
+  font-size: var(--text-xs); font-weight: 700; color: var(--text-tertiary);
+  text-transform: uppercase; letter-spacing: 0.09em; margin-bottom: 14px;
+}
+.hero-title {
+  font-size: var(--text-hero); font-weight: 800; color: var(--text-primary);
+  letter-spacing: -0.025em; line-height: 1.15; margin-bottom: 18px;
+  max-width: 22ch;
+}
+.hero-sub {
+  font-size: var(--text-lg); color: var(--text-secondary); font-weight: 400;
+  line-height: 1.55; max-width: 60ch;
+}
+
+/* ── Section label ── */
+.section-label {
+  font-size: var(--text-xs); font-weight: 700; color: var(--text-quaternary);
+  text-transform: uppercase; letter-spacing: 0.08em;
+  margin: 40px 0 18px; padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+/* ── Offer block (Fractional, Board, Portfolio) ── */
+.offer {
+  margin-bottom: 22px;
+  padding: 24px 4px;
+}
+.offer:last-child { margin-bottom: 0; }
+.offer-name {
+  font-size: var(--text-xl); font-weight: 800; color: var(--text-primary);
+  letter-spacing: -0.02em; margin-bottom: 6px;
+}
+.offer-meta {
+  font-size: var(--text-sm); font-weight: 600; color: var(--text-tertiary);
+  margin-bottom: 14px;
+}
+.offer-body {
+  font-size: var(--text-base); color: var(--text-secondary);
+  line-height: 1.65; max-width: 64ch;
+}
+.offer-body + .offer-body { margin-top: 10px; }
+
+/* ── Bio block ── */
+.bio {
+  background: var(--bg-app);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 28px;
+  display: flex; gap: 24px; align-items: flex-start;
+}
+@media (max-width: 560px) {
+  .bio { flex-direction: column; align-items: flex-start; padding: 22px; }
+}
+.bio-photo {
+  flex-shrink: 0;
+  width: 120px; height: 120px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--accent-dim);
+  border: 3px solid var(--bg-app);
+  box-shadow: var(--shadow);
+}
+.bio-photo.is-placeholder { position: relative; }
+.bio-photo.is-placeholder .bio-photo-img { visibility: hidden; }
+.bio-photo.is-placeholder::before {
+  content: "/images/mark.jpg";
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  text-align: center; padding: 12px;
+  font-size: 0.66rem; font-weight: 600;
+  color: var(--text-tertiary);
+  background:
+    repeating-linear-gradient(45deg,
+      var(--accent-dim), var(--accent-dim) 8px,
+      var(--bg-app) 8px, var(--bg-app) 16px);
+}
+.bio-photo-img {
+  display: block; width: 100%; height: 100%;
+  object-fit: cover; object-position: center top;
+}
+.bio-text { flex: 1; }
+.bio-text p {
+  font-size: var(--text-base); color: var(--text-secondary);
+  line-height: 1.65; margin-bottom: 12px;
+}
+.bio-text p:last-child { margin-bottom: 0; }
+.bio-text strong { color: var(--text-primary); font-weight: 700; }
+
+/* ── Contact ── */
+.contact {
+  margin-top: 44px;
+  padding: 32px 28px;
+  background: var(--accent-dim);
+  border-radius: var(--radius);
+  text-align: center;
+}
+.contact-h {
+  font-size: var(--text-xl); font-weight: 800; color: var(--text-primary);
+  letter-spacing: -0.02em; margin-bottom: 8px;
+}
+.contact-sub {
+  font-size: var(--text-base); color: var(--text-secondary);
+  margin-bottom: 22px; line-height: 1.55;
+  max-width: 52ch; margin-left: auto; margin-right: auto;
+}
+.contact-cta {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  height: 48px; padding: 0 28px;
+  background: var(--btn-bg); color: var(--btn-text);
+  border-radius: var(--radius-sm); border: 1px solid transparent;
+  font-size: var(--text-base); font-weight: 700; font-family: var(--font);
+  text-decoration: none; transition: var(--transition);
+}
+.contact-cta:hover { background: var(--btn-hover); }
+
+/* ── Footer (matches the rest) ── */
+.site-footer {
+  border-top: 1px solid var(--border);
+  padding: 26px 12px calc(1.5rem + var(--safe-bottom));
+  max-width: min(96vw, 1100px); margin: 16px auto 0;
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+}
+.footer-links { display: flex; gap: 16px; margin-bottom: 3px; }
+.footer-links a {
+  font-size: var(--text-sm); font-weight: 500;
+  color: var(--accent); text-decoration: none;
+}
+.footer-links a:hover { opacity: 0.72; }
+.footer-back {
+  font-size: var(--text-sm); font-weight: 500;
+  color: var(--accent); text-decoration: none;
+}
+.footer-back:hover { opacity: 0.72; }
+.footer-copy { font-size: var(--text-xs); color: var(--text-quaternary); }
+
+@media (max-width: 640px) { .page-wrap { padding: 28px 12px calc(3rem + var(--safe-bottom)); } }
+</style>
+</head>
+<body>
+
+<!-- HEADER (same shell as tools + consulting) -->
+<header class="site-header">
+  <div class="header-top">
+    <a href="/" class="logo-link">Fedmo.</a>
+    <div style="flex:1;"></div>
+    <nav class="site-nav">
+      <a href="/" class="nav-link">Ask Mo</a>
+      <a href="/tools/" class="nav-link">Tools</a>
+      <a href="/consulting/" class="nav-link nav-link-cta">Work with Mark<svg class="nav-arrow" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a>
+    </nav>
+    <button class="hdr-btn" id="darkToggleBtn" onclick="toggleDark()" title="Toggle dark mode" aria-label="Toggle dark mode">
+      <svg id="darkToggleIcon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+    </button>
+  </div>
+</header>
+
+<div class="page-wrap">
+
+  <!-- HERO -->
+  <div class="hero">
+    <div class="hero-eyebrow">Advisory</div>
+    <h1 class="hero-title">Federal go-to-market for founders and investors.</h1>
+    <p class="hero-sub">A small advisory practice for AI and infrastructure companies building a federal motion, and for the funds that back them. Fractional partner leadership, board advisory, and portfolio-level work. By introduction or referral.</p>
+  </div>
+
+  <!-- WHAT I DO -->
+  <div class="section-label">The work</div>
+
+  <div class="offer">
+    <div class="offer-name">Fractional Head of Federal Partners</div>
+    <div class="offer-meta">10 to 15 hours per week. 6 to 12 month engagements.</div>
+    <p class="offer-body">Stand up the federal partner motion before a company is ready to hire a full-time leader. Map the right primes, resellers, and SIs for the product. Build the partner program structure. Run partner calls alongside the founder or sales lead. Advise on the eventual full-time hire and hand off cleanly. The right fit is companies in the $5M to $50M ARR range with a federal opportunity that's outpacing their ability to staff against it.</p>
+  </div>
+
+  <div class="offer">
+    <div class="offer-name">Board and Strategic Advisor</div>
+    <div class="offer-meta">2 to 5 hours per month. Equity based, multi-year.</div>
+    <p class="offer-body">Quarterly board attendance, monthly check-ins with the CEO, and on-call availability for federal partner and go-to-market questions. Most useful for AI and infrastructure companies where federal is one of several markets and the founder needs a federal-savvy voice in the room without the cost of a full board seat. Comfortable in a board-observer role or a formal advisor seat.</p>
+  </div>
+
+  <div class="offer">
+    <div class="offer-name">VC Portfolio Advisor</div>
+    <div class="offer-meta">Engagement varies by fund. Cash retainer plus portfolio access.</div>
+    <p class="offer-body">For funds with several portfolio companies pursuing federal: a retained relationship to make me available across the portfolio for federal go-to-market questions, partner introductions, and capture strategy. Reduces the cost of getting federal advice from one company at a time to one fund at a time. Currently working with a small number of funds in this format.</p>
+  </div>
+
+  <!-- BIO -->
+  <div class="section-label">Background</div>
+  <div class="bio">
+    <figure class="bio-photo is-placeholder">
+      <img class="bio-photo-img" src="/images/mark.jpg"
+           alt="Mark Flournoy"
+           loading="lazy" onload="this.closest('.bio-photo').classList.remove('is-placeholder')">
+    </figure>
+    <div class="bio-text">
+      <p><strong>Mark Flournoy</strong> spent two decades in federal sales as an early federal seller at <strong>AWS</strong>, <strong>F5</strong>, and <strong>Red Hat</strong>, through significant federal growth phases at each. He served as a Contracting Officer's Technical Representative at <strong>DISA</strong> and spent <strong>20 years in the United States Marine Corps</strong>.</p>
+      <p>He founded <a href="/">Fedmo</a>, a federal market intelligence platform used by federal sellers and BD teams to map agency spending, partner ecosystems, and recompete pipelines using live USASpending and SEC EDGAR data.</p>
+      <p>He lives in Palm Springs, California, and works primarily on West Coast hours.</p>
+    </div>
+  </div>
+
+  <!-- CONTACT -->
+  <div class="contact">
+    <div class="contact-h">Get in touch</div>
+    <p class="contact-sub">Advisory work is taken on by introduction or referral. If you've found this page, you likely have someone in common. Reach out with a sentence or two about your company and where federal sits in the plan.</p>
+    <a class="contact-cta" href="mailto:mark@fedmo.com?subject=Advisory%20inquiry" data-cta="advisory">mark@fedmo.com</a>
+  </div>
+
+</div><!-- /page-wrap -->
+
+<footer class="site-footer">
+  <nav class="footer-links">
+    <a href="/">Ask Mo</a>
+    <a href="/tools/">Tools</a>
+    <a href="/consulting/">Work with Mark</a>
+  </nav>
+  <a href="/" class="footer-back">Back to Fedmo</a>
+  <div class="footer-copy">&copy; 2026 Fedmo.com, Federal Market Intelligence for BD &amp; Sales Teams</div>
+</footer>
+
+<script>
+'use strict';
+function toggleDark() {
+  var isDark = document.documentElement.classList.toggle('dark');
+  try { localStorage.setItem('fedmo_dark', isDark ? '1' : '0'); } catch(e) {}
+  var icon = document.getElementById('darkToggleIcon');
+  if (!icon) return;
+  icon.innerHTML = isDark
+    ? '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>'
+    : '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
+}
+if (document.documentElement.classList.contains('dark')) {
+  var _ic = document.getElementById('darkToggleIcon');
+  if (_ic) _ic.innerHTML = '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>';
+}
+document.querySelectorAll('[data-cta]').forEach(function (el) {
+  el.addEventListener('click', function () {
+    try { gtag('event', 'advisory_cta', { cta: el.getAttribute('data-cta') }); } catch (e) {}
+  });
+});
+</script>
+</body>
+</html>
