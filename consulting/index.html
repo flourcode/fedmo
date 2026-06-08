@@ -359,9 +359,64 @@ a, button { touch-action: manipulation; }
 .footer-links a:hover, .footer-back:hover { opacity: 0.72; }
 .footer-copy { font-size: var(--text-xs); color: var(--text-quaternary); }
 
+/* ── MOBILE ── */
 @media (max-width: 640px) {
-  .page-wrap { padding: 26px 12px calc(3rem + var(--safe-bottom)); }
-  .tier, .offer { padding: 22px 18px; }
+  /* Layout */
+  .page-wrap { padding: 24px 12px calc(3rem + var(--safe-bottom)); }
+
+  /* Hero */
+  .hero-title { font-size: 1.75rem; letter-spacing: -0.025em; }
+  .hero-sub { font-size: var(--text-base); }
+  .hero-cta-row { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .hero-cta, .hero-cta-ghost { width: 100%; justify-content: center; height: 48px; font-size: var(--text-base); }
+  .hero-cta-note { font-size: var(--text-xs); }
+
+  /* Screenshot */
+  .hero-shot { margin-top: 20px; }
+  .hero-shot-cap { font-size: var(--text-xs); padding: 8px 12px; }
+
+  /* Section labels */
+  .section-label { margin: 32px 0 14px; }
+
+  /* Cred grid: single column on mobile */
+  .cred-grid { grid-template-columns: 1fr; }
+  .cred { padding: 18px; }
+  .moat { padding: 16px 18px; }
+
+  /* Topic chips: smaller, tighter wrapping */
+  .topic-chip { font-size: var(--text-xs); padding: 4px 11px; }
+
+  /* Fit grid: stack on mobile */
+  .fit-grid { grid-template-columns: 1fr; }
+  .fit-card { padding: 16px 18px; }
+
+  /* Offer cards */
+  .offer { padding: 20px 16px; }
+  .offer-name { font-size: var(--text-lg); }
+  .tier-price-amount { font-size: var(--text-xl); }
+  .offer-cta-row { flex-direction: column; gap: 8px; }
+  .offer-cta, .offer-cta-ghost { width: 100%; justify-content: center; height: 44px; }
+
+  /* Tier cards */
+  .tier, .tier-wide { padding: 20px 16px; }
+  .tier-name { font-size: var(--text-lg); }
+  .tier-cta { height: 44px; font-size: var(--text-base); }
+  .tier-list-2col { grid-template-columns: 1fr; }
+
+  /* Steps: single column */
+  .steps { grid-template-columns: 1fr; gap: 10px; }
+
+  /* About: stack photo + text */
+  .cred-about { flex-direction: column; align-items: center; text-align: center; }
+  .about-honesty { text-align: left; }
+
+  /* Final CTA */
+  .final { padding: 28px 16px; }
+  .final-h { font-size: var(--text-xl); }
+  .final-cta { width: 100%; height: 48px; font-size: var(--text-base); }
+
+  /* Footer */
+  .footer-links { flex-wrap: wrap; justify-content: center; gap: 10px; }
 }
 </style>
 </head>
@@ -394,14 +449,6 @@ a, button { touch-action: manipulation; }
       <a class="hero-cta-ghost" href="mailto:mark@fedmo.com" data-cta="hero-email">mark@fedmo.com</a>
       <span class="hero-cta-note">Responds within one business day</span>
     </div>
-
-    <!-- Fedmo platform screenshot — proof of the research layer -->
-    <figure class="hero-shot is-placeholder" style="max-width:780px">
-      <img class="hero-shot-img" src="/images/flow.png"
-           alt="Fedmo platform: agency spending flow diagram showing money moving from contracting offices to top vendors, sized by dollar volume."
-           loading="lazy" onload="this.closest('.hero-shot').classList.remove('is-placeholder')">
-      <figcaption class="hero-shot-cap">Fedmo — live federal spending data, partner ecosystems, and recompete pipelines in one platform. Advisory clients get access to both the expertise and the data.</figcaption>
-    </figure>
   </div>
 
   <!-- WHY COMPANIES CALL ME -->
@@ -422,6 +469,14 @@ a, button { touch-action: manipulation; }
       <p><a href="/">Fedmo</a> combines public spending data, SEC filings, partner ecosystem intelligence, contract vehicles, recompete analysis, and federal market research into a single platform used by federal sellers, capture managers, consultants, and founders. Advisory clients benefit from both 30 years of operating experience and the underlying research platform. You're not just getting access to a person — you're getting access to a platform.</p>
     </div>
   </div>
+
+  <!-- FEDMO PLATFORM SCREENSHOT -->
+  <figure class="hero-shot is-placeholder" style="margin-top:28px;margin-bottom:0;max-width:100%">
+    <img class="hero-shot-img" src="/images/flow.png"
+         alt="Fedmo platform: agency spending flow diagram showing money moving from contracting offices to top vendors, sized by dollar volume."
+         loading="lazy" onload="this.closest('.hero-shot').classList.remove('is-placeholder')">
+    <figcaption class="hero-shot-cap">Fedmo — live federal spending data, partner ecosystems, and recompete pipelines in one platform. Advisory clients get access to both the expertise and the data.</figcaption>
+  </figure>
 
   <!-- RECENT ENGAGEMENTS -->
   <div class="section-label">Recent advisory conversations</div>
