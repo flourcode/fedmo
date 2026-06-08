@@ -359,6 +359,36 @@ a, button { touch-action: manipulation; }
 .footer-links a:hover, .footer-back:hover { opacity: 0.72; }
 .footer-copy { font-size: var(--text-xs); color: var(--text-quaternary); }
 
+/* ── HERO PHOTO ── */
+.hero-layout { display: flex; gap: 28px; align-items: flex-start; }
+.hero-photo-wrap {
+  flex-shrink: 0;
+  width: 128px; height: 128px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--bg-app);
+  border: 3px solid var(--bg-app);
+  box-shadow: var(--shadow);
+  margin-top: 6px;
+}
+.hero-photo-wrap img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: center top; }
+.hero-photo-wrap.is-placeholder { position: relative; }
+.hero-photo-wrap.is-placeholder img { visibility: hidden; }
+.hero-photo-wrap.is-placeholder::before {
+  content: "Add photo \2192 /images/mark.jpg";
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  text-align: center; padding: 12px;
+  font-size: 0.6rem; font-weight: 600; line-height: 1.4;
+  color: var(--text-tertiary);
+  background: repeating-linear-gradient(45deg, var(--accent-dim), var(--accent-dim) 8px, var(--bg-app) 8px, var(--bg-app) 16px);
+}
+.hero-copy { flex: 1; min-width: 0; }
+@media (max-width: 480px) {
+  .hero-layout { flex-direction: column; gap: 16px; align-items: flex-start; }
+  .hero-photo-wrap { width: 88px; height: 88px; margin-top: 0; }
+}
+
 /* ── MOBILE ── */
 @media (max-width: 640px) {
   /* Layout */
@@ -441,14 +471,22 @@ a, button { touch-action: manipulation; }
 
   <!-- HERO -->
   <div class="hero">
-    <div class="hero-eyebrow">Fedmo Advisory</div>
-    <h1 class="hero-title">Cloud, AI, Data Platforms<br class="hero-title-br"> &amp; Federal Market Strategy.</h1>
-    <p class="hero-sub">Former AWS Federal executive. Military officer. Founder of Fedmo. Advisor to founders, investors, consulting firms, and growth leaders on cloud, AI, enterprise data platforms, partner ecosystems, and federal market strategy.</p>
-    <p class="hero-sub" style="margin-top:10px;font-size:var(--text-base);font-style:italic;color:var(--text-tertiary);">Most conversations start with a simple question. If I can help, I'll tell you. If I can't, I'll tell you that too.</p>
-    <div class="hero-cta-row">
-      <a class="hero-cta" href="https://calendly.com/markflournoy/chat-with-mark" target="_blank" rel="noopener" data-cta="hero-primary">Book a 15-minute call</a>
-      <a class="hero-cta-ghost" href="mailto:mark@fedmo.com" data-cta="hero-email">mark@fedmo.com</a>
-      <span class="hero-cta-note">Responds within one business day</span>
+    <div class="hero-layout">
+      <figure class="hero-photo-wrap is-placeholder">
+        <img src="/images/mark.jpg" alt="Mark Flournoy, founder of Fedmo"
+             loading="eager" onload="this.closest('.hero-photo-wrap').classList.remove('is-placeholder')">
+      </figure>
+      <div class="hero-copy">
+        <div class="hero-eyebrow">Fedmo Advisory</div>
+        <h1 class="hero-title">Cloud, AI, Data Platforms<br class="hero-title-br"> &amp; Federal Market Strategy.</h1>
+        <p class="hero-sub">Former AWS Federal Sales Leader. Marine Corps Officer. Founder of Fedmo. Advisor to sales teams, investors, consulting firms, and growth leaders on cloud, AI, enterprise data platforms, partner ecosystems, and federal market strategy.</p>
+        <p class="hero-sub" style="margin-top:10px;font-size:var(--text-base);font-style:italic;color:var(--text-tertiary);">Most conversations start with a simple question. If I can help, I'll tell you. If I can't, I'll tell you that too.</p>
+        <div class="hero-cta-row">
+          <a class="hero-cta" href="https://calendly.com/markflournoy/chat-with-mark" target="_blank" rel="noopener" data-cta="hero-primary">Book a 15-minute call</a>
+          <a class="hero-cta-ghost" href="mailto:mark.flournoy@gmail.com" data-cta="hero-email">mark.flournoy@gmail.com</a>
+          <span class="hero-cta-note">Responds within one business day</span>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -471,15 +509,128 @@ a, button { touch-action: manipulation; }
     </div>
   </div>
 
-  <!-- FEDMO PLATFORM SCREENSHOT -->
-  <figure class="hero-shot is-placeholder" style="margin-top:28px;margin-bottom:0;max-width:100%">
-    <img class="hero-shot-img" src="/images/flow.png"
-         alt="Fedmo platform: agency spending flow diagram showing money moving from contracting offices to top vendors, sized by dollar volume."
-         loading="lazy" onload="this.closest('.hero-shot').classList.remove('is-placeholder')">
-    <figcaption class="hero-shot-cap">Fedmo — live federal spending data, partner ecosystems, and recompete pipelines in one platform. Advisory clients get access to both the expertise and the data.</figcaption>
-  </figure>
+  <!-- A QUICK NOTE -->
+  <div class="section-label">A quick note</div>
+  <div style="background:var(--bg-app);border:1px solid var(--border);border-radius:var(--radius);padding:24px 26px;">
+    <p style="font-size:var(--text-lg);font-weight:400;color:var(--text-primary);line-height:1.6;margin:0">I've spent most of my career helping technology companies navigate federal markets. I don't know everything, but I've probably seen a version of the problem you're working through. The goal of these conversations isn't to impress you with credentials. It's to help you make a better decision.</p>
+  </div>
 
-  <!-- RECENT ENGAGEMENTS -->
+  <!-- WAYS TO WORK TOGETHER -->
+  <div class="section-label">Ways to work together</div>
+  <p class="pitch">Most clients start with a single conversation. Some become long-term advisory relationships. The options below are roughly ordered by depth of engagement — pick the one that fits where you are right now.</p>
+
+  <!-- EXPERT CONSULTATION -->
+  <div class="offer">
+    <span class="tier-flag" style="background:var(--go-text)">Fastest path in</span>
+    <div class="offer-name">Expert Consultation</div>
+    <div class="offer-meta">Available through expert networks and direct engagements.</div>
+    <p class="offer-body">Direct access to answer your hardest federal technology question. Market entry, competitive landscape, procurement dynamics, partner strategy, or technology due diligence. Bring one specific question and leave with a clear answer. No prep required — just your question.</p>
+    <ul class="offer-dl">
+      <li>Federal cloud, AI, data platform, or partner ecosystem questions</li>
+      <li>Technology due diligence for investors and consulting firms</li>
+      <li>Defense and intelligence market dynamics</li>
+      <li>Available through major expert networks or direct booking below</li>
+    </ul>
+    <div class="offer-cta-row">
+      <a class="offer-cta" href="https://calendly.com/markflournoy/chat-with-mark" target="_blank" rel="noopener" data-cta="consultation">Book a 15-minute discovery call</a>
+      <a class="offer-cta-ghost" href="mailto:mark.flournoy@gmail.com?subject=Expert%20consultation" data-cta="consultation-email">Email Mark directly</a>
+    </div>
+  </div>
+
+  <!-- STRATEGY SESSION -->
+  <div class="offer is-featured">
+    <span class="tier-flag">Recommended starting point</span>
+    <div class="offer-name">Executive Strategy Session</div>
+    <div class="tier-price" style="margin-bottom:4px">
+      <span class="tier-price-amount">$1,500 – $2,500</span>
+      <span class="tier-price-unit">90 minutes &nbsp;·&nbsp; written summary delivered within 48 hours</span>
+    </div>
+    <p class="offer-body">We go deep on your specific situation and you leave with a written assessment you can act on. The right bridge between a quick expert call and an ongoing engagement — concrete enough to move on, fast enough to matter. The most common entry point for founders and investors who've been referred.</p>
+    <ul class="offer-dl">
+      <li>Federal market assessment for your specific situation</li>
+      <li>Go-to-market review and recommendations</li>
+      <li>Federal strategy and partner strategy review</li>
+      <li>Written summary with prioritized next steps, delivered within 48 hours</li>
+    </ul>
+    <div class="offer-cta-row">
+      <a class="offer-cta" href="https://calendly.com/markflournoy/chat-with-mark" target="_blank" rel="noopener" data-cta="strategy-session">Book a discovery call</a>
+      <a class="offer-cta-ghost" href="mailto:mark.flournoy@gmail.com?subject=Strategy%20session" data-cta="strategy-email">Email Mark directly</a>
+    </div>
+  </div>
+
+  <!-- FRACTIONAL -->
+  <div class="offer">
+    <div class="offer-name">Fractional Federal Leadership</div>
+    <div class="tier-price" style="margin-bottom:4px">
+      <span class="tier-price-amount">From $15,000</span>
+      <span class="tier-price-unit">per month &nbsp;·&nbsp; typically 10–15 hours per week &nbsp;·&nbsp; 6–12 month engagements</span>
+    </div>
+    <p class="offer-body">I become part of your team — working deals, building relationships, and driving federal go-to-market execution. The right fit is companies in the $5M to $50M ARR range with a federal opportunity that's outpacing their ability to staff against it. Stand up the federal partner motion before you're ready to hire a full-time leader.</p>
+    <ul class="offer-dl">
+      <li>Fractional Federal VP or Chief Federal Officer function</li>
+      <li>Pipeline development and partner ecosystem build</li>
+      <li>Executive representation with agencies and partners</li>
+      <li>Advise on the eventual full-time hire and hand off cleanly</li>
+    </ul>
+    <a class="offer-cta-ghost" href="mailto:mark.flournoy@gmail.com?subject=Fractional%20engagement" data-cta="fractional">Start a conversation</a>
+  </div>
+
+  <!-- ADVISORY RETAINER -->
+  <div class="offer">
+    <div class="offer-name">Advisory Retainer</div>
+    <div class="tier-price" style="margin-bottom:4px">
+      <span class="tier-price-amount">$5,000 – $10,000</span>
+      <span class="tier-price-unit">per month &nbsp;·&nbsp; month to month, no long-term contract</span>
+    </div>
+    <p class="offer-body">Retained access for ongoing federal technology strategy. Monthly calls, async questions between sessions, introductions where relevant, and access to Fedmo platform intelligence. For PE and VC funds with multiple portfolio companies in federal, a fund-level retainer is often more efficient than company-by-company engagements.</p>
+    <ul class="offer-dl">
+      <li>Monthly strategy calls</li>
+      <li>Async access between sessions</li>
+      <li>Network introductions as relevant</li>
+      <li>Access to Fedmo platform data and research</li>
+      <li>Fund-level arrangements available for VC and PE</li>
+    </ul>
+    <a class="offer-cta-ghost" href="mailto:mark.flournoy@gmail.com?subject=Advisory%20retainer" data-cta="retainer">Inquire about retainer</a>
+  </div>
+
+  <!-- SPEAKING -->
+  <div class="offer">
+    <div class="offer-name">Executive Briefing &amp; Speaking</div>
+    <div class="tier-price" style="margin-bottom:4px">
+      <span class="tier-price-amount">$5,000 – $15,000+</span>
+      <span class="tier-price-unit">board briefings, executive offsites, and keynotes</span>
+    </div>
+    <p class="offer-body">Designed for leadership teams that need fast orientation on a complex federal technology market. Speaking engagements frequently lead to ongoing advisory relationships.</p>
+    <div class="tier-aside" style="margin-top:14px;margin-bottom:0">
+      <div class="tier-aside-h">Available topics</div>
+      <p>Federal AI Market Outlook &nbsp;·&nbsp; Cloud &amp; Data Platform Trends in Government &nbsp;·&nbsp; Winning in the Federal Market &nbsp;·&nbsp; Partner Ecosystems and Growth Strategy &nbsp;·&nbsp; Defense Technology Market Dynamics</p>
+    </div>
+    <div class="offer-cta-row" style="margin-top:16px">
+      <a class="offer-cta-ghost" href="mailto:mark.flournoy@gmail.com?subject=Speaking%20inquiry" data-cta="speaking">Inquire about speaking</a>
+    </div>
+  </div>
+
+  <!-- HOW IT WORKS -->
+  <div class="section-label">How most engagements start</div>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-title">15-minute discovery call</div>
+      <div class="step-text">A short call to understand your situation and figure out whether we're a fit. No pitch, no deck. You tell me what you're working on and I'll tell you whether I can be useful.</div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-title">Right-size the engagement</div>
+      <div class="step-text">One question? Expert call. Need a full assessment? Strategy session. Ongoing support? Retainer. We match the format to what you actually need, not what looks best on a proposal.</div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-title">Work together while it's useful</div>
+      <div class="step-text">Month-to-month, no long-term contracts. The retainer and fractional arrangements run as long as they're creating value. A polite "we're good" is a perfectly fine outcome.</div>
+    </div>
+  </div>
+
+  <!-- RECENT ADVISORY CONVERSATIONS -->
   <div class="section-label">Recent advisory conversations</div>
   <p class="pitch">Recent engagements have covered the following topics. If your question lives in this territory, you're in the right place. This list is updated regularly — these are active areas, not legacy credentials.</p>
   <div class="topic-grid">
@@ -503,7 +654,7 @@ a, button { touch-action: manipulation; }
     <span class="topic-chip">National security technology markets</span>
   </div>
 
-  <!-- WHO THIS IS AND ISN'T FOR -->
+  <!-- WHO THIS IS FOR -->
   <div class="section-label">Who this is for</div>
   <div class="fit-grid">
     <div class="fit-card not">
@@ -529,128 +680,15 @@ a, button { touch-action: manipulation; }
     </div>
   </div>
 
-  <!-- A QUICK NOTE -->
-  <div class="section-label">A quick note</div>
-  <div class="pitch" style="max-width:none;background:var(--bg-app);border:1px solid var(--border);border-radius:var(--radius);padding:24px 26px;margin:0">
-    <p style="font-size:var(--text-lg);font-weight:400;color:var(--text-primary);line-height:1.6;margin:0">I've spent most of my career helping technology companies navigate federal markets. I don't know everything, but I've probably seen a version of the problem you're working through. The goal of these conversations isn't to impress you with credentials. It's to help you make a better decision.</p>
-  </div>
+  <!-- FEDMO PLATFORM SCREENSHOT -->
+  <figure class="hero-shot is-placeholder" style="margin-top:28px;margin-bottom:0;max-width:100%">
+    <img class="hero-shot-img" src="/images/flow.png"
+         alt="Fedmo platform: agency spending flow diagram showing money moving from contracting offices to top vendors, sized by dollar volume."
+         loading="lazy" onload="this.closest('.hero-shot').classList.remove('is-placeholder')">
+    <figcaption class="hero-shot-cap">Fedmo — live federal spending data, partner ecosystems, and recompete pipelines in one platform. Advisory clients get access to both the expertise and the data.</figcaption>
+  </figure>
 
-  <!-- WAYS TO WORK TOGETHER -->
-  <div class="section-label">Ways to work together</div>
-  <p class="pitch">Most clients start with a single conversation. Some become long-term advisory relationships. The options below are roughly ordered by depth of engagement — pick the one that fits where you are right now.</p>
-
-  <!-- EXPERT CONSULTATION -->
-  <div class="offer">
-    <span class="tier-flag" style="background:var(--go-text)">Fastest path in</span>
-    <div class="offer-name">Expert Consultation</div>
-    <div class="offer-meta">Available through expert networks and direct engagements.</div>
-    <p class="offer-body">Direct access to answer your hardest federal technology question. Market entry, competitive landscape, procurement dynamics, partner strategy, or technology due diligence. Bring one specific question and leave with a clear answer. No prep required — just your question.</p>
-    <ul class="offer-dl">
-      <li>Federal cloud, AI, data platform, or partner ecosystem questions</li>
-      <li>Technology due diligence for investors and consulting firms</li>
-      <li>Defense and intelligence market dynamics</li>
-      <li>Available through major expert networks or direct booking below</li>
-    </ul>
-    <div class="offer-cta-row">
-      <a class="offer-cta" href="https://calendly.com/markflournoy/chat-with-mark" target="_blank" rel="noopener" data-cta="consultation">Book a 15-minute discovery call</a>
-      <a class="offer-cta-ghost" href="mailto:mark@fedmo.com?subject=Expert%20consultation" data-cta="consultation-email">Email Mark directly</a>
-    </div>
-  </div>
-
-  <!-- STRATEGY SESSION — featured -->
-  <div class="offer is-featured">
-    <span class="tier-flag">Recommended starting point</span>
-    <div class="offer-name">Executive Strategy Session</div>
-    <div class="tier-price" style="margin-bottom:4px">
-      <span class="tier-price-amount">$1,500 – $2,500</span>
-      <span class="tier-price-unit">90 minutes &nbsp;·&nbsp; written summary delivered within 48 hours</span>
-    </div>
-    <p class="offer-body">We go deep on your specific situation and you leave with a written assessment you can act on. The right bridge between a quick expert call and an ongoing engagement — concrete enough to move on, fast enough to matter. The most common entry point for founders and investors who've been referred.</p>
-    <ul class="offer-dl">
-      <li>Federal market assessment for your specific situation</li>
-      <li>Go-to-market review and recommendations</li>
-      <li>Federal strategy and partner strategy review</li>
-      <li>Written summary with prioritized next steps, delivered within 48 hours</li>
-    </ul>
-    <div class="offer-cta-row">
-      <a class="offer-cta" href="https://calendly.com/markflournoy/chat-with-mark" target="_blank" rel="noopener" data-cta="strategy-session">Book a discovery call</a>
-      <a class="offer-cta-ghost" href="mailto:mark@fedmo.com?subject=Strategy%20session" data-cta="strategy-email">Email Mark directly</a>
-    </div>
-  </div>
-
-  <!-- FRACTIONAL — moved up -->
-  <div class="offer">
-    <div class="offer-name">Fractional Federal Leadership</div>
-    <div class="tier-price" style="margin-bottom:4px">
-      <span class="tier-price-amount">From $15,000</span>
-      <span class="tier-price-unit">per month &nbsp;·&nbsp; typically 10–15 hours per week &nbsp;·&nbsp; 6–12 month engagements</span>
-    </div>
-    <p class="offer-body">I become part of your team — working deals, building relationships, and driving federal go-to-market execution. The right fit is companies in the $5M to $50M ARR range with a federal opportunity that's outpacing their ability to staff against it. Stand up the federal partner motion before you're ready to hire a full-time leader.</p>
-    <ul class="offer-dl">
-      <li>Fractional Federal VP or Chief Federal Officer function</li>
-      <li>Pipeline development and partner ecosystem build</li>
-      <li>Executive representation with agencies and partners</li>
-      <li>Advise on the eventual full-time hire and hand off cleanly</li>
-    </ul>
-    <a class="offer-cta-ghost" href="mailto:mark@fedmo.com?subject=Fractional%20engagement" data-cta="fractional">Start a conversation</a>
-  </div>
-
-  <!-- ADVISORY RETAINER -->
-  <div class="offer">
-    <div class="offer-name">Advisory Retainer</div>
-    <div class="tier-price" style="margin-bottom:4px">
-      <span class="tier-price-amount">From $5,000</span>
-      <span class="tier-price-unit">per month &nbsp;·&nbsp; month to month, no long-term contract</span>
-    </div>
-    <p class="offer-body">Retained access for ongoing federal technology strategy. Monthly calls, async questions between sessions, introductions where relevant, and access to Fedmo platform intelligence. For PE and VC funds with multiple portfolio companies in federal, a fund-level retainer is often more efficient than company-by-company engagements.</p>
-    <ul class="offer-dl">
-      <li>Monthly strategy calls</li>
-      <li>Async access between sessions</li>
-      <li>Network introductions as relevant</li>
-      <li>Access to Fedmo platform data and research</li>
-      <li>Fund-level arrangements available for VC and PE</li>
-    </ul>
-    <a class="offer-cta-ghost" href="mailto:mark@fedmo.com?subject=Advisory%20retainer" data-cta="retainer">Inquire about retainer</a>
-  </div>
-
-  <!-- SPEAKING -->
-  <div class="offer">
-    <div class="offer-name">Executive Briefing &amp; Speaking</div>
-    <div class="tier-price" style="margin-bottom:4px">
-      <span class="tier-price-amount">$5,000 – $15,000+</span>
-      <span class="tier-price-unit">board briefings, executive offsites, and keynotes</span>
-    </div>
-    <p class="offer-body">Designed for leadership teams that need fast orientation on a complex federal technology market. Speaking engagements frequently lead to ongoing advisory relationships.</p>
-    <div class="tier-aside" style="margin-top:14px;margin-bottom:0">
-      <div class="tier-aside-h">Available topics</div>
-      <p>Federal AI Market Outlook &nbsp;·&nbsp; Cloud &amp; Data Platform Trends in Government &nbsp;·&nbsp; Winning in the Federal Market &nbsp;·&nbsp; Partner Ecosystems and Growth Strategy &nbsp;·&nbsp; Defense Technology Market Dynamics</p>
-    </div>
-    <div class="offer-cta-row" style="margin-top:16px">
-      <a class="offer-cta-ghost" href="mailto:mark@fedmo.com?subject=Speaking%20inquiry" data-cta="speaking">Inquire about speaking</a>
-    </div>
-  </div>
-
-  <!-- HOW IT WORKS -->
-  <div class="section-label">How most engagements start</div>
-  <div class="steps">
-    <div class="step">
-      <div class="step-num">1</div>
-      <div class="step-title">15-minute discovery call</div>
-      <div class="step-text">A short call to understand your situation and figure out whether we're a fit. No pitch, no deck. You tell me what you're working on and I'll tell you whether I can be useful.</div>
-    </div>
-    <div class="step">
-      <div class="step-num">2</div>
-      <div class="step-title">Right-size the engagement</div>
-      <div class="step-text">One question? Expert call. Need a full assessment? Strategy session. Ongoing support? Retainer. We match the format to what you actually need, not what looks best on a proposal.</div>
-    </div>
-    <div class="step">
-      <div class="step-num">3</div>
-      <div class="step-title">Work together while it's useful</div>
-      <div class="step-text">Month-to-month, no long-term contracts. The retainer and fractional arrangements run as long as they're creating value. A polite "we're good" is a perfectly fine outcome.</div>
-    </div>
-  </div>
-
-  <!-- FREE SESSION (kept for pipeline / fedmo leads) -->
+  <!-- FREE SESSION -->
   <div class="section-label">For federal sales teams</div>
   <p class="pitch">The work above is for founders, investors, and senior leaders. If you're a federal sales or BD team that needs pipeline help — target accounts, recompete lists, partner maps — there's a separate free session for that.</p>
   <div class="tier-wide">
@@ -671,7 +709,7 @@ a, button { touch-action: manipulation; }
     <div class="tier-foot">Free because showing you is faster than explaining it.</div>
   </div>
 
-  <!-- MARK'S BIO -->
+  <!-- BACKGROUND -->
   <div class="section-label">Background</div>
   <div class="cred cred-about">
     <figure class="about-photo is-placeholder">
@@ -679,7 +717,7 @@ a, button { touch-action: manipulation; }
     </figure>
     <div class="about-text">
       <div class="about-name">Mark Flournoy</div>
-      <div class="about-role">Founder of Fedmo &nbsp;·&nbsp; Palm Springs, California</div>
+      <div class="about-role">Founder of Fedmo</div>
       <p><strong>Mark Flournoy</strong> spent two decades in federal sales as an early federal seller at <strong>AWS</strong>, <strong>F5</strong>, and <strong>Red Hat</strong>, through significant federal growth phases at each. He served as a Contracting Officer's Technical Representative at <strong>DISA</strong> and spent <strong>20 years in the United States Marine Corps</strong>.</p>
       <p>At AWS he led federal partner and alliance teams supporting some of the government's largest cloud modernization initiatives, building and managing 25+ federal sellers and partner leaders across DoD, the Intelligence Community, and Federal Civilian agencies.</p>
       <p>He founded <a href="/">Fedmo</a>, a federal market intelligence platform used by federal sellers and BD teams to map agency spending, partner ecosystems, and recompete pipelines using live USASpending and SEC EDGAR data.</p>
@@ -692,7 +730,7 @@ a, button { touch-action: manipulation; }
     <div class="final-h">Start with a conversation.</div>
     <div class="final-sub">Most clients start with a single call. Some become long-term advisory relationships. The 15-minute discovery call is free and there's no obligation. Let's figure out if we're a fit.</div>
     <a class="final-cta" href="https://calendly.com/markflournoy/chat-with-mark" target="_blank" rel="noopener" data-cta="final">Book a 15-minute discovery call</a>
-    <div class="final-note">Prefer email? <a href="mailto:mark@fedmo.com" data-cta="final-email">mark@fedmo.com</a> &nbsp;·&nbsp; Expert network engagements available on request.</div>
+    <div class="final-note">Prefer email? <a href="mailto:mark.flournoy@gmail.com" data-cta="final-email">mark.flournoy@gmail.com</a> &nbsp;·&nbsp; Expert network engagements available on request.</div>
     <div style="margin-top:24px;padding-top:24px;border-top:1px solid var(--border);font-size:var(--text-xs);color:var(--text-quaternary);line-height:1.5;">
       I take on a small number of engagements at a time. If the roster is full, I'll say so. Reach out anyway and I'll let you know when a slot opens.
     </div>
