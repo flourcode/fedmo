@@ -221,6 +221,26 @@ a, button, input, select { touch-action: manipulation; }
 }
 .hdr-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
 .header-label { font-size: var(--text-sm); font-weight: 600; color: var(--text-tertiary); }
+/* Site nav — same pattern as / and /consulting/: everything visible */
+.site-nav { display: flex; align-items: center; gap: 4px; margin-right: 8px; }
+.nav-link {
+  display: inline-flex; align-items: center; gap: 5px;
+  height: 36px; padding: 0 12px;
+  font-family: var(--font); font-size: var(--text-sm); font-weight: 600;
+  color: var(--text-secondary); text-decoration: none;
+  border-radius: var(--radius-sm); white-space: nowrap; transition: var(--transition);
+}
+.nav-link:hover { background: var(--bg-hover); color: var(--text-primary); }
+.nav-link.is-current { color: var(--text-quaternary); cursor: default; }
+.nav-link.is-current:hover { background: none; color: var(--text-quaternary); }
+.nav-link-cta { background: var(--accent-dim); color: var(--accent); }
+.nav-link-cta:hover { background: var(--chip-hover); color: var(--accent); }
+.nav-link-cta .nav-arrow { transition: transform 0.15s ease; }
+.nav-link-cta:hover .nav-arrow { transform: translateX(2px); }
+@media (max-width: 420px) {
+  .nav-link { padding: 0 8px; font-size: 0.78rem; }
+  .logo-link { padding: 0 10px; }
+}
 
 /* Jump nav — simple dropdown */
 .jump-select {
@@ -821,6 +841,11 @@ input[type=range]::-moz-range-thumb  { height: 18px; width: 18px; border-radius:
   <div class="header-top">
     <a href="/" class="logo-link">Fedmo.</a>
     <div style="flex:1;"></div>
+    <nav class="site-nav">
+      <a href="/" class="nav-link">Ask Mo</a>
+      <span class="nav-link is-current" aria-current="page">Tools</span>
+      <a href="/consulting/" class="nav-link nav-link-cta" data-cta="nav-consulting">Work with Mark<svg class="nav-arrow" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a>
+    </nav>
     <button class="hdr-btn" id="darkToggleBtn" onclick="toggleDark()" title="Toggle dark mode" aria-label="Toggle dark mode">
       <svg id="darkToggleIcon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
     </button>
@@ -1515,7 +1540,11 @@ input[type=range]::-moz-range-thumb  { height: 18px; width: 18px; border-radius:
 </div><!-- /page-wrap -->
 
 <footer class="site-footer">
-  <a href="../" class="footer-back">← Back to Fedmo</a>
+  <nav class="footer-links" style="display:flex;gap:14px;align-items:center;font-size:var(--text-sm);font-weight:600">
+    <a href="/" style="color:var(--text-secondary);text-decoration:none">Ask Mo</a>
+    <span style="color:var(--text-quaternary)" aria-current="page">Tools</span>
+    <a href="/consulting/" style="color:var(--accent);text-decoration:none">Work with Mark</a>
+  </nav>
   <div class="footer-copy">© 2026 Fedmo.com — Federal Market Intelligence for BD &amp; Sales Teams</div>
 </footer>
 
