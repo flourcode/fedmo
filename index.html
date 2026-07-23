@@ -894,7 +894,7 @@ a:hover { text-decoration: underline; }
 /* ── Quick take — Blinkist-style insight deck ────────────
    Swipeable strip of snack-sized insight cards between the stats and the
    treemap. Each card is one sharp, non-obvious read on the data (HHI,
-   recompete wall, vehicle gatekeeping...) with a tag chip, a punchy
+   expiration wall, vehicle gatekeeping...) with a tag chip, a punchy
    headline, and one supporting line. Tap to copy — built for pasting into
    Slack before the meeting. Scroll-snap + dots = the Blinkist feel. */
 .mo-blinks {
@@ -996,7 +996,7 @@ a:hover { text-decoration: underline; }
 }
 .mo-blink-move::before { content: '→ '; }
 
-/* ── Recompete targets — the BD hit list ─────────────────
+/* ── Expiring contracts — the BD hit list ────────────────
    Contracts ending inside 12 months, soonest first, each with a days-left
    countdown chip and a Source link. Reuses the 2-line row pattern inside a
    framed list so it reads as a curated slice, not the full contract table. */
@@ -5046,7 +5046,7 @@ function renderSubawardRows(card, rows, attrs, resolved) {
 //
 // Computes 3-5 sharp, non-obvious reads on the result set — the angles a
 // BD person skimming the treemap would miss: HHI concentration class, the
-// 12-month recompete wall in dollars, task-order gatekeeping, whether new
+// 12-month expiration wall in dollars, task-order gatekeeping, whether new
 // vendors are actually breaking in, interagency money that never leaves
 // government, deal-size barbells, incumbent age. Each take is one snackable
 // card: tag + punchy headline + one supporting line. Tap copies it — built
@@ -5057,7 +5057,7 @@ function renderSubawardRows(card, rows, attrs, resolved) {
 // weighted; we surface the top 5 so the deck stays a 30-second read.
 
 const QUICK_TAKE_COLORS = {
-  'RECOMPETE':        '#C75268',
+  'EXPIRATIONS':      '#C75268',
   'FOLLOW THE MONEY': '#D4A0B0',
   'CONCENTRATION':    '#8888B8',
   'VEHICLE':          '#7CA8C4',
@@ -5082,7 +5082,7 @@ function buildQuickTakes(rows, isSub, total, vendorEntries) {
     return isNaN(d) ? null : d;
   };
 
-  // ── 1. Recompete wall: dollars ending within 12 months (prime only) ──
+  // ── 1. Expiration wall: dollars ending within 12 months (prime only) ──
   if (!isSub) {
     const soon = rows.filter(r => {
       const e = dateOf(r, 'End Date');
@@ -5096,9 +5096,9 @@ function buildQuickTakes(rows, isSub, total, vendorEntries) {
       if (sum > 0 && share >= 5) {
         const biggest = soon.slice().sort((a, b) => amtOf(b) - amtOf(a))[0];
         takes.push({
-          kind: 'RECOMPETE',
+          kind: 'EXPIRATIONS',
           weight: 90 + Math.min(9, share / 10),
-          headline: `${fmtMoney(sum)} comes up for recompete within 12 months`,
+          headline: `${fmtMoney(sum)} in contracts expires within 12 months`,
           body: `${soon.length} ${pluralize(soon.length, 'contract')} — ${share}% of this volume — ${soon.length === 1 ? 'ends' : 'end'} inside a year. Biggest: ${nameOf(biggest) || 'unknown'} at ${fmtMoney(amtOf(biggest))}${biggest['End Date'] ? `, ending ${biggest['End Date']}` : ''}.`,
           move: `Work backward from the end dates — sources-sought notices typically drop 6–9 months out. Get the meetings before they publish.`,
         });
@@ -5121,30 +5121,33 @@ function buildQuickTakes(rows, isSub, total, vendorEntries) {
     }
   }
 
-  // ── 3. Concentration: HHI, the number analysts use and BD decks skip ──
+  // ── 3. Concentration: classified with a Herfindahl-style score under the
+  // hood, but surfaced in plain shares — "HHI" reads too much like HII
+  // (Huntington Ingalls) for a federal audience.
   if (vendorEntries.length >= 1) {
-    const hhi = Math.round(vendorEntries.reduce((s, [, v]) => {
+    const concScore = Math.round(vendorEntries.reduce((s, [, v]) => {
       const sh = (v / total) * 100;
       return s + sh * sh;
     }, 0));
     const [topName, topAmt] = vendorEntries[0];
     const topPct = Math.round((topAmt / total) * 100);
+    const top3Pct = Math.round((vendorEntries.slice(0, 3).reduce((s, [, v]) => s + v, 0) / total) * 100);
     let headline, body, move;
     if (vendorEntries.length === 1) {
       headline = `One ${isSub ? 'sub' : 'vendor'} holds 100% of this slice`;
       body = `${topName} is the only recipient here. Any pursuit starts as a takeaway or a teaming play — plan the relationship map first.`;
-      move = `Map ${topName}'s contract end dates and open the teaming conversation now, before the recompete clock starts.`;
-    } else if (hhi >= 2500) {
-      headline = `Winner-take-most market — HHI ${hhi.toLocaleString()}`;
-      body = `${topName} alone holds ${topPct}%. Anything over 2,500 counts as "highly concentrated" — expect entrenched incumbents and long displacement cycles.`;
+      move = `Map ${topName}'s contract end dates and open the teaming conversation now, before the expiration clock starts.`;
+    } else if (concScore >= 2500) {
+      headline = `Winner-take-most: top 3 hold ${top3Pct}%`;
+      body = `${topName} alone holds ${topPct}%. By the standard antitrust yardstick this is a highly concentrated market — expect entrenched incumbents and long displacement cycles.`;
       move = `Don't bid head-on. Position as second-source risk reduction, or enter through the mid-tier as a sub.`;
-    } else if (hhi >= 1500) {
-      headline = `Contestable: moderately concentrated at HHI ${hhi.toLocaleString()}`;
-      body = `${topName} leads with ${topPct}%, but nobody owns the room. Mid-tier displacement is realistic in markets shaped like this.`;
-      move = `Pick one mid-tier incumbent to displace and shadow their recompetes — don't chase the leader first.`;
+    } else if (concScore >= 1500) {
+      headline = `Contestable: the leader holds only ${topPct}%`;
+      body = `${topName} is ahead, but concentration is moderate — top 3 hold ${top3Pct}% across ${vendorEntries.length} ${isSub ? 'subs' : 'vendors'}. Mid-tier displacement is realistic in markets shaped like this.`;
+      move = `Pick one mid-tier incumbent to displace and watch their contract end dates — don't chase the leader first.`;
     } else {
       headline = `Fragmented field — nobody owns it`;
-      body = `HHI ${hhi.toLocaleString()} across ${vendorEntries.length} ${isSub ? 'subs' : 'vendors'}; the leader (${topName}) holds just ${topPct}%. Low barriers to entry — but thin customer loyalty cuts both ways.`;
+      body = `${vendorEntries.length} ${isSub ? 'subs' : 'vendors'}, and the leader (${topName}) holds just ${topPct}% — top 3 together only ${top3Pct}%. Low barriers to entry, but thin customer loyalty cuts both ways.`;
       move = `Land small and fast — in fragmented markets, past performance compounds quicker than pipeline reviews assume.`;
     }
     takes.push({ kind: 'CONCENTRATION', weight: 80, headline, body, move });
@@ -5217,7 +5220,7 @@ function buildQuickTakes(rows, isSub, total, vendorEntries) {
           weight: 64,
           headline: `No new ${isSub ? 'sub' : 'vendor'} has broken in for 2+ years`,
           body: `Every recipient in this set first won before ${cutoff.getFullYear()}. Strong incumbent bias — teaming onto an existing player likely beats priming cold.`,
-          move: `Skip priming here. Pick the incumbent with the nearest recompete and get on their team instead.`,
+          move: `Skip priming here. Pick the incumbent whose contract expires soonest and get on their team instead.`,
         });
       }
     }
@@ -5261,8 +5264,8 @@ function buildQuickTakes(rows, isSub, total, vendorEntries) {
           kind: 'DEAL SIZE',
           weight: 45,
           headline: `The top award is ${Math.round(ratio)}× the median deal`,
-          body: `Median award: ${fmtMoney(median)}. Top: ${fmtMoney(max)}. A barbell market — small quick-win orders and marquee recompetes coexist. Pick which game you're playing.`,
-          move: `Run both plays: harvest ${fmtMoney(median)}-class orders for past performance while positioning early for the marquee recompete.`,
+          body: `Median award: ${fmtMoney(median)}. Top: ${fmtMoney(max)}. A barbell market — small quick-win orders and flagship renewals coexist. Pick which game you're playing.`,
+          move: `Run both plays: harvest ${fmtMoney(median)}-class orders for past performance while positioning early for the largest expiring award.`,
         });
       }
     }
@@ -5284,7 +5287,7 @@ function buildQuickTakes(rows, isSub, total, vendorEntries) {
           kind: 'INCUMBENT',
           weight: 40,
           headline: `${topName} has held this ground since ${earliest.getFullYear()}`,
-          body: `${years} years of incumbency in this set. Deep relationships — but also a proposal team that may not have run a real competition in years. Both matter at recompete.`,
+          body: `${years} years of incumbency in this set. Deep relationships — but also a proposal team that may not have run a real competition in years. Both matter when the contract ends.`,
           move: `Request a capability briefing with the buying office — long incumbencies often hide quiet dissatisfaction nobody has offered to fix.`,
         });
       }
@@ -5319,7 +5322,7 @@ function buildQuickTakes(rows, isSub, total, vendorEntries) {
         weight: 62,
         headline: `Warm doors: ${names}`,
         body: `Repeat winners with fresh awards but no dominant share — they know this buyer and are still hungry. Natural teammates for a prime bid, or your channel into the account.`,
-        move: `Look up their capture leads on LinkedIn and open a teaming conversation before the next recompete cycle heats up.`,
+        move: `Look up their capture leads on LinkedIn and open a teaming conversation before the next wave of expirations hits.`,
       });
     }
   }
@@ -5344,7 +5347,7 @@ function renderQuickTakesInto(card, takes, getBriefText) {
   const meta = $$('div', { class: 'mo-comp-meta', text: `1/${takes.length} · tap to copy` });
   compHead.appendChild(meta);
   // "Copy brief" — assembles the whole card (topline, takes + moves, top
-  // vendors, recompete targets, permalink) into paste-ready text for
+  // vendors, expiring contracts, permalink) into paste-ready text for
   // CRM / Slack / email. THE take-it-to-the-meeting button.
   if (typeof getBriefText === 'function') {
     const briefBtn = $$('button', { class: 'mo-tm-toggle-btn', type: 'button', text: 'Copy brief' });
@@ -5432,7 +5435,7 @@ function renderQuickTakesInto(card, takes, getBriefText) {
 }
 
 // =============================================================================
-// RECOMPETE TARGETS — the BD hit list
+// EXPIRING CONTRACTS — the BD hit list
 // =============================================================================
 //
 // Contracts ending inside 12 months, soonest first: the actionable slice a
@@ -5440,7 +5443,7 @@ function renderQuickTakesInto(card, takes, getBriefText) {
 // (hot ≤90d / warm ≤180d / watch ≤365d), the buying office, and the
 // USASpending source link. "Copy list" exports it paste-ready.
 
-function computeRecompeteTargets(rows, isSub) {
+function computeExpiringContracts(rows, isSub) {
   if (isSub) return [];
   const now = Date.now(), MS_DAY = 86400000;
   return rows
@@ -5457,12 +5460,12 @@ function computeRecompeteTargets(rows, isSub) {
     .sort((a, b) => a.days - b.days);
 }
 
-function renderRecompeteTargetsInto(card, targets) {
+function renderExpiringContractsInto(card, targets) {
   if (!targets.length) return;
   const wall = targets.reduce((s, t) => s + (Number(t.r['Award Amount']) || 0), 0);
 
   const compHeadEl = $$('div', { class: 'mo-comp-head' });
-  compHeadEl.appendChild($$('div', { class: 'mo-comp-title', text: 'Recompete targets' }));
+  compHeadEl.appendChild($$('div', { class: 'mo-comp-title', text: 'Expiring contracts' }));
   compHeadEl.appendChild($$('div', {
     class: 'mo-comp-meta',
     text: `${targets.length} inside 12 months · ${fmtMoney(wall)}`,
@@ -5509,7 +5512,7 @@ function renderRecompeteTargetsInto(card, targets) {
       copyBtn.textContent = msg;
       setTimeout(() => { copyBtn.textContent = orig; delete copyBtn.dataset.flash; }, 1600);
     };
-    const lines = [`RECOMPETE TARGETS — next 12 months (${targets.length}, ${fmtMoney(wall)} total)`];
+    const lines = [`EXPIRING CONTRACTS — next 12 months (${targets.length}, ${fmtMoney(wall)} total)`];
     for (const { r, days } of targets) {
       const office = buildOfficeLabel(r['Award ID'], r['Awarding Agency'] || '', r['Awarding Sub Agency'] || r['Awarding Agency'] || '');
       lines.push(`• ${r['End Date']} (${days}d) · ${r['Recipient Name'] || '?'} — ${fmtMoney(Number(r['Award Amount']) || 0)}${office ? ` · ${office}` : ''}${r['Award ID'] ? ` · ${r['Award ID']}` : ''}`);
@@ -5662,10 +5665,10 @@ function renderCard(rows, attrs, resolved) {
     }
   }
 
-  // Quick takes + recompete hit list — computed once, shared by the deck,
+  // Quick takes + expiring-contract hit list — computed once, shared by the deck,
   // the targets section, and the "Copy brief" export.
   const quickTakes = buildQuickTakes(rows, isSub, total, vendorEntries);
-  const recompeteTargets = computeRecompeteTargets(rows, isSub);
+  const expiringContracts = computeExpiringContracts(rows, isSub);
 
   // Assemble the paste-ready meeting brief. Built lazily at click time so
   // the permalink can read the mounted turn's data-q.
@@ -5692,12 +5695,12 @@ function renderCard(rows, attrs, resolved) {
         lines.push(`${i + 1}. ${n} — ${fmtMoney(v)} (${total > 0 ? Math.round((v / total) * 100) : 0}%)`);
       });
     }
-    if (recompeteTargets.length) {
-      lines.push('', `RECOMPETE TARGETS (next 12 months — ${fmtMoney(recompeteTargets.reduce((sum, t) => sum + (Number(t.r['Award Amount']) || 0), 0))})`);
-      recompeteTargets.slice(0, 8).forEach(({ r, days }) => {
+    if (expiringContracts.length) {
+      lines.push('', `EXPIRING CONTRACTS (next 12 months — ${fmtMoney(expiringContracts.reduce((sum, t) => sum + (Number(t.r['Award Amount']) || 0), 0))})`);
+      expiringContracts.slice(0, 8).forEach(({ r, days }) => {
         lines.push(`• ${r['End Date']} (${days}d) · ${r['Recipient Name'] || '?'} — ${fmtMoney(Number(r['Award Amount']) || 0)}${r['Award ID'] ? ` · ${r['Award ID']}` : ''}`);
       });
-      if (recompeteTargets.length > 8) lines.push(`  …plus ${recompeteTargets.length - 8} more`);
+      if (expiringContracts.length > 8) lines.push(`  …plus ${expiringContracts.length - 8} more`);
     }
     const q = card.closest('.mo-turn-mo')?.getAttribute('data-q') || '';
     if (q) {
@@ -5884,10 +5887,10 @@ function renderCard(rows, attrs, resolved) {
       text: "Amounts are USASpending Award Amount — cumulative obligated value over a contract's lifetime, not a single new obligation. Expired contracts are hidden." }));
   }
 
-  // ── Recompete targets — the BD hit list ──
+  // ── Expiring contracts — the BD hit list ──
   // Curated slice, not the whole table: contracts ending inside 12 months,
   // soonest first, with countdown chips and one-tap "Copy list".
-  renderRecompeteTargetsInto(card, recompeteTargets);
+  renderExpiringContractsInto(card, expiringContracts);
 
   // ── State map ──
   if (!isSub) {
@@ -6475,7 +6478,7 @@ async function fireInsight(cardEl, rows, resolved, attrs) {
       vulnEvidence = `Incumbent has held position avg ${Math.round(avgAgeDays/365*10)/10} years — entrenched but not immune`;
     } else if (expiring.length >= 3) {
       incumbentVulnerability = 'moderate';
-      vulnEvidence = `${expiring.length} contracts expiring creates multiple recompete opportunities`;
+      vulnEvidence = `${expiring.length} contracts expiring creates multiple renewal-window opportunities`;
     } else {
       incumbentVulnerability = 'low';
       vulnEvidence = `Contracts are mostly mid-lifecycle — limited near-term displacement opportunity`;
@@ -6530,7 +6533,7 @@ async function fireInsight(cardEl, rows, resolved, attrs) {
     } else if (marketStability === 'monopolistic' || marketStability === 'concentrated') {
       if (incumbentVulnerability === 'high') {
         playType = 'competitive_displacement';
-        playRationale = 'Concentrated market + aging incumbent = displacement opportunity through recompete';
+        playRationale = 'Concentrated market + aging incumbent = displacement opportunity as contracts expire';
       } else {
         playType = 'partner_teaming';
         playRationale = 'Locked market — only viable path is teaming with the dominant prime, not displacing them';
@@ -6585,7 +6588,7 @@ async function fireInsight(cardEl, rows, resolved, attrs) {
       sample_descriptions: rows.slice(0,2).map(r => r['Description']||'').filter(Boolean).map(d=>d.slice(0,120)),
     };
 
-    // Feed the deterministic Quick Takes + recompete hit list into the AI
+    // Feed the deterministic Quick Takes + expiring-contract hit list into the AI
     // prompt, so the strategist paragraph reasons from the exact evidence
     // the user is looking at — and can name real contract IDs and dates in
     // its "first call to make this week".
@@ -6596,9 +6599,9 @@ async function fireInsight(cardEl, rows, resolved, attrs) {
         evidenceBlock += '\n\nQUICK-TAKE FINDINGS (deterministic, computed from these exact rows — build on them, never contradict them):\n'
           + qt.map(t => `- [${t.kind}] ${t.headline} — ${t.body}`).join('\n');
       }
-      const tg = computeRecompeteTargets(rows, false);
+      const tg = computeExpiringContracts(rows, false);
       if (tg.length) {
-        evidenceBlock += '\n\nRECOMPETE TARGETS (soonest first — cite these by name/ID when recommending the first call):\n'
+        evidenceBlock += '\n\nEXPIRING CONTRACTS (soonest first — cite these by name/ID when recommending the first call):\n'
           + tg.slice(0, 5).map(({ r, days }) =>
               `- ${r['End Date']} (${days} days out): ${r['Recipient Name'] || '?'} — $${((Number(r['Award Amount']) || 0) / 1e6).toFixed(1)}M${r['Award ID'] ? ` · ${r['Award ID']}` : ''}`
             ).join('\n');
