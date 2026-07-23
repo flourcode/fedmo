@@ -986,6 +986,48 @@ a:hover { text-decoration: underline; }
   vertical-align: 1px;
   letter-spacing: 0.02em;
 }
+/* The "so what" answer — every take ends with a concrete play */
+.mo-blink-move {
+  margin-top: 8px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--primary-80);
+  line-height: 1.45;
+}
+.mo-blink-move::before { content: '→ '; }
+
+/* ── Recompete targets — the BD hit list ─────────────────
+   Contracts ending inside 12 months, soonest first, each with a days-left
+   countdown chip and a Source link. Reuses the 2-line row pattern inside a
+   framed list so it reads as a curated slice, not the full contract table. */
+.mo-targets {
+  margin: 0 var(--s-5) var(--s-3);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.mo-target-row { padding: 10px 14px 11px; }
+.mo-target-row + .mo-target-row { border-top: 1px solid var(--border-soft); }
+.mo-countdown {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 2px 7px;
+  border-radius: 4px;
+  margin-right: 8px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.mo-countdown-hot   { background: #FEE2E2; color: #991B1B; }  /* ≤90 days */
+.mo-countdown-warm  { background: #FEF3C7; color: #92400E; }  /* ≤180 days */
+.mo-countdown-watch { background: var(--primary-20); color: var(--primary-100); }
+.mo-targets-more {
+  font-size: 11.5px;
+  color: var(--text-faint);
+  padding: 8px 14px;
+  background: var(--bg-tint);
+}
 
 /* ── Sankey flow diagram ─────────────────────────────────
    Rendered into the same .mo-treemap-host as the treemap, so it shares the
@@ -5004,6 +5046,7 @@ const QUICK_TAKE_COLORS = {
   'GEOGRAPHY':        '#E8A468',
   'DEAL SIZE':        '#9878A0',
   'INCUMBENT':        '#A07860',
+  'TEAMING':          '#80C0B0',
 };
 
 function buildQuickTakes(rows, isSub, total, vendorEntries) {
@@ -5038,6 +5081,7 @@ function buildQuickTakes(rows, isSub, total, vendorEntries) {
           weight: 90 + Math.min(9, share / 10),
           headline: `${fmtMoney(sum)} comes up for recompete within 12 months`,
           body: `${soon.length} ${pluralize(soon.length, 'contract')} — ${share}% of this volume — ${soon.length === 1 ? 'ends' : 'end'} inside a year. Biggest: ${nameOf(biggest) || 'unknown'} at ${fmtMoney(amtOf(biggest))}${biggest['End Date'] ? `, ending ${biggest['End Date']}` : ''}.`,
+          move: `Work backward from the end dates — sources-sought notices typically drop 6–9 months out. Get the meetings before they publish.`,
         });
       }
     }
@@ -5053,6 +5097,7 @@ function buildQuickTakes(rows, isSub, total, vendorEntries) {
         weight: 86,
         headline: `${igtPct}% of this money never leaves government`,
         body: `${fmtMoney(igtSum)} is interagency transfers, not private contracts. The commercially addressable market here is ${fmtMoney(total - igtSum)} — smaller than the topline suggests.`,
+        move: `Size the pipeline on ${fmtMoney(total - igtSum)} and flag the IGT rows before someone quotes the topline in a QBR.`,
       });
     }
   }
@@ -5065,21 +5110,25 @@ function buildQuickTakes(rows, isSub, total, vendorEntries) {
     }, 0));
     const [topName, topAmt] = vendorEntries[0];
     const topPct = Math.round((topAmt / total) * 100);
-    let headline, body;
+    let headline, body, move;
     if (vendorEntries.length === 1) {
       headline = `One ${isSub ? 'sub' : 'vendor'} holds 100% of this slice`;
       body = `${topName} is the only recipient here. Any pursuit starts as a takeaway or a teaming play — plan the relationship map first.`;
+      move = `Map ${topName}'s contract end dates and open the teaming conversation now, before the recompete clock starts.`;
     } else if (hhi >= 2500) {
       headline = `Winner-take-most market — HHI ${hhi.toLocaleString()}`;
       body = `${topName} alone holds ${topPct}%. Anything over 2,500 counts as "highly concentrated" — expect entrenched incumbents and long displacement cycles.`;
+      move = `Don't bid head-on. Position as second-source risk reduction, or enter through the mid-tier as a sub.`;
     } else if (hhi >= 1500) {
       headline = `Contestable: moderately concentrated at HHI ${hhi.toLocaleString()}`;
       body = `${topName} leads with ${topPct}%, but nobody owns the room. Mid-tier displacement is realistic in markets shaped like this.`;
+      move = `Pick one mid-tier incumbent to displace and shadow their recompetes — don't chase the leader first.`;
     } else {
       headline = `Fragmented field — nobody owns it`;
       body = `HHI ${hhi.toLocaleString()} across ${vendorEntries.length} ${isSub ? 'subs' : 'vendors'}; the leader (${topName}) holds just ${topPct}%. Low barriers to entry — but thin customer loyalty cuts both ways.`;
+      move = `Land small and fast — in fragmented markets, past performance compounds quicker than pipeline reviews assume.`;
     }
-    takes.push({ kind: 'CONCENTRATION', weight: 80, headline, body });
+    takes.push({ kind: 'CONCENTRATION', weight: 80, headline, body, move });
   }
 
   // ── 4. Vehicle gatekeeping: how much moves through task orders ──
@@ -5102,6 +5151,7 @@ function buildQuickTakes(rows, isSub, total, vendorEntries) {
           weight: 72,
           headline: `${pct}% of the money moves through task orders`,
           body: `Most of this is orders against existing vehicles, not open competitions. No contract seat, no invitation — find out which IDIQs and BPAs feed this buyer before writing a capture plan.`,
+          move: `List the vehicles behind these orders and check on-ramp windows — or find a seat-holder to sub under this quarter.`,
         });
       } else if (pct <= 25 && typedSum > 0) {
         takes.push({
@@ -5109,6 +5159,7 @@ function buildQuickTakes(rows, isSub, total, vendorEntries) {
           weight: 55,
           headline: `${100 - pct}% awarded as standalone contracts`,
           body: `This buyer mostly competes work in the open rather than ordering off vehicles. You can bid here without holding an IDIQ seat — rarer than you'd think.`,
+          move: `Set a SAM.gov saved search on this buyer today — open competition means you can bid without waiting for an on-ramp.`,
         });
       }
     }
@@ -5139,6 +5190,7 @@ function buildQuickTakes(rows, isSub, total, vendorEntries) {
           weight: 64,
           headline: `${newcomers.length} ${isSub ? 'subs' : 'vendors'} broke in within the last 2 years`,
           body: `First-time winners in this set include ${names.join(' and ')}. The door is opening — outside past performance is getting through.`,
+          move: `Study the newcomers' entry awards — copy the wedge (deal size, office, award type) rather than inventing one.`,
         });
       } else if (newcomers.length === 0 && spanYears >= 3) {
         takes.push({
@@ -5146,6 +5198,7 @@ function buildQuickTakes(rows, isSub, total, vendorEntries) {
           weight: 64,
           headline: `No new ${isSub ? 'sub' : 'vendor'} has broken in for 2+ years`,
           body: `Every recipient in this set first won before ${cutoff.getFullYear()}. Strong incumbent bias — teaming onto an existing player likely beats priming cold.`,
+          move: `Skip priming here. Pick the incumbent with the nearest recompete and get on their team instead.`,
         });
       }
     }
@@ -5171,6 +5224,7 @@ function buildQuickTakes(rows, isSub, total, vendorEntries) {
           weight: 50,
           headline: `${pct}% of the work lands in ${topState}`,
           body: `${fmtMoney(topStateSum)} of performance sits in one state. Local presence — an office, cleared staff, or a ${topState}-based teammate — is a real evaluation edge here.`,
+          move: `No footprint in ${topState}? Sign a ${topState}-based sub before your competitor does — it's the cheapest eval point you'll buy.`,
         });
       }
     }
@@ -5189,6 +5243,7 @@ function buildQuickTakes(rows, isSub, total, vendorEntries) {
           weight: 45,
           headline: `The top award is ${Math.round(ratio)}× the median deal`,
           body: `Median award: ${fmtMoney(median)}. Top: ${fmtMoney(max)}. A barbell market — small quick-win orders and marquee recompetes coexist. Pick which game you're playing.`,
+          move: `Run both plays: harvest ${fmtMoney(median)}-class orders for past performance while positioning early for the marquee recompete.`,
         });
       }
     }
@@ -5211,8 +5266,42 @@ function buildQuickTakes(rows, isSub, total, vendorEntries) {
           weight: 40,
           headline: `${topName} has held this ground since ${earliest.getFullYear()}`,
           body: `${years} years of incumbency in this set. Deep relationships — but also a proposal team that may not have run a real competition in years. Both matter at recompete.`,
+          move: `Request a capability briefing with the buying office — long incumbencies often hide quiet dissatisfaction nobody has offered to fix.`,
         });
       }
+    }
+  }
+
+  // ── 9. Warm doors: who to actually call ──
+  // Vendors outside the top 3 with repeat wins AND recent activity: they
+  // know the buyer, they're proven, but they lack scale — natural teammates,
+  // channels into the account, or acquisition targets.
+  if (vendorEntries.length >= 6) {
+    const cutoff = new Date(now - 548 * MS_DAY);  // 18 months
+    const rowsByName = new Map();
+    for (const r of rows) {
+      const n = nameOf(r);
+      if (!n) continue;
+      if (!rowsByName.has(n)) rowsByName.set(n, []);
+      rowsByName.get(n).push(r);
+    }
+    const warm = vendorEntries.slice(3).filter(([n]) => {
+      const rs = rowsByName.get(n) || [];
+      if (rs.length < 2) return false;
+      return rs.some(r => {
+        const sd = dateOf(r, 'Start Date');
+        return sd && sd >= cutoff;
+      });
+    }).slice(0, 2);
+    if (warm.length > 0) {
+      const names = warm.map(([n]) => n).join(' and ');
+      takes.push({
+        kind: 'TEAMING',
+        weight: 62,
+        headline: `Warm doors: ${names}`,
+        body: `Repeat winners with fresh awards but no dominant share — they know this buyer and are still hungry. Natural teammates for a prime bid, or your channel into the account.`,
+        move: `Look up their capture leads on LinkedIn and open a teaming conversation before the next recompete cycle heats up.`,
+      });
     }
   }
 
@@ -5221,7 +5310,7 @@ function buildQuickTakes(rows, isSub, total, vendorEntries) {
 
 // Render the deck: comp-head with read-time badge, scroll-snap card strip,
 // progress dots that track the swipe, and tap-to-copy on every card.
-function renderQuickTakesInto(card, takes) {
+function renderQuickTakesInto(card, takes, getBriefText) {
   if (!takes.length) return;
   const hexToRgba = (hex, a) => {
     const h = hex.replace('#', '');
@@ -5235,6 +5324,27 @@ function renderQuickTakesInto(card, takes) {
   compHead.appendChild(title);
   const meta = $$('div', { class: 'mo-comp-meta', text: `1/${takes.length} · tap to copy` });
   compHead.appendChild(meta);
+  // "Copy brief" — assembles the whole card (topline, takes + moves, top
+  // vendors, recompete targets, permalink) into paste-ready text for
+  // CRM / Slack / email. THE take-it-to-the-meeting button.
+  if (typeof getBriefText === 'function') {
+    const briefBtn = $$('button', { class: 'mo-tm-toggle-btn', type: 'button', text: 'Copy brief' });
+    briefBtn.addEventListener('click', () => {
+      if (briefBtn.dataset.flash === '1') return;
+      const done = (msg) => {
+        briefBtn.dataset.flash = '1';
+        const orig = briefBtn.textContent;
+        briefBtn.textContent = msg;
+        setTimeout(() => { briefBtn.textContent = orig; delete briefBtn.dataset.flash; }, 1600);
+      };
+      const text = getBriefText();
+      if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(text).then(() => done('Copied ✓'), () => done('Try again'));
+      } else { done('Try again'); }
+      track('copy_brief', {});
+    });
+    compHead.appendChild(briefBtn);
+  }
   card.appendChild(compHead);
 
   const strip = $$('div', { class: 'mo-blinks', role: 'list' });
@@ -5255,11 +5365,12 @@ function renderQuickTakesInto(card, takes) {
     el.appendChild(tag);
     el.appendChild($$('div', { class: 'mo-blink-headline', text: t.headline }));
     el.appendChild($$('div', { class: 'mo-blink-body', text: t.body }));
+    if (t.move) el.appendChild($$('div', { class: 'mo-blink-move', text: t.move }));
     const copyHint = $$('span', { class: 'mo-blink-copy', text: 'Copy' });
     el.appendChild(copyHint);
 
     const doCopy = () => {
-      const text = `${t.headline} — ${t.body}`;
+      const text = `${t.headline} — ${t.body}${t.move ? ` Next move: ${t.move}` : ''}`;
       const done = () => {
         copyHint.textContent = 'Copied ✓';
         el.classList.add('is-copied');
@@ -5299,6 +5410,97 @@ function renderQuickTakesInto(card, takes) {
       meta.textContent = `${idx + 1}/${takes.length} · tap to copy`;
     });
   }, { passive: true });
+}
+
+// =============================================================================
+// RECOMPETE TARGETS — the BD hit list
+// =============================================================================
+//
+// Contracts ending inside 12 months, soonest first: the actionable slice a
+// capture team builds a calendar from. Each row carries a days-left countdown
+// (hot ≤90d / warm ≤180d / watch ≤365d), the buying office, and the
+// USASpending source link. "Copy list" exports it paste-ready.
+
+function computeRecompeteTargets(rows, isSub) {
+  if (isSub) return [];
+  const now = Date.now(), MS_DAY = 86400000;
+  return rows
+    .map(r => {
+      if (!r['End Date']) return null;
+      const e = new Date(r['End Date']);
+      if (isNaN(e)) return null;
+      const days = Math.round((e - now) / MS_DAY);
+      if (days < 0 || days > 365) return null;
+      if ((Number(r['Award Amount']) || 0) <= 0) return null;
+      return { r, days };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.days - b.days);
+}
+
+function renderRecompeteTargetsInto(card, targets) {
+  if (!targets.length) return;
+  const wall = targets.reduce((s, t) => s + (Number(t.r['Award Amount']) || 0), 0);
+
+  const compHeadEl = $$('div', { class: 'mo-comp-head' });
+  compHeadEl.appendChild($$('div', { class: 'mo-comp-title', text: 'Recompete targets' }));
+  compHeadEl.appendChild($$('div', {
+    class: 'mo-comp-meta',
+    text: `${targets.length} inside 12 months · ${fmtMoney(wall)}`,
+  }));
+  const copyBtn = $$('button', { class: 'mo-tm-toggle-btn', type: 'button', text: 'Copy list' });
+  compHeadEl.appendChild(copyBtn);
+  card.appendChild(compHeadEl);
+
+  const SHOWN = 6;
+  const wrap = $$('div', { class: 'mo-targets' });
+  targets.slice(0, SHOWN).forEach(({ r, days }) => {
+    const amount = Number(r['Award Amount']) || 0;
+    const agencyTop = r['Awarding Agency'] || '';
+    const office = buildOfficeLabel(r['Award ID'], agencyTop, r['Awarding Sub Agency'] || agencyTop);
+    const internalId = r.generated_internal_id || '';
+    const viewUrl = internalId ? `https://www.usaspending.gov/award/${internalId}` : '';
+    const urgency = days <= 90 ? 'hot' : days <= 180 ? 'warm' : 'watch';
+    const metaBits = [office, r['Award ID'] ? `ID: ${r['Award ID']}` : ''].filter(Boolean);
+
+    const row = $$('div', { class: 'mo-row-2line mo-target-row' });
+    row.innerHTML = `
+      <div class="mo-row-2line-top">
+        <span class="mo-row-name" title="${escapeHtml(r['Recipient Name'] || '')}">${escapeHtml(r['Recipient Name'] || '—')}</span>
+        <span class="mo-row-amount">${fmtMoney(amount)}</span>
+      </div>
+      ${metaBits.length ? `<div class="mo-row-meta">${escapeHtml(metaBits.join(' · '))}</div>` : ''}
+      <div class="mo-row-meta-pop"><span class="mo-countdown mo-countdown-${urgency}">${days}d left</span>ends ${escapeHtml(r['End Date'] || '')}</div>
+      ${viewUrl ? `<div class="mo-row-actions"><a class="mo-row-view" href="${escapeHtml(viewUrl)}" target="_blank" rel="noopener">Source ↗</a></div>` : ''}`;
+    wrap.appendChild(row);
+  });
+  if (targets.length > SHOWN) {
+    wrap.appendChild($$('div', {
+      class: 'mo-targets-more',
+      text: `+${targets.length - SHOWN} more inside 12 months — sort the contract list below by "Expiring"`,
+    }));
+  }
+  card.appendChild(wrap);
+
+  copyBtn.addEventListener('click', () => {
+    if (copyBtn.dataset.flash === '1') return;
+    const done = (msg) => {
+      copyBtn.dataset.flash = '1';
+      const orig = copyBtn.textContent;
+      copyBtn.textContent = msg;
+      setTimeout(() => { copyBtn.textContent = orig; delete copyBtn.dataset.flash; }, 1600);
+    };
+    const lines = [`RECOMPETE TARGETS — next 12 months (${targets.length}, ${fmtMoney(wall)} total)`];
+    for (const { r, days } of targets) {
+      const office = buildOfficeLabel(r['Award ID'], r['Awarding Agency'] || '', r['Awarding Sub Agency'] || r['Awarding Agency'] || '');
+      lines.push(`• ${r['End Date']} (${days}d) · ${r['Recipient Name'] || '?'} — ${fmtMoney(Number(r['Award Amount']) || 0)}${office ? ` · ${office}` : ''}${r['Award ID'] ? ` · ${r['Award ID']}` : ''}`);
+    }
+    const text = lines.join('\n');
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).then(() => done('Copied ✓'), () => done('Try again'));
+    } else { done('Try again'); }
+    track('copy_targets', { count: targets.length });
+  });
 }
 
 function renderCard(rows, attrs, resolved) {
@@ -5441,6 +5643,51 @@ function renderCard(rows, attrs, resolved) {
     }
   }
 
+  // Quick takes + recompete hit list — computed once, shared by the deck,
+  // the targets section, and the "Copy brief" export.
+  const quickTakes = buildQuickTakes(rows, isSub, total, vendorEntries);
+  const recompeteTargets = computeRecompeteTargets(rows, isSub);
+
+  // Assemble the paste-ready meeting brief. Built lazily at click time so
+  // the permalink can read the mounted turn's data-q.
+  const buildBriefText = () => {
+    const lines = [];
+    lines.push(`MARKET BRIEF — ${titleBits.join(' · ')}`);
+    const effSince = resolved.dateBroadened?.broadenedTo || attrs.since;
+    const range = (effSince || attrs.until)
+      ? `${effSince || '…'} → ${attrs.until || 'today'}`
+      : 'lifetime view';
+    lines.push(`${range} · ${rows.length} ${pluralize(rows.length, 'award')} · Fedmo, ${new Date().toISOString().slice(0, 10)}`);
+    lines.push('', 'TOPLINE');
+    lines.push(`• ${fmtMoney(total)} obligated across ${vendorCount} ${isSub ? 'subs' : 'vendors'} — top 3 hold ${top3Share}%`);
+    if (quickTakes.length) {
+      lines.push('', 'QUICK TAKE');
+      for (const t of quickTakes) {
+        lines.push(`• [${t.kind}] ${t.headline} — ${t.body}${t.move ? ` Next move: ${t.move}` : ''}`);
+      }
+    }
+    const topV = vendorEntries.slice(0, 5);
+    if (topV.length) {
+      lines.push('', isSub ? 'TOP SUBS' : 'TOP VENDORS');
+      topV.forEach(([n, v], i) => {
+        lines.push(`${i + 1}. ${n} — ${fmtMoney(v)} (${total > 0 ? Math.round((v / total) * 100) : 0}%)`);
+      });
+    }
+    if (recompeteTargets.length) {
+      lines.push('', `RECOMPETE TARGETS (next 12 months — ${fmtMoney(recompeteTargets.reduce((sum, t) => sum + (Number(t.r['Award Amount']) || 0), 0))})`);
+      recompeteTargets.slice(0, 8).forEach(({ r, days }) => {
+        lines.push(`• ${r['End Date']} (${days}d) · ${r['Recipient Name'] || '?'} — ${fmtMoney(Number(r['Award Amount']) || 0)}${r['Award ID'] ? ` · ${r['Award ID']}` : ''}`);
+      });
+      if (recompeteTargets.length > 8) lines.push(`  …plus ${recompeteTargets.length - 8} more`);
+    }
+    const q = card.closest('.mo-turn-mo')?.getAttribute('data-q') || '';
+    if (q) {
+      const path = window.location.pathname.replace(/\/[^\/]+\.html?$/, '/') || '/';
+      lines.push('', `Live data: ${window.location.origin}${path}?q=${encodeURIComponent(q)}`);
+    }
+    return lines.join('\n');
+  };
+
   const insightBits = [];
   if (vendorEntries.length > 0 && total > 0) {
     const [topName, topAmount] = vendorEntries[0];
@@ -5494,8 +5741,9 @@ function renderCard(rows, attrs, resolved) {
 
   // ── Quick take — snackable insight deck (Blinkist-style) ──
   // First thing in the content area, above the treemap: the 30-second
-  // "here's what you'd miss" read before the visuals.
-  renderQuickTakesInto(card, buildQuickTakes(rows, isSub, total, vendorEntries));
+  // "here's what you'd miss" read before the visuals. The deck header
+  // carries "Copy brief" — the whole card as paste-ready text.
+  renderQuickTakesInto(card, quickTakes, buildBriefText);
 
   const initialDimension = (!isSub && (resolved.recipientResolved || attrs.recipient))
     ? 'agency'
@@ -5616,6 +5864,11 @@ function renderCard(rows, attrs, resolved) {
     card.appendChild($$('div', { class: 'mo-amount-note',
       text: "Amounts are USASpending Award Amount — cumulative obligated value over a contract's lifetime, not a single new obligation. Expired contracts are hidden." }));
   }
+
+  // ── Recompete targets — the BD hit list ──
+  // Curated slice, not the whole table: contracts ending inside 12 months,
+  // soonest first, with countdown chips and one-tap "Copy list".
+  renderRecompeteTargetsInto(card, recompeteTargets);
 
   // ── State map ──
   if (!isSub) {
