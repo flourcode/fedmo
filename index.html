@@ -1418,6 +1418,22 @@ a:hover { text-decoration: underline; }
   cursor: not-allowed;
 }
 
+/* ── Desktop layout ───────────────────────────────────── */
+/* The app is a mobile-first 720px column. On real desktop widths, let it
+   breathe: header, conversation, and composer widen together so cards,
+   treemaps, and the Sankey use the space. All charts measure clientWidth
+   and re-render on resize, so they adapt automatically. Prose stays capped
+   at a readable measure — data wants width, sentences don't. */
+@media (min-width: 1100px) {
+  .mo-header-inner, .mo-app, .mo-composer { max-width: 980px; }
+  .mo-prose { max-width: 70ch; }
+  /* Treemap height is set inline by renderTreemapInto per measured width —
+     no CSS height override here, or preserveAspectRatio:none would stretch. */
+}
+@media (min-width: 1440px) {
+  .mo-header-inner, .mo-app, .mo-composer { max-width: 1120px; }
+}
+
 /* ── Mobile tweaks ────────────────────────────────────── */
 @media (max-width: 600px) {
   .mo-card-head { padding: var(--s-3) var(--s-4) var(--s-3); }
@@ -3853,7 +3869,10 @@ function renderTreemapInto(host, items) {
   // Stash data for resize-driven re-render
   try { host.setAttribute('data-tm-items', JSON.stringify(items)); } catch {}
   const W = host.clientWidth || 320;
-  const H = W <= 420 ? 170 : 220;  // match @media (max-width:600px) CSS height
+  // Height tiers by measured host width. Set inline on the SVG below so the
+  // rendered height ALWAYS matches the viewBox — with preserveAspectRatio=
+  // "none", any CSS/JS disagreement stretches the text.
+  const H = W <= 420 ? 170 : W >= 820 ? 260 : 220;
   const sorted = items.slice().sort((a, b) => b.value - a.value);
   const laid = squarify(sorted, 0, 0, W, H);
   const PADDING = 2;
@@ -3870,7 +3889,7 @@ function renderTreemapInto(host, items) {
       : { name: 'rgba(255,255,255,0.96)', value: 'rgba(255,255,255,0.82)' };
   };
 
-  let svg = `<svg class="mo-treemap" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">`;
+  let svg = `<svg class="mo-treemap" style="height:${H}px" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">`;
   // Diagonal-hatch pattern for "Other" cells so they read as buckets,
   // not as player cells the user might click into. The pattern is the
   // muted purple from the palette over the Other base color.
@@ -6566,6 +6585,26 @@ async function fireInsight(cardEl, rows, resolved, attrs) {
       sample_descriptions: rows.slice(0,2).map(r => r['Description']||'').filter(Boolean).map(d=>d.slice(0,120)),
     };
 
+    // Feed the deterministic Quick Takes + recompete hit list into the AI
+    // prompt, so the strategist paragraph reasons from the exact evidence
+    // the user is looking at — and can name real contract IDs and dates in
+    // its "first call to make this week".
+    let evidenceBlock = '';
+    try {
+      const qt = buildQuickTakes(rows, false, total, sorted);
+      if (qt.length) {
+        evidenceBlock += '\n\nQUICK-TAKE FINDINGS (deterministic, computed from these exact rows — build on them, never contradict them):\n'
+          + qt.map(t => `- [${t.kind}] ${t.headline} — ${t.body}`).join('\n');
+      }
+      const tg = computeRecompeteTargets(rows, false);
+      if (tg.length) {
+        evidenceBlock += '\n\nRECOMPETE TARGETS (soonest first — cite these by name/ID when recommending the first call):\n'
+          + tg.slice(0, 5).map(({ r, days }) =>
+              `- ${r['End Date']} (${days} days out): ${r['Recipient Name'] || '?'} — $${((Number(r['Award Amount']) || 0) / 1e6).toFixed(1)}M${r['Award ID'] ? ` · ${r['Award ID']}` : ''}`
+            ).join('\n');
+      }
+    } catch (err) { console.warn('[insight evidence]', err.message); }
+
     // Create insight element and append directly to turn
     const insightEl = $$('div', { class: 'mo-insight', text: '' });
     turn.appendChild(insightEl);
@@ -6601,7 +6640,7 @@ RAW NUMBERS:
 - ${signals.total_obligated}
 - Top vendor: ${signals.top_vendor}
 - Expiring in 90 days: ${signals.expiring_90d}
-- Avg contract age: ${signals.avg_contract_age}
+- Avg contract age: ${signals.avg_contract_age}${evidenceBlock}
 
 Write 3 sentences. No markdown. No bullet points. Plain prose.
 Sentence 1: What this specific market situation means for this specific person given their role/company.
