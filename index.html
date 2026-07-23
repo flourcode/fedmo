@@ -3458,13 +3458,30 @@ function worst(row, sideLength) {
   )));
 }
 
+// Colorful categorical palette, ported from Fedhoo's chart colors.
+// "Crayon construction paper" — matte, chalky, diffused. Colors are
+// assigned per entity NAME (not rank), so the same vendor keeps the same
+// color across the treemap, the Sankey, dimension toggles, and re-sorts.
 const TREEMAP_COLORS = [
-  '#46446E', '#4F4D7A', '#585686', '#615F92', '#6A689E',
-  '#7372AA', '#7C7BB6', '#8584BF', '#8E8DC4', '#9796C9',
-  '#A09FCE', '#A9A8D3', '#B2B1D8', '#BBBADD', '#C4C3E2',
-  '#CDCCE7',
+  '#7CA8C4', '#D4A0B0', '#638E6E', '#E8A468', '#8888B8',
+  '#D8CFC2', '#9878A0', '#C75268', '#80C0B0', '#A07860',
 ];
 const TREEMAP_OTHER_COLOR = '#E3E3F1';
+
+// Fedhoo-style stable color assignment: first-come-first-served palette
+// slots keyed by entity name, cycling with modulo when we run out.
+// "Other (N)" buckets keep the neutral hatched treatment handled by the
+// renderers, so they never claim a palette slot here.
+const chartColorFor = (() => {
+  const assigned = new Map();
+  let nextIdx = 0;
+  return (name) => {
+    if (!name) return TREEMAP_OTHER_COLOR;
+    if (/^Other \(/.test(name) || name.includes('(unknown')) return TREEMAP_OTHER_COLOR;
+    if (!assigned.has(name)) assigned.set(name, nextIdx++);
+    return TREEMAP_COLORS[assigned.get(name) % TREEMAP_COLORS.length];
+  };
+})();
 
 function aggregateRowsBy(rows, isSub, dimension) {
   const map = new Map();
@@ -3682,8 +3699,8 @@ function buildTreemapItems(rows, isSub, dimension) {
   const leftoverCount = sorted.length - cutoff;
   if (leftoverCount === 1 && cutoff < MAX_CELLS) cutoff += 1;
 
-  const items = sorted.slice(0, cutoff).map(([name, value], i) => ({
-    name, value, color: TREEMAP_COLORS[i] || TREEMAP_COLORS[TREEMAP_COLORS.length - 1],
+  const items = sorted.slice(0, cutoff).map(([name, value]) => ({
+    name, value, color: chartColorFor(name),
   }));
   const remainder = sorted.length - cutoff;
   if (remainder > 1) {
@@ -3904,10 +3921,13 @@ function renderSankeyInto(host, rows, isSub) {
   const leftPos = layoutColumn(agencies, colLeftX);
   const rightPos = layoutColumn(vendors, colRightX);
 
-  // Color: agencies take palette slots in rank order; "Other" stays neutral.
+  // Color: same name-keyed palette as the treemap, so a vendor keeps its
+  // color when the user flips between views. Because assignment is by name,
+  // agencies (left) and vendors (right) draw from the same pool and don't
+  // mirror each other's colors the way rank-indexing did. "Other" stays
+  // neutral / hatched.
   const colorFor = (pos) =>
-    pos.node.isOther ? TREEMAP_OTHER_COLOR
-      : (TREEMAP_COLORS[pos.idx] || TREEMAP_COLORS[TREEMAP_COLORS.length - 1]);
+    pos.node.isOther ? TREEMAP_OTHER_COLOR : chartColorFor(pos.node.name);
 
   // Within each node, links stack so ribbons don't all collide at the midline.
   const leftOffsets = new Map();   // name -> running y offset for outgoing links
@@ -3919,6 +3939,12 @@ function renderSankeyInto(host, rows, isSub) {
   const sortedLinks = links.slice().sort((a, b) => b.value - a.value);
 
   let svg = `<svg class="mo-sankey" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">`;
+
+  // Per-render unique prefix for gradient ids — several Mo cards (each with
+  // its own Sankey) can be in the document at once, and SVG ids are global.
+  const gradPrefix = 'mo-skg' + (renderSankeyInto._seq = (renderSankeyInto._seq || 0) + 1);
+  let gradDefs = '';
+  let gradIdx = 0;
 
   // ── Link ribbons ──
   for (const link of sortedLinks) {
@@ -3941,7 +3967,16 @@ function renderSankeyInto(host, rows, isSub) {
     const x0 = colLeftX + NODE_W;
     const x1 = colRightX;
     const xc = (x0 + x1) / 2;
-    const ribbonColor = colorFor(lp);
+    // Fedhoo-style ribbon: horizontal gradient from the agency's color into
+    // the vendor's color, so each flow reads as "this money moved there".
+    const gradId = `${gradPrefix}-${gradIdx++}`;
+    gradDefs +=
+      `<linearGradient id="${gradId}" gradientUnits="userSpaceOnUse" ` +
+      `x1="${x0}" y1="0" x2="${x1}" y2="0">` +
+      `<stop offset="0%" stop-color="${colorFor(lp)}"/>` +
+      `<stop offset="100%" stop-color="${colorFor(rp)}"/>` +
+      `</linearGradient>`;
+    const ribbonColor = `url(#${gradId})`;
 
     // Filled ribbon: top edge then bottom edge back, cubic bezier curves.
     const topPath =
@@ -3994,7 +4029,7 @@ function renderSankeyInto(host, rows, isSub) {
          `width="6" height="6" patternTransform="rotate(45)">` +
          `<rect width="6" height="6" fill="${TREEMAP_OTHER_COLOR}"/>` +
          `<line x1="0" y1="0" x2="0" y2="6" stroke="rgba(70,68,110,0.10)" stroke-width="3"/>` +
-         `</pattern></defs>`;
+         `</pattern>${gradDefs}</defs>`;
   drawNodes(leftPos, 'left');
   drawNodes(rightPos, 'right');
 
