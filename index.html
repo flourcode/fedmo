@@ -891,6 +891,102 @@ a:hover { text-decoration: underline; }
   border-color: var(--primary-100);
 }
 
+/* ── Quick take — Blinkist-style insight deck ────────────
+   Swipeable strip of snack-sized insight cards between the stats and the
+   treemap. Each card is one sharp, non-obvious read on the data (HHI,
+   recompete wall, vehicle gatekeeping...) with a tag chip, a punchy
+   headline, and one supporting line. Tap to copy — built for pasting into
+   Slack before the meeting. Scroll-snap + dots = the Blinkist feel. */
+.mo-blinks {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  padding: 2px var(--s-5) 8px;
+  scrollbar-width: none;
+}
+.mo-blinks::-webkit-scrollbar { display: none; }
+.mo-blink {
+  flex: 0 0 min(272px, 82%);
+  scroll-snap-align: start;
+  background: var(--bg-tint);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px 13px;
+  cursor: pointer;
+  position: relative;
+  transition: box-shadow 140ms, transform 140ms, border-color 140ms;
+}
+.mo-blink:hover { box-shadow: var(--shadow-lift); border-color: var(--border); }
+.mo-blink:active { transform: scale(0.985); }
+.mo-blink-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  padding: 2px 9px 2px 7px;
+  border-radius: 999px;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+.mo-blink-tag-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.mo-blink-headline {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--text-title);
+  line-height: 1.32;
+  letter-spacing: var(--track-tight);
+  margin-bottom: 6px;
+}
+.mo-blink-body {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+.mo-blink-copy {
+  position: absolute;
+  top: 11px;
+  right: 12px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-faint);
+  opacity: 0;
+  transition: opacity 120ms;
+  pointer-events: none;
+}
+.mo-blink:hover .mo-blink-copy, .mo-blink:focus-visible .mo-blink-copy { opacity: 1; }
+.mo-blink.is-copied .mo-blink-copy { opacity: 1; color: var(--primary-80); font-weight: 800; }
+.mo-blink-dots {
+  display: flex;
+  gap: 5px;
+  justify-content: center;
+  align-items: center;
+  padding: 0 0 var(--s-2);
+}
+.mo-blink-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--border);
+  transition: background 160ms, width 160ms;
+}
+.mo-blink-dot.is-active { background: var(--primary-80); width: 14px; }
+/* Read-time badge in the deck header — the Blinkist "2-min read" cue */
+.mo-blinks-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--primary-80);
+  background: var(--primary-20);
+  border-radius: 999px;
+  padding: 2px 8px;
+  margin-left: 6px;
+  vertical-align: 1px;
+  letter-spacing: 0.02em;
+}
+
 /* ── Sankey flow diagram ─────────────────────────────────
    Rendered into the same .mo-treemap-host as the treemap, so it shares the
    host's horizontal margin. Height is intrinsic (the SVG viewBox sets it). */
@@ -4883,6 +4979,328 @@ function renderSubawardRows(card, rows, attrs, resolved) {
 // =============================================================================
 // CARD RENDER
 // =============================================================================
+// =============================================================================
+// QUICK TAKE — Blinkist-style insight deck
+// =============================================================================
+//
+// Computes 3-5 sharp, non-obvious reads on the result set — the angles a
+// BD person skimming the treemap would miss: HHI concentration class, the
+// 12-month recompete wall in dollars, task-order gatekeeping, whether new
+// vendors are actually breaking in, interagency money that never leaves
+// government, deal-size barbells, incumbent age. Each take is one snackable
+// card: tag + punchy headline + one supporting line. Tap copies it — built
+// for pasting into Slack before the meeting.
+//
+// Every generator guards on field availability so sub-award sets (which use
+// _subName/_amount and may lack prime fields) degrade gracefully. Takes are
+// weighted; we surface the top 5 so the deck stays a 30-second read.
+
+const QUICK_TAKE_COLORS = {
+  'RECOMPETE':        '#C75268',
+  'FOLLOW THE MONEY': '#D4A0B0',
+  'CONCENTRATION':    '#8888B8',
+  'VEHICLE':          '#7CA8C4',
+  'NEW ENTRANTS':     '#638E6E',
+  'GEOGRAPHY':        '#E8A468',
+  'DEAL SIZE':        '#9878A0',
+  'INCUMBENT':        '#A07860',
+};
+
+function buildQuickTakes(rows, isSub, total, vendorEntries) {
+  const takes = [];
+  if (!rows.length || total <= 0) return takes;
+  const now = new Date();
+  const MS_DAY = 86400000;
+  const amtOf = (r) => isSub ? (Number(r._amount) || 0) : (Number(r['Award Amount']) || 0);
+  const nameOf = (r) => isSub ? (r._subName || '') : (r['Recipient Name'] || '');
+  const dateOf = (r, field) => {
+    const v = r[field];
+    if (!v) return null;
+    const d = new Date(v);
+    return isNaN(d) ? null : d;
+  };
+
+  // ── 1. Recompete wall: dollars ending within 12 months (prime only) ──
+  if (!isSub) {
+    const soon = rows.filter(r => {
+      const e = dateOf(r, 'End Date');
+      if (!e) return false;
+      const days = (e - now) / MS_DAY;
+      return days >= 0 && days <= 365;
+    });
+    if (soon.length > 0) {
+      const sum = soon.reduce((s, r) => s + amtOf(r), 0);
+      const share = Math.round((sum / total) * 100);
+      if (sum > 0 && share >= 5) {
+        const biggest = soon.slice().sort((a, b) => amtOf(b) - amtOf(a))[0];
+        takes.push({
+          kind: 'RECOMPETE',
+          weight: 90 + Math.min(9, share / 10),
+          headline: `${fmtMoney(sum)} comes up for recompete within 12 months`,
+          body: `${soon.length} ${pluralize(soon.length, 'contract')} — ${share}% of this volume — ${soon.length === 1 ? 'ends' : 'end'} inside a year. Biggest: ${nameOf(biggest) || 'unknown'} at ${fmtMoney(amtOf(biggest))}${biggest['End Date'] ? `, ending ${biggest['End Date']}` : ''}.`,
+        });
+      }
+    }
+  }
+
+  // ── 2. Interagency transfers: money that never leaves government ──
+  if (!isSub) {
+    const igtSum = rows.reduce((s, r) => s + (detectIGT(r) ? amtOf(r) : 0), 0);
+    const igtPct = Math.round((igtSum / total) * 100);
+    if (igtPct >= 25) {
+      takes.push({
+        kind: 'FOLLOW THE MONEY',
+        weight: 86,
+        headline: `${igtPct}% of this money never leaves government`,
+        body: `${fmtMoney(igtSum)} is interagency transfers, not private contracts. The commercially addressable market here is ${fmtMoney(total - igtSum)} — smaller than the topline suggests.`,
+      });
+    }
+  }
+
+  // ── 3. Concentration: HHI, the number analysts use and BD decks skip ──
+  if (vendorEntries.length >= 1) {
+    const hhi = Math.round(vendorEntries.reduce((s, [, v]) => {
+      const sh = (v / total) * 100;
+      return s + sh * sh;
+    }, 0));
+    const [topName, topAmt] = vendorEntries[0];
+    const topPct = Math.round((topAmt / total) * 100);
+    let headline, body;
+    if (vendorEntries.length === 1) {
+      headline = `One ${isSub ? 'sub' : 'vendor'} holds 100% of this slice`;
+      body = `${topName} is the only recipient here. Any pursuit starts as a takeaway or a teaming play — plan the relationship map first.`;
+    } else if (hhi >= 2500) {
+      headline = `Winner-take-most market — HHI ${hhi.toLocaleString()}`;
+      body = `${topName} alone holds ${topPct}%. Anything over 2,500 counts as "highly concentrated" — expect entrenched incumbents and long displacement cycles.`;
+    } else if (hhi >= 1500) {
+      headline = `Contestable: moderately concentrated at HHI ${hhi.toLocaleString()}`;
+      body = `${topName} leads with ${topPct}%, but nobody owns the room. Mid-tier displacement is realistic in markets shaped like this.`;
+    } else {
+      headline = `Fragmented field — nobody owns it`;
+      body = `HHI ${hhi.toLocaleString()} across ${vendorEntries.length} ${isSub ? 'subs' : 'vendors'}; the leader (${topName}) holds just ${topPct}%. Low barriers to entry — but thin customer loyalty cuts both ways.`;
+    }
+    takes.push({ kind: 'CONCENTRATION', weight: 80, headline, body });
+  }
+
+  // ── 4. Vehicle gatekeeping: how much moves through task orders ──
+  if (!isSub) {
+    let orderSum = 0, typedSum = 0;
+    for (const r of rows) {
+      const t = String(r['Contract Award Type'] || '').toUpperCase();
+      if (!t) continue;
+      const a = amtOf(r);
+      typedSum += a;
+      if (t.includes('DELIVERY ORDER') || t.includes('TASK ORDER') || t.includes('BPA') || t.includes('IDV')) {
+        orderSum += a;
+      }
+    }
+    if (typedSum > total * 0.5) {
+      const pct = Math.round((orderSum / typedSum) * 100);
+      if (pct >= 60) {
+        takes.push({
+          kind: 'VEHICLE',
+          weight: 72,
+          headline: `${pct}% of the money moves through task orders`,
+          body: `Most of this is orders against existing vehicles, not open competitions. No contract seat, no invitation — find out which IDIQs and BPAs feed this buyer before writing a capture plan.`,
+        });
+      } else if (pct <= 25 && typedSum > 0) {
+        takes.push({
+          kind: 'VEHICLE',
+          weight: 55,
+          headline: `${100 - pct}% awarded as standalone contracts`,
+          body: `This buyer mostly competes work in the open rather than ordering off vehicles. You can bid here without holding an IDIQ seat — rarer than you'd think.`,
+        });
+      }
+    }
+  }
+
+  // ── 5. New entrants: is the door actually open? ──
+  {
+    const firstWin = new Map();  // vendor -> earliest Start Date in this set
+    for (const r of rows) {
+      const n = nameOf(r);
+      const s = dateOf(r, 'Start Date');
+      if (!n || !s) continue;
+      const prev = firstWin.get(n);
+      if (!prev || s < prev) firstWin.set(n, s);
+    }
+    if (firstWin.size >= 4) {
+      const cutoff = new Date(now - 730 * MS_DAY);  // 24 months
+      const newcomers = [...firstWin.entries()].filter(([, d]) => d >= cutoff);
+      const earliest = [...firstWin.values()].sort((a, b) => a - b)[0];
+      const spanYears = (now - earliest) / (365 * MS_DAY);
+      if (newcomers.length >= 2) {
+        const names = newcomers
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 2)
+          .map(([n]) => n);
+        takes.push({
+          kind: 'NEW ENTRANTS',
+          weight: 64,
+          headline: `${newcomers.length} ${isSub ? 'subs' : 'vendors'} broke in within the last 2 years`,
+          body: `First-time winners in this set include ${names.join(' and ')}. The door is opening — outside past performance is getting through.`,
+        });
+      } else if (newcomers.length === 0 && spanYears >= 3) {
+        takes.push({
+          kind: 'NEW ENTRANTS',
+          weight: 64,
+          headline: `No new ${isSub ? 'sub' : 'vendor'} has broken in for 2+ years`,
+          body: `Every recipient in this set first won before ${cutoff.getFullYear()}. Strong incumbent bias — teaming onto an existing player likely beats priming cold.`,
+        });
+      }
+    }
+  }
+
+  // ── 6. Geography: where the work physically lands ──
+  {
+    const geo = new Map();
+    let geoTotal = 0;
+    for (const r of rows) {
+      const c = r['Place of Performance State Code'];
+      if (!c) continue;
+      const a = amtOf(r);
+      geo.set(c, (geo.get(c) || 0) + a);
+      geoTotal += a;
+    }
+    if (geo.size >= 2 && geoTotal > 0) {
+      const [topState, topStateSum] = [...geo.entries()].sort((a, b) => b[1] - a[1])[0];
+      const pct = Math.round((topStateSum / geoTotal) * 100);
+      if (pct >= 45) {
+        takes.push({
+          kind: 'GEOGRAPHY',
+          weight: 50,
+          headline: `${pct}% of the work lands in ${topState}`,
+          body: `${fmtMoney(topStateSum)} of performance sits in one state. Local presence — an office, cleared staff, or a ${topState}-based teammate — is a real evaluation edge here.`,
+        });
+      }
+    }
+  }
+
+  // ── 7. Deal-size barbell: median vs. top award ──
+  {
+    const amounts = rows.map(amtOf).filter(a => a > 0).sort((a, b) => a - b);
+    if (amounts.length >= 8) {
+      const median = amounts[Math.floor(amounts.length / 2)];
+      const max = amounts[amounts.length - 1];
+      const ratio = median > 0 ? max / median : 0;
+      if (ratio >= 8) {
+        takes.push({
+          kind: 'DEAL SIZE',
+          weight: 45,
+          headline: `The top award is ${Math.round(ratio)}× the median deal`,
+          body: `Median award: ${fmtMoney(median)}. Top: ${fmtMoney(max)}. A barbell market — small quick-win orders and marquee recompetes coexist. Pick which game you're playing.`,
+        });
+      }
+    }
+  }
+
+  // ── 8. Incumbent age: how long the leader has held this ground ──
+  if (!isSub && vendorEntries.length >= 2) {
+    const [topName] = vendorEntries[0];
+    let earliest = null;
+    for (const r of rows) {
+      if (nameOf(r) !== topName) continue;
+      const s = dateOf(r, 'Start Date');
+      if (s && (!earliest || s < earliest)) earliest = s;
+    }
+    if (earliest) {
+      const years = Math.floor((now - earliest) / (365 * MS_DAY));
+      if (years >= 4) {
+        takes.push({
+          kind: 'INCUMBENT',
+          weight: 40,
+          headline: `${topName} has held this ground since ${earliest.getFullYear()}`,
+          body: `${years} years of incumbency in this set. Deep relationships — but also a proposal team that may not have run a real competition in years. Both matter at recompete.`,
+        });
+      }
+    }
+  }
+
+  return takes.sort((a, b) => b.weight - a.weight).slice(0, 5);
+}
+
+// Render the deck: comp-head with read-time badge, scroll-snap card strip,
+// progress dots that track the swipe, and tap-to-copy on every card.
+function renderQuickTakesInto(card, takes) {
+  if (!takes.length) return;
+  const hexToRgba = (hex, a) => {
+    const h = hex.replace('#', '');
+    return `rgba(${parseInt(h.slice(0, 2), 16)},${parseInt(h.slice(2, 4), 16)},${parseInt(h.slice(4, 6), 16)},${a})`;
+  };
+  const secs = takes.length * 6;
+
+  const compHead = $$('div', { class: 'mo-comp-head' });
+  const title = $$('div', { class: 'mo-comp-title' }, 'Quick take');
+  title.appendChild($$('span', { class: 'mo-blinks-badge', text: `⚡ ${secs}-sec read` }));
+  compHead.appendChild(title);
+  const meta = $$('div', { class: 'mo-comp-meta', text: `1/${takes.length} · tap to copy` });
+  compHead.appendChild(meta);
+  card.appendChild(compHead);
+
+  const strip = $$('div', { class: 'mo-blinks', role: 'list' });
+  takes.forEach((t) => {
+    const color = QUICK_TAKE_COLORS[t.kind] || '#8888B8';
+    const el = $$('div', {
+      class: 'mo-blink',
+      role: 'listitem',
+      tabindex: '0',
+      'aria-label': `${t.kind}: ${t.headline}. Press Enter to copy.`,
+    });
+    const tag = $$('span', { class: 'mo-blink-tag' });
+    tag.style.color = color;
+    tag.style.background = hexToRgba(color, 0.14);
+    tag.appendChild($$('span', { class: 'mo-blink-tag-dot' }));
+    tag.lastChild.style.background = color;
+    tag.appendChild(document.createTextNode(t.kind));
+    el.appendChild(tag);
+    el.appendChild($$('div', { class: 'mo-blink-headline', text: t.headline }));
+    el.appendChild($$('div', { class: 'mo-blink-body', text: t.body }));
+    const copyHint = $$('span', { class: 'mo-blink-copy', text: 'Copy' });
+    el.appendChild(copyHint);
+
+    const doCopy = () => {
+      const text = `${t.headline} — ${t.body}`;
+      const done = () => {
+        copyHint.textContent = 'Copied ✓';
+        el.classList.add('is-copied');
+        setTimeout(() => { copyHint.textContent = 'Copy'; el.classList.remove('is-copied'); }, 1400);
+      };
+      if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(text).then(done).catch(done);
+      } else { done(); }
+    };
+    el.addEventListener('click', doCopy);
+    el.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); doCopy(); }
+    });
+    strip.appendChild(el);
+  });
+  card.appendChild(strip);
+
+  const dots = $$('div', { class: 'mo-blink-dots', 'aria-hidden': 'true' });
+  const dotEls = takes.map((_, i) => {
+    const d = $$('span', { class: 'mo-blink-dot' + (i === 0 ? ' is-active' : '') });
+    dots.appendChild(d);
+    return d;
+  });
+  card.appendChild(dots);
+
+  // Track the swipe: nearest-card index drives dots + the "n/N" counter.
+  let raf = 0;
+  strip.addEventListener('scroll', () => {
+    if (raf) return;
+    raf = requestAnimationFrame(() => {
+      raf = 0;
+      const first = strip.firstElementChild;
+      if (!first) return;
+      const step = first.offsetWidth + 10;  // card width + gap
+      const idx = Math.max(0, Math.min(takes.length - 1, Math.round(strip.scrollLeft / step)));
+      dotEls.forEach((d, i) => d.classList.toggle('is-active', i === idx));
+      meta.textContent = `${idx + 1}/${takes.length} · tap to copy`;
+    });
+  }, { passive: true });
+}
+
 function renderCard(rows, attrs, resolved) {
   // EDGAR branch — capital-markets cards (Form D, Form 4, 13F, etc.)
   if (resolved && resolved.edgarMode) {
@@ -5073,6 +5491,11 @@ function renderCard(rows, attrs, resolved) {
     card.appendChild($$('div', { class: 'mo-card-empty', text: msg }));
     return card;
   }
+
+  // ── Quick take — snackable insight deck (Blinkist-style) ──
+  // First thing in the content area, above the treemap: the 30-second
+  // "here's what you'd miss" read before the visuals.
+  renderQuickTakesInto(card, buildQuickTakes(rows, isSub, total, vendorEntries));
 
   const initialDimension = (!isSub && (resolved.recipientResolved || attrs.recipient))
     ? 'agency'
