@@ -130,8 +130,45 @@ a:hover { text-decoration: underline; }
   cursor: pointer;
 }
 .mo-header-action:active { background: var(--primary-20); }
-/* "Work with Mark" — left-aligned text pill in the header. Tinted so it's
-   visible without competing with the ask bar, which is the page's main job. */
+/* Site nav — same pattern as /tools/ and /consulting/: "Fedmo." wordmark,
+   plain "Tools" link, tinted "Work with Mark" CTA pill. Everything visible,
+   nothing behind an icon. The old hamburger read as a nav menu but opened
+   the About modal, so people never found Tools or Work with Mark. */
+.mo-header-brand {
+  font-family: var(--font);
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #FFFFFF;
+  background: var(--primary-100);
+  border-radius: var(--radius-sm);
+  padding: 0 13px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+.mo-header-brand:hover { background: var(--primary-80); }
+.mo-header-nav-link {
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-decoration: none;
+  padding: 0 11px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  transition: background 120ms, color 120ms;
+}
+.mo-header-nav-link:hover { background: var(--bg-tint); color: var(--text-title); }
+@media (max-width: 400px) {
+  .mo-header-brand { padding: 0 10px; }
+  .mo-header-nav-link { padding: 0 8px; font-size: 12.5px; }
+  .mo-header-link { padding: 7px 11px; font-size: 12.5px; }
+}
 .mo-header-link {
   font-family: var(--font);
   font-size: 13px;
@@ -1482,18 +1519,20 @@ a:hover { text-decoration: underline; }
 
 <header class="mo-header">
   <div class="mo-header-inner">
+    <a class="mo-header-brand" href="/" aria-label="Fedmo home">Fedmo.</a>
+    <a class="mo-header-nav-link" href="/tools/" data-cta="header-tools">Tools</a>
     <a class="mo-header-link" href="/consulting/" data-cta="header-consulting">Work with Mark<svg class="mo-header-link-arrow" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a>
     <div class="mo-header-spacer"></div>
     <button class="mo-header-action" id="btnReset" aria-label="New conversation" title="New conversation">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
     </button>
-    <button class="mo-header-action" id="btnAbout" aria-label="About Mini Mo" title="About">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    <button class="mo-header-action" id="btnAbout" aria-label="Tips and examples" title="Tips &amp; examples">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
     </button>
   </div>
 </header>
 
-<!-- About modal, opens from the hamburger -->
+<!-- About modal, opens from the "?" help button -->
 <div class="mo-modal-backdrop" id="aboutBackdrop"></div>
 <div class="mo-modal" id="aboutModal" role="dialog" aria-labelledby="aboutTitle" aria-hidden="true">
   <div class="mo-modal-handle" aria-hidden="true"></div>
