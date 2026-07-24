@@ -7,23 +7,6 @@
 <meta name="theme-color" content="#0F0E13" media="(prefers-color-scheme: dark)">
 <title>Fedmo - Federal Market Intelligence</title>
 <meta name="description" content="Talk to Mo. Know any federal market before the meeting starts.">
-<meta name="color-scheme" content="light dark">
-
-<!-- Theme applied before first paint. Deliberately inline and blocking:
-     a class added after stylesheet load produces a white flash on every
-     navigation, which is exactly the thing dark mode users notice. -->
-<script>
-(function () {
-  try {
-    // store.set() writes JSON, so the value arrives quoted. Strip rather
-    // than JSON.parse — this runs before anything else and must not throw.
-    var saved = (localStorage.getItem('fedmo.theme.v1') || '').replace(/"/g, '');
-    var dark = saved === 'dark' ||
-      (saved !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-    if (dark) document.documentElement.classList.add('dark');
-  } catch (e) { /* storage blocked — light mode is a fine default */ }
-}());
-</script>
 
 <!-- Open Graph (LinkedIn, Slack, iMessage, Facebook, Discord) -->
 <meta property="og:type" content="website">
@@ -96,59 +79,6 @@
 
   --font: 'Atkinson Hyperlegible Next', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 }
-
-/* ── Dark mode ─────────────────────────────────────────────
-   A token swap, not a second stylesheet — every surface in the app already
-   reads from these variables. The purple ramp inverts (light purple on dark
-   ground instead of dark on light) so accents stay legible without the
-   headache-inducing saturation you get from reusing the light values.
-   The block below the tokens handles the handful of places where a colour
-   was hardcoded because it carried meaning. */
-:root.dark {
-  --primary-100: #C8C6E8;
-  --primary-80:  #ACAAD4;
-  --primary-60:  #8885C8;
-  --primary-40:  #4A4770;
-  --primary-20:  #2B2840;
-
-  --text-title: #E8E6F0;
-  --text-body:  #DEDCE8;
-  --text-muted: #B0ADC4;
-  --text-faint: #85819C;
-
-  --bg-screen: #0F0E13;
-  --bg-card:   #1A1820;
-  --bg-tint:   #221F2C;
-
-  --border:      #2E2B3A;
-  --border-soft: #262332;
-
-  --shadow-lift: 0 4px 16px rgba(0,0,0,0.35);
-}
-/* Meaning-bearing colours, restated for dark ground. */
-:root.dark .mo-card-chip-warn { background: #40320F; color: #F0D68A; }
-:root.dark .mo-card-chip-terr { background: var(--primary-40); color: #F0EFF8; }
-:root.dark .mo-header-brand   { background: var(--primary-40); color: #F0EFF8; }
-:root.dark .mo-header-brand:hover { background: #5A5680; }
-:root.dark .mo-header-badge   { background: var(--primary-60); color: #14121A; }
-:root.dark .mo-act.is-on      { background: var(--primary-60); border-color: var(--primary-60); color: #14121A; }
-:root.dark .mo-modal-btn      { background: var(--primary-60); color: #14121A; }
-:root.dark .mo-modal-btn.is-secondary { background: var(--primary-20); color: var(--primary-100); }
-:root.dark .mo-watch-remove:hover { background: #3A1F26; color: #E89AA6; }
-
-:root.dark .mo-verdict.is-open    { background: #1B2620; border-color: #33503A; }
-:root.dark .mo-verdict.is-partner { background: #2A2318; border-color: #574627; }
-:root.dark .mo-verdict.is-long    { background: #2A1B20; border-color: #573039; }
-:root.dark .mo-verdict.is-open    .mo-verdict-label { color: #9CC79C; }
-:root.dark .mo-verdict.is-partner .mo-verdict-label { color: #E0B872; }
-:root.dark .mo-verdict.is-long    .mo-verdict-label { color: #DE9EAA; }
-
-:root.dark .mo-pf-score-go    { background: #22331F; color: #9CC79C; }
-:root.dark .mo-pf-score-mid   { background: #33291A; color: #E0B872; }
-:root.dark .mo-pf-role-channel{ background: #1E2A33; color: #8FB6CF; }
-:root.dark .mo-pl-pill.mo-pl-renewal,   :root.dark .mo-pl-badge.mo-pl-renewal   { background: #1E2A33; color: #8FB6CF; }
-:root.dark .mo-pl-pill.mo-pl-shortterm, :root.dark .mo-pl-badge.mo-pl-shortterm { background: #33291A; color: #E0B872; }
-:root.dark .mo-pl-pill.mo-pl-maturing,  :root.dark .mo-pl-badge.mo-pl-maturing  { background: #2A2333; color: #B9A2D0; }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; padding: 0; overflow-anchor: none; }
@@ -760,260 +690,6 @@ a:hover { text-decoration: underline; }
   border-radius: 6px;
 }
 .mo-shared-dismiss:hover { background: var(--primary-20); color: var(--primary-100); }
-
-/* ── Verdict ───────────────────────────────────────────────
-   The finding, above the evidence. Deliberately the loudest thing in the
-   card: if a reader takes one glance and leaves, this is the part that
-   should have landed. The tinted panel is the one place in the app where
-   colour carries meaning rather than decoration, so nothing else competes
-   for the same treatment. */
-/* ── Evidence fold ─────────────────────────────────────────
-   The card answers first and shows its working second. This is the seam
-   between the two: a full-width, quiet control that names what's behind
-   it, so pressing it is a decision rather than a gamble. */
-.mo-fold-toggle {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 12px var(--s-5);
-  background: transparent;
-  border: none;
-  border-top: 1px solid var(--border-soft);
-  font-family: var(--font);
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--primary-80);
-  cursor: pointer;
-  text-align: left;
-  transition: background 120ms;
-}
-.mo-fold-toggle:hover { background: var(--bg-tint); }
-.mo-fold-toggle:focus-visible { outline: 2px solid var(--primary-60); outline-offset: -2px; }
-.mo-fold-meta {
-  font-size: 11.5px;
-  font-weight: 500;
-  color: var(--text-faint);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-}
-.mo-fold-chev {
-  margin-left: auto;
-  flex-shrink: 0;
-  line-height: 0;
-  color: var(--text-faint);
-  transition: transform 180ms ease;
-}
-.mo-fold-toggle.is-open .mo-fold-chev { transform: rotate(180deg); }
-.mo-fold[hidden] { display: none; }
-.mo-fold { animation: moFoldIn 180ms ease; }
-@keyframes moFoldIn { from { opacity: 0; } to { opacity: 1; } }
-@media (prefers-reduced-motion: reduce) {
-  .mo-fold { animation: none; }
-  .mo-fold-chev { transition: none; }
-}
-@media (max-width: 600px) {
-  .mo-fold-toggle { padding: 12px var(--s-4); }
-  .mo-fold-meta { display: none; }
-}
-
-.mo-verdict {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-  padding: 13px 14px;
-  border-radius: var(--radius-sm);
-  margin-bottom: var(--s-3);
-  border: 1px solid;
-}
-.mo-verdict.is-open    { background: #F1F6F1; border-color: #CFE0CF; }
-.mo-verdict.is-partner { background: #FBF4E9; border-color: #EBD9BC; }
-.mo-verdict.is-long    { background: #FAF0F2; border-color: #EBCDD4; }
-.mo-verdict-face { width: 34px; height: 34px; flex-shrink: 0; margin-top: 1px; }
-.mo-verdict-body { flex: 1; min-width: 0; }
-.mo-verdict-label {
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  margin-bottom: 3px;
-}
-.mo-verdict.is-open    .mo-verdict-label { color: #3D5C3D; }
-.mo-verdict.is-partner .mo-verdict-label { color: #7A5520; }
-.mo-verdict.is-long    .mo-verdict-label { color: #6B3040; }
-.mo-verdict-sentence {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text-title);
-  line-height: 1.4;
-  letter-spacing: var(--track-tight);
-}
-.mo-verdict-move {
-  font-size: 13px;
-  color: var(--text-muted);
-  line-height: 1.5;
-  margin-top: 7px;
-}
-.mo-verdict-move-tag {
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: var(--text-faint);
-  margin-right: 6px;
-}
-.mo-card-chip-terr { background: var(--primary-100); color: #FFFFFF; }
-
-/* ── Ways in (partner fit) ─────────────────────────────────
-   Two doors, ranked. The score is deliberately small and quiet — it orders
-   the list, it isn't the point. The reason line underneath is the point. */
-.mo-pf { display: flex; flex-direction: column; }
-.mo-pf-row {
-  display: flex;
-  gap: 10px;
-  padding: 11px var(--s-5);
-  border-bottom: 1px solid var(--border-soft);
-}
-.mo-pf-row:last-child { border-bottom: none; }
-.mo-pf-rank {
-  flex-shrink: 0;
-  width: 18px;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--text-faint);
-  font-variant-numeric: tabular-nums;
-  line-height: 1.6;
-}
-.mo-pf-body { flex: 1; min-width: 0; }
-.mo-pf-name-row { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
-.mo-pf-name {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-title);
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.mo-pf-score {
-  font-size: 11px;
-  font-weight: 700;
-  padding: 1px 7px;
-  border-radius: 999px;
-  font-variant-numeric: tabular-nums;
-}
-.mo-pf-score-go  { background: #E3F0E4; color: #3D5C3D; }
-.mo-pf-score-mid { background: #F7EDDD; color: #7A5520; }
-.mo-pf-score-low { background: var(--bg-tint); color: var(--text-faint); }
-.mo-pf-role {
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  padding: 2px 7px;
-  border-radius: 999px;
-}
-.mo-pf-role-channel { background: #EAF0F5; color: #4A6B85; }
-.mo-pf-role-prime   { background: var(--primary-20); color: var(--primary-100); }
-.mo-pf-why {
-  font-size: 12px;
-  color: var(--text-muted);
-  line-height: 1.45;
-  margin-top: 3px;
-}
-
-/* ── Pipeline signals ─────────────────────────────────────
-   Badges encode the pattern, which is real information about how the buy
-   behaves — not a severity rating dressed up as one. */
-.mo-pl-summary {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 0 var(--s-5) var(--s-2);
-}
-.mo-pl-pill {
-  font-size: 11px;
-  font-weight: 600;
-  padding: 3px 10px;
-  border-radius: 999px;
-  font-variant-numeric: tabular-nums;
-}
-.mo-pl-badge {
-  display: inline-block;
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  padding: 2px 7px;
-  border-radius: 999px;
-  margin-right: 7px;
-}
-.mo-pl-pill.mo-pl-renewal,   .mo-pl-badge.mo-pl-renewal   { background: #EAF0F5; color: #40607A; }
-.mo-pl-pill.mo-pl-shortterm, .mo-pl-badge.mo-pl-shortterm { background: #F7EDDD; color: #7A5520; }
-.mo-pl-pill.mo-pl-maturing,  .mo-pl-badge.mo-pl-maturing  { background: #F1EDF5; color: #5E4A72; }
-.mo-pl-why {
-  font-size: 12px;
-  color: var(--text-muted);
-  line-height: 1.45;
-  margin-top: 4px;
-}
-
-/* ── Seller lens ───────────────────────────────────────────
-   One sentence the user completes about themselves. Written as a sentence
-   rather than a labelled form because it's answered once and then lives in
-   the background — a form implies it wants revisiting. */
-.mo-lens {
-  margin-top: 22px;
-  padding-top: 16px;
-  border-top: 1px solid var(--border-soft);
-}
-.mo-lens-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.mo-lens-label { font-size: 14px; color: var(--text-muted); }
-.mo-lens-input {
-  flex: 1 1 200px;
-  min-width: 160px;
-  font-size: 14px;
-  font-family: var(--font);
-  color: var(--text-title);
-  background: transparent;
-  border: none;
-  border-bottom: 1.5px dashed var(--border);
-  padding: 3px 2px;
-  outline: none;
-}
-.mo-lens-input:focus { border-bottom-color: var(--primary-60); border-bottom-style: solid; }
-.mo-lens-input::placeholder { color: var(--text-faint); }
-.mo-lens-terr { display: flex; gap: 5px; flex-wrap: wrap; }
-.mo-lens-terr-btn {
-  font-family: var(--font);
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-muted);
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 4px 11px;
-  cursor: pointer;
-  transition: background 120ms, color 120ms, border-color 120ms;
-}
-.mo-lens-terr-btn:hover { background: var(--bg-tint); color: var(--text-title); }
-.mo-lens-terr-btn.is-on {
-  color: var(--primary-100);
-  background: var(--primary-20);
-  border-color: var(--terr, var(--primary-40));
-  border-width: 1.5px;
-}
-.mo-lens-note {
-  font-size: 12px;
-  color: var(--text-faint);
-  margin-top: 9px;
-  line-height: 1.5;
-}
 
 /* ── Pills (follow-up suggestions) ── */
 /* Float below a card in the conversation flow, NOT inside the card.
@@ -2010,28 +1686,6 @@ a:hover { text-decoration: underline; }
     <circle cx="26" cy="16" r="2.4" fill="#2D5033"/>
     <path d="M12 24 Q20 31 28 24" fill="none" stroke="#2D5033" stroke-width="2.8" stroke-linecap="round"/>
   </symbol>
-  <!-- Verdict faces. These answer one question — can I sell here — so the
-       expression tracks the opening, never the incumbent's health. A grin
-       means there's a way in; a flat mouth means there's a way in but it
-       runs through someone else; a frown means not this quarter. -->
-  <symbol id="icon-verdict-open" viewBox="0 0 40 40">
-    <circle cx="20" cy="20" r="19" fill="#8EAF8E" stroke="#3D5C3D" stroke-width="2.4"/>
-    <circle cx="14" cy="16" r="2.4" fill="#3D5C3D"/>
-    <circle cx="26" cy="16" r="2.4" fill="#3D5C3D"/>
-    <path d="M12 24 Q20 31 28 24" fill="none" stroke="#3D5C3D" stroke-width="2.8" stroke-linecap="round"/>
-  </symbol>
-  <symbol id="icon-verdict-partner" viewBox="0 0 40 40">
-    <circle cx="20" cy="20" r="19" fill="#D4AA72" stroke="#7A5520" stroke-width="2.4"/>
-    <circle cx="14" cy="16" r="2.4" fill="#7A5520"/>
-    <circle cx="26" cy="16" r="2.4" fill="#7A5520"/>
-    <line x1="13" y1="26" x2="27" y2="26" stroke="#7A5520" stroke-width="2.8" stroke-linecap="round"/>
-  </symbol>
-  <symbol id="icon-verdict-long" viewBox="0 0 40 40">
-    <circle cx="20" cy="20" r="19" fill="#C48A96" stroke="#6B3040" stroke-width="2.4"/>
-    <circle cx="14" cy="16" r="2.4" fill="#6B3040"/>
-    <circle cx="26" cy="16" r="2.4" fill="#6B3040"/>
-    <path d="M12 28 Q20 21 28 28" fill="none" stroke="#6B3040" stroke-width="2.8" stroke-linecap="round"/>
-  </symbol>
 </svg>
 
 <header class="mo-header">
@@ -2040,9 +1694,6 @@ a:hover { text-decoration: underline; }
     <a class="mo-header-nav-link" href="/tools/" data-cta="header-tools">Tools</a>
     <a class="mo-header-link" href="/consulting/" data-cta="header-consulting">Work with Mark<svg class="mo-header-link-arrow" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a>
     <div class="mo-header-spacer"></div>
-    <button class="mo-header-action" id="btnTheme" aria-label="Switch theme" title="Switch theme">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" id="themeIcon"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-    </button>
     <button class="mo-header-action" id="btnWatch" aria-label="Watchlist" title="Watchlist">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
       <span class="mo-header-badge" id="watchCount" style="display:none">0</span>
@@ -2182,16 +1833,6 @@ a:hover { text-decoration: underline; }
       <div class="mo-greeting-tagline">Ask me anything about federal contracts or private capital &mdash; like you'd ask a colleague, not a search box. I pull live data from USASpending and SEC EDGAR so you can follow the money. Not sure where to start? Just say what you sell.</div>
       <div class="mo-greeting-examples" id="greeting-examples"></div>
       <div class="mo-greeting-recents" id="greeting-recents" style="display:none"></div>
-      <div class="mo-lens" id="lens">
-        <div class="mo-lens-row">
-          <span class="mo-lens-label">I sell</span>
-          <input type="text" class="mo-lens-input" id="lensInput" autocomplete="off"
-                 placeholder="endpoint security software" aria-label="What you sell">
-          <span class="mo-lens-label">across</span>
-          <div class="mo-lens-terr" id="lensTerritory" role="group" aria-label="Territory"></div>
-        </div>
-        <div class="mo-lens-note" id="lensNote">Mo remembers this and reads every answer through it. Change it any time.</div>
-      </div>
     </div>
   </div>
 </main>
@@ -2375,146 +2016,6 @@ function recordRecent(q) {
     .filter(x => typeof x === 'string' && x && x !== clean);
   next.unshift(clean);
   store.set(RECENT_KEY, next.slice(0, RECENT_MAX));
-}
-
-// =============================================================================
-// SELLER LENS — what you sell, and where you're allowed to sell it
-// =============================================================================
-//
-// Two facts change the answer to almost every question in this app, and a
-// federal seller's answer to both is stable for years: what they sell, and
-// which slice of government they cover. Asking once and remembering is worth
-// more than any amount of query cleverness.
-//
-// The lens goes into Mo's prompt rather than being applied as a filter,
-// because it's guidance, not a constraint — "I sell endpoint security" should
-// colour how a question gets interpreted, not silently drop rows. Territory
-// is the opposite: it IS a constraint, so it gets applied at the API level
-// where it can't be quietly ignored.
-
-const LENS_KEY = 'fedmo.lens.v1';
-const TERRITORY_KEY = 'fedmo.territory.v1';
-
-// Territory agency lists, verified against USASpending's toptier names.
-// The awkward ones are FedHealth (HHS files plenty of awards under its
-// subtiers rather than rolling up) and FedFin (a long tail of independent
-// regulators nobody thinks of as one buying community, but reps cover them
-// as one). Both lists are the expensive part to rebuild — don't trim them.
-const TERRITORIES = {
-  dod: {
-    label: 'DoD',
-    blurb: 'Army, Navy, Air Force, DISA, DARPA…',
-    color: '#7CA8C4',
-    agencies: [
-      'Department of Defense',
-      'Corps of Engineers - Civil Works',
-      'Defense Nuclear Facilities Safety Board',
-      'Armed Forces Retirement Home',
-      'American Battle Monuments Commission',
-    ],
-  },
-  fedciv: {
-    label: 'FedCiv',
-    blurb: 'GSA, DHS, DOJ, State, Commerce…',
-    color: '#E8934A',
-    agencies: [
-      'Department of Homeland Security', 'General Services Administration',
-      'Social Security Administration', 'Department of Agriculture',
-      'Office of Personnel Management', 'Department of Education',
-      'Department of Transportation', 'Department of Energy',
-      'Department of Housing and Urban Development', 'Department of Labor',
-      'Department of Justice', 'Department of the Interior', 'Department of State',
-      'Department of Commerce', 'National Aeronautics and Space Administration',
-      'Environmental Protection Agency', 'Federal Communications Commission',
-      'Agency for International Development', 'National Science Foundation',
-      'Nuclear Regulatory Commission', 'Railroad Retirement Board',
-      'National Archives and Records Administration', 'Peace Corps',
-      'Equal Employment Opportunity Commission', 'Executive Office of the President',
-    ],
-  },
-  fedhealth: {
-    label: 'FedHealth',
-    blurb: 'VA, HHS, CMS, CDC, FDA, NIH…',
-    color: '#D4A0B0',
-    agencies: [
-      'Department of Health and Human Services',
-      'Department of Veterans Affairs',
-      'United States Court of Appeals for Veterans Claims',
-      'Patient-Centered Outcomes Research Trust Fund',
-    ],
-    // HHS and VA file a lot of awards under these directly rather than
-    // rolling up to the toptier, so they need naming explicitly or a
-    // FedHealth search quietly misses most of CMS and the VHA.
-    subtiers: [
-      ['Centers for Medicare and Medicaid Services', 'Department of Health and Human Services'],
-      ['Centers for Disease Control and Prevention', 'Department of Health and Human Services'],
-      ['Food and Drug Administration', 'Department of Health and Human Services'],
-      ['National Institutes of Health', 'Department of Health and Human Services'],
-      ['Health Resources and Services Administration', 'Department of Health and Human Services'],
-      ['Substance Abuse and Mental Health Services Administration', 'Department of Health and Human Services'],
-      ['Agency for Healthcare Research and Quality', 'Department of Health and Human Services'],
-      ['Indian Health Service', 'Department of Health and Human Services'],
-      ['Administration for Community Living', 'Department of Health and Human Services'],
-      ['Administration for Children and Families', 'Department of Health and Human Services'],
-      ['Veterans Health Administration', 'Department of Veterans Affairs'],
-      ['Veterans Benefits Administration', 'Department of Veterans Affairs'],
-      ['National Cemetery Administration', 'Department of Veterans Affairs'],
-    ],
-  },
-  fedfin: {
-    label: 'FedFin',
-    blurb: 'Treasury, IRS, SEC, FDIC, SBA…',
-    color: '#5DBFB0',
-    agencies: [
-      'Department of the Treasury', 'Pension Benefit Guaranty Corporation',
-      'Federal Deposit Insurance Corporation', 'Consumer Financial Protection Bureau',
-      'Small Business Administration', 'Government Accountability Office',
-      'Commodity Futures Trading Commission', 'Export-Import Bank of the United States',
-      'Farm Credit System Insurance Corporation',
-      'U.S. International Development Finance Corporation',
-      'International Trade Commission', 'Federal Trade Commission',
-      'National Credit Union Administration',
-    ],
-  },
-};
-
-const getLens = () => String(store.get(LENS_KEY, '') || '').trim();
-const setLens = (v) => { store.set(LENS_KEY, String(v || '').trim().slice(0, 120)); };
-const getTerritory = () => {
-  const t = store.get(TERRITORY_KEY, null);
-  return t && TERRITORIES[t] ? t : null;
-};
-const setTerritory = (t) => { store.set(TERRITORY_KEY, t && TERRITORIES[t] ? t : null); };
-
-// USASpending agency filter objects for the active territory, or null.
-function territoryAgencyFilters() {
-  const key = getTerritory();
-  if (!key) return null;
-  const t = TERRITORIES[key];
-  const out = t.agencies.map(name => ({ type: 'awarding', tier: 'toptier', name }));
-  for (const [name, parent] of (t.subtiers || [])) {
-    out.push({ type: 'awarding', tier: 'subtier', name, toptier_name: parent });
-  }
-  return out;
-}
-
-// Appended to the message Mo sees, not to the message the user sees. Mo
-// gets the standing context on every turn; the thread stays clean.
-function lensPreamble() {
-  const bits = [];
-  const lens = getLens();
-  const terr = getTerritory();
-  if (lens) bits.push(`I sell ${lens}`);
-  if (terr) bits.push(`my territory is ${TERRITORIES[terr].label} (${TERRITORIES[terr].blurb})`);
-  if (!bits.length) return '';
-  return `\n\n[Standing context — ${bits.join('; ')}. Use it to interpret the question and pick keywords; don't restate it back to me.]`;
-}
-
-// Does this seller sell a product rather than services? Changes which of the
-// two doors in Partner Fit matters more — a product company needs a line
-// card, a services company needs a teaming agreement.
-function lensIsProduct() {
-  return /saas|software|licen|platform|cloud|app|product|subscription|tool|hardware|appliance/i.test(getLens());
 }
 
 // =============================================================================
@@ -2914,11 +2415,6 @@ const FIELDS = [
   'Start Date', 'End Date',
   'Awarding Agency', 'Awarding Sub Agency', 'Awarding Office',
   'Place of Performance State Code',
-  // NAICS + PSC drive the pipeline classifier: software and licensing
-  // paper renews on a cycle, which is a different sales motion from a
-  // services recompete. Without these codes the classifier can only read
-  // the free-text description, which is missing on plenty of rows.
-  'NAICS', 'PSC',
   // generated_internal_id powers the per-row View link to usaspending.gov
   'generated_internal_id',
 ];
@@ -3138,18 +2634,7 @@ function buildBaseFilters(attrs, agencyFilter) {
     if (codes) f.award_type_codes = codes;
   }
 
-  if (agencyFilter) {
-    f.agencies = [agencyFilter];
-  } else {
-    // No agency in the question — fall back to the saved territory. This is
-    // applied here, at the API level, rather than passed to Mo as a hint,
-    // because a rep who covers FedHealth asking "who's buying cyber" means
-    // FedHealth and would be actively misled by a government-wide answer.
-    // An explicit agency in the question always wins: asking about Navy
-    // while scoped to FedHealth is a deliberate look outside your patch.
-    const terr = territoryAgencyFilters();
-    if (terr) f.agencies = terr;
-  }
+  if (agencyFilter) f.agencies = [agencyFilter];
 
   const naics = CSV(attrs.naics).filter(n => /^\d{6}$/.test(n));
   if (naics.length) f.naics_codes = { require: naics };
@@ -6063,522 +5548,6 @@ function renderSubawardRows(card, rows, attrs, resolved) {
 }
 
 // =============================================================================
-// PARTNER FIT — the two doors into a market
-// =============================================================================
-//
-// Almost nobody's first federal deal is a prime award. There are two realistic
-// ways in: sell through a channel holder who already has the paper, or team
-// under a prime who already has the relationship. This ranks both, separately,
-// because they are different sales motions and mixing them produces a list
-// that's useless for either.
-//
-// Channel scoring rewards velocity and breadth — how many doors are already
-// open. Prime scoring rewards subaward flow and expiring exposure — how likely
-// they are to actually need somebody.
-
-const cap01 = (v, ceiling) => Math.min(v, ceiling) / ceiling;
-
-// Integrators and OEMs that are never resellers, whatever their paper looks
-// like. This list exists because the heuristic below got SAIC wrong in
-// testing: a services prime with a handful of licence lines on its awards
-// tripped the software-ratio test and got labelled "Channel". Telling a
-// federal seller that SAIC is a reseller is the kind of error that ends the
-// conversation — nobody in this market needs a tool to explain who SAIC is.
-// One bad name discredits the other forty rows on the card, so the guard is
-// worth more than the handful of true positives it costs.
-const NEVER_CHANNEL = [
-  'SAIC', 'SCIENCE APPLICATIONS', 'LEIDOS', 'BOOZ ALLEN', 'CACI', 'GDIT',
-  'GENERAL DYNAMICS', 'NORTHROP', 'LOCKHEED', 'RAYTHEON', 'RTX', 'BAE SYSTEMS',
-  'L3HARRIS', 'HUNTINGTON INGALLS', 'MANTECH', 'PERATON', 'AMENTUM', 'JACOBS',
-  'PARSONS', 'ACCENTURE', 'DELOITTE', 'BOOZ ', 'KPMG', 'MCKINSEY', 'IBM',
-  'MITRE', 'AEROSPACE CORP', 'BATTELLE', 'ICF', 'LMI', 'MAXIMUS', 'SERCO',
-  'AMERICAN SYSTEMS', 'VECTRUS V2X', 'V2X', 'KBR', 'DXC', 'UNISYS', 'CGI FEDERAL',
-];
-
-function isChannelVendor(v) {
-  const n = normName(v.name);
-  if (NEVER_CHANNEL.some(c => n.includes(c))) return false;
-  if (CHANNEL_NAMES.some(c => n.includes(c))) return true;
-
-  // Unknown regional reseller. Three tests, all of which have to hold:
-  //   1. Order velocity — resellers transact constantly. A prime with two
-  //      big licence-bearing awards is not a channel player.
-  //   2. Paper mix — the large majority of descriptions read as licence,
-  //      subscription or maintenance. Raised from half, which was letting
-  //      through integrators whose work happens to include software.
-  //   3. Nothing flows back out as subawards, and the median order is small.
-  //      This is the real tell: a reseller moves many modest orders and
-  //      subcontracts nothing, while an integrator's median award is large
-  //      and its work gets spread across a team.
-  if (v.awards < 5 || v.subOut > 0) return false;
-  if (v.swHits / v.awards < 0.7) return false;
-  const median = medianOf(v.amounts);
-  return median > 0 && median <= 5e6;
-}
-
-// Plain median. Small sets, so a sort is cheaper than being clever.
-function medianOf(list) {
-  if (!list || !list.length) return 0;
-  const s = list.slice().sort((a, b) => a - b);
-  const mid = s.length >> 1;
-  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
-}
-
-function scoreChannelVendor(v, marketTotal) {
-  let s = 0;
-  s += 30 * cap01(v.awards, 20);                              // order velocity
-  s += 25 * cap01(v.agencies.size, 8);                        // doors already open
-  s += 25 * cap01(v.expiring / Math.max(v.prime, 1), 0.6);    // renewal windows
-  s += 20 * cap01(v.prime / Math.max(marketTotal, 1), 0.25);  // weight here
-  return Math.round(s);
-}
-
-function scorePrimeVendor(v, marketTotal, hasSubs) {
-  let s = 0;
-  if (hasSubs) {
-    s += 30 * cap01(v.subOut / Math.max(v.prime, 1), 0.5);    // proven to team
-    s += 15 * cap01(v.subCount, 12);                          // teams widely
-  }
-  s += 25 * cap01(v.expiring / Math.max(v.prime, 1), 0.6);    // needs help soon
-  s += 15 * cap01(v.prime / Math.max(marketTotal, 1), 0.25);
-  s += 15 * cap01(v.vehicles, 5);                             // holds seats
-  return Math.round(s);
-}
-
-function computePartnerFit(rows, isSub) {
-  if (isSub || rows.length < 3) return null;
-  const now = Date.now();
-  const horizon = now + 548 * 86400000;
-  const V = new Map();
-  let marketTotal = 0;
-
-  for (const c of rows) {
-    const amt = Number(c['Award Amount']) || 0;
-    marketTotal += amt;
-    const key = normName(c['Recipient Name']);
-    if (!key) continue;
-    // Interagency transfers aren't partners — they're other government.
-    if (detectIGT(c)) continue;
-    let v = V.get(key);
-    if (!v) {
-      v = { name: c['Recipient Name'], prime: 0, awards: 0, expiring: 0, swHits: 0,
-            agencies: new Set(), vehicleSet: new Set(), subOut: 0, subNames: new Set(),
-            amounts: [] };
-      V.set(key, v);
-    }
-    v.prime += amt;
-    v.awards++;
-    if (amt > 0) v.amounts.push(amt);
-    if (c['Awarding Agency']) v.agencies.add(c['Awarding Agency']);
-    if (SW_RE.test(c['Description'] || '')) v.swHits++;
-    const end = Date.parse(c['End Date']);
-    if (!isNaN(end) && end > now && end <= horizon) v.expiring += amt;
-    // fedmo already resolves vehicles by award-ID prefix, which is more
-    // reliable than the raw idv_type flag — reuse it rather than re-deriving.
-    const veh = detectVehicle(c);
-    if (veh) v.vehicleSet.add(veh);
-  }
-
-  const channel = [], primes = [];
-  for (const v of V.values()) {
-    if (v.prime < 250000) continue;   // below this it's noise, not a partner
-    v.vehicles = v.vehicleSet.size;
-    v.subCount = v.subNames.size;
-    if (isChannelVendor(v)) {
-      v.role = 'channel';
-      v.score = scoreChannelVendor(v, marketTotal);
-      channel.push(v);
-    } else {
-      v.role = 'prime';
-      v.score = scorePrimeVendor(v, marketTotal, false);
-      primes.push(v);
-    }
-  }
-  if (!channel.length && !primes.length) return null;
-  channel.sort((a, b) => b.score - a.score);
-  primes.sort((a, b) => b.score - a.score);
-  return { channel: channel.slice(0, 4), primes: primes.slice(0, 6), marketTotal, hasSubs: false };
-}
-
-function whyChannelRow(v, mt) {
-  const bits = [`${v.awards} ${pluralize(v.awards, 'award')} across ${v.agencies.size} ${pluralize(v.agencies.size, 'agency', 'agencies')}`];
-  if (v.expiring > 0) bits.push(`${fmtMoney(v.expiring)} renewing within 18 months`);
-  bits.push(`${Math.round(v.prime / Math.max(mt, 1) * 100)}% of market (${fmtMoney(v.prime)})`);
-  if (v.swHits / Math.max(v.awards, 1) >= 0.5) bits.push('licence and software paper');
-  return bits.join(' · ');
-}
-
-function whyPrimeRow(v, mt) {
-  const bits = [];
-  if (v.expiring > 0) bits.push(`${fmtMoney(v.expiring)} expiring within 18 months`);
-  if (v.vehicles > 0) bits.push(`${v.vehicles} ${pluralize(v.vehicles, 'vehicle')} in play`);
-  bits.push(`${Math.round(v.prime / Math.max(mt, 1) * 100)}% market share (${fmtMoney(v.prime)})`);
-  bits.push(`${v.awards} ${pluralize(v.awards, 'award')}, ${v.agencies.size} ${pluralize(v.agencies.size, 'agency', 'agencies')}`);
-  return bits.join(' · ');
-}
-
-function renderPartnerFitInto(card, fit) {
-  if (!fit) return;
-  const rowsOut = [];
-  // Channel first when it's a channel-led market — that's the shorter path,
-  // and putting the harder route above it wastes the reader's attention.
-  // A product seller gets channel first at a lower threshold: for them a
-  // line card IS the route to market, while a services firm needs a prime
-  // to team with no matter how much reseller volume is in the data.
-  const channelPct = fit.channel.reduce((s, v) => s + v.prime, 0) / Math.max(fit.marketTotal, 1);
-  const channelLed = fit.channel.length > 0 &&
-    channelPct >= (lensIsProduct() ? 0.05 : 0.15);
-  const groups = channelLed
-    ? [['channel', fit.channel], ['prime', fit.primes]]
-    : [['prime', fit.primes], ['channel', fit.channel]];
-
-  for (const [role, list] of groups) {
-    for (const v of list.slice(0, role === 'channel' ? 3 : 4)) rowsOut.push({ role, v });
-  }
-  if (!rowsOut.length) return;
-
-  const compHeadEl = $$('div', { class: 'mo-comp-head' });
-  compHeadEl.appendChild($$('div', { class: 'mo-comp-title', text: 'Ways in' }));
-  compHeadEl.appendChild($$('div', {
-    class: 'mo-comp-meta',
-    text: channelLed ? 'Channel first — this market runs on resellers' : 'Ranked by how likely they are to need you',
-  }));
-  card.appendChild(compHeadEl);
-
-  const wrap = $$('div', { class: 'mo-pf' });
-  rowsOut.forEach(({ role, v }, i) => {
-    const tier = v.score >= 60 ? 'go' : v.score >= 35 ? 'mid' : 'low';
-    const clean = titleCaseVendor(v.name);
-    const people = 'https://www.linkedin.com/search/results/people/?keywords=' +
-      encodeURIComponent(`"${clean}"`) + '&origin=GLOBAL_SEARCH_HEADER';
-    const row = $$('div', { class: 'mo-pf-row' });
-    row.innerHTML = `
-      <span class="mo-pf-rank">${i + 1}</span>
-      <div class="mo-pf-body">
-        <div class="mo-pf-name-row">
-          <span class="mo-pf-name" title="${escapeHtml(v.name)}">${escapeHtml(clean)}</span>
-          <span class="mo-pf-score mo-pf-score-${tier}" title="Fit score, 0–100">${v.score}</span>
-          <span class="mo-pf-role mo-pf-role-${role}">${role === 'channel' ? 'Channel' : 'Prime'}</span>
-        </div>
-        <div class="mo-pf-why">${escapeHtml(role === 'channel' ? whyChannelRow(v, fit.marketTotal) : whyPrimeRow(v, fit.marketTotal))}</div>
-        <div class="mo-row-actions"><a class="mo-row-people" href="${people}" target="_blank" rel="noopener">Find people ↗</a></div>
-      </div>`;
-    wrap.appendChild(row);
-  });
-  card.appendChild(wrap);
-}
-
-// =============================================================================
-// CHANNEL DETECTION
-// =============================================================================
-//
-// In federal IT, most software never reaches the government on the vendor's
-// own paper. It goes through a reseller who holds the contract. Knowing which
-// names in a result set are channel rather than end-vendor changes the whole
-// read: a market that looks like "Carahsoft owns 40%" is not a concentrated
-// market, it's a market with one front door.
-//
-// The name list is the reliable part. The heuristic below it catches regional
-// resellers nobody has heard of: several awards, mostly licensing paper, and
-// no subaward flow outward — that's reseller behaviour, not an integrator.
-const CHANNEL_NAMES = [
-  'CARAHSOFT', 'CDW', 'SHI INTERNATIONAL', 'SHI GOVERNMENT', 'DLT SOLUTIONS',
-  'IMMIX', 'THUNDERCAT', 'WORLD WIDE TECHNOLOGY', 'IRON BOW', 'RED RIVER',
-  'PRESIDIO', 'INSIGHT PUBLIC SECTOR', 'MYTHICS', 'EPLUS', 'FOUR POINTS TECHNOLOGY',
-  'STERLING COMPUTERS', 'GOVCONNECTION', 'CONNECTION PUBLIC SECTOR', 'SOFTWAREONE',
-  'SOFTCHOICE', 'AFFIGENT', 'GOVPLACE', 'FCN INC', 'NORSEMAN', 'EMERGENT LLC',
-  'ALVAREZ & ASSOCIATES', 'BLUE TECH', 'MINBURN', 'DH TECHNOLOGIES', 'SYNNEX',
-  'TD SYNNEX', 'INGRAM MICRO',
-];
-
-// Licensing / subscription / renewal language in an award description.
-const SW_RE = /licen|software|subscription|saas|renewal|cloud service|maintenance|support renewal|brand name/i;
-
-const normName = (s) => String(s || '').toUpperCase().replace(/[.,]/g, '').replace(/\s+/g, ' ').trim();
-
-// NAICS and PSC come back either as a bare string or as {code, description}
-// depending on which USASpending endpoint served the row.
-const codeOf = (v) => {
-  if (!v) return '';
-  if (typeof v === 'object') return String(v.code || '');
-  return String(v);
-};
-
-// =============================================================================
-// VERDICT — the answer, before the data
-// =============================================================================
-//
-// Everything below this in the card is evidence. This is the finding: one
-// face, one sentence, one move. It's also the only part that survives being
-// pasted into Slack, so it has to stand alone without the treemap under it.
-//
-// Three stances, and each one names a play rather than grading the market:
-//   open    — there's a direct way in
-//   partner — there's a way in, but it runs through somebody else
-//   long    — not this quarter; build the relationship and wait for a window
-//
-// Note the stance answers "can I sell here", never "is the incumbent
-// healthy". Those two come apart constantly: a vendor with a rock-solid
-// position and $200M expiring inside a year is a *good* market to walk into,
-// and any scale that reports that as red is lying to the seller.
-
-const VERDICT_META = {
-  open:    { label: 'Open',         icon: 'icon-verdict-open' },
-  partner: { label: 'Partner play', icon: 'icon-verdict-partner' },
-  long:    { label: 'Long game',    icon: 'icon-verdict-long' },
-};
-
-function buildVerdict(ctx) {
-  const { rows, isSub, total, vendorEntries, attrs, resolved, partnerFit } = ctx;
-  if (!rows.length || total <= 0) return null;
-
-  const MS_DAY = 86400000;
-  const now = Date.now();
-  const amtOf = (r) => isSub ? (Number(r._amount) || 0) : (Number(r['Award Amount']) || 0);
-  const nameOf = (r) => isSub ? (r._subName || '') : (r['Recipient Name'] || '');
-  const ts = (r, f) => { const d = Date.parse(r[f]); return isNaN(d) ? null : d; };
-
-  // ── Shared signals ──
-  const [topName, topAmt] = vendorEntries[0] || ['', 0];
-  const topPct = Math.round((topAmt / total) * 100);
-  const top3Pct = Math.round(vendorEntries.slice(0, 3).reduce((s, [, v]) => s + v, 0) / total * 100);
-  const vendorCount = vendorEntries.length;
-
-  const agencies = new Set(rows.map(r => r['Awarding Agency']).filter(Boolean));
-  const recent = rows.filter(r => { const s = ts(r, 'Start Date'); return s && s >= now - 90 * MS_DAY; });
-
-  const expiring18 = rows.filter(r => {
-    const e = ts(r, 'End Date');
-    return e && e > now && e <= now + 548 * MS_DAY;
-  });
-  const expiringVal = expiring18.reduce((s, r) => s + amtOf(r), 0);
-  const expiringPct = total > 0 ? expiringVal / total : 0;
-
-  const channelShare = partnerFit && partnerFit.channel.length
-    ? partnerFit.channel.reduce((s, v) => s + v.prime, 0) / total
-    : 0;
-  const channelNames = (partnerFit?.channel || []).slice(0, 2).map(v => titleCaseVendor(v.name));
-
-  const tc = (s) => titleCaseVendor(s);
-
-  // ── Sub-award sets: a different question entirely ──
-  // The user is looking at money flowing out of a prime, so the read is
-  // about whether that prime is a realistic teaming door.
-  if (isSub) {
-    const subCount = vendorEntries.length;
-    const prime = resolved.recipientResolved || attrs.recipient || 'this prime';
-    if (subCount >= 8 && topPct < 40) {
-      return {
-        stance: 'open',
-        label: 'Open',
-        sentence: `${tc(prime)} spreads sub work across ${subCount} companies — no single favourite.`,
-        move: `A prime that already teams this widely will take a call. Lead with a capability they're currently buying, not a general capabilities deck.`,
-      };
-    }
-    if (topPct >= 55) {
-      return {
-        stance: 'partner',
-        label: 'Partner play',
-        sentence: `${tc(topName)} takes ${topPct}% of the sub work here.`,
-        move: `Going straight at ${tc(prime)} means displacing an established sub. Easier route is a teaming conversation with ${tc(topName)} directly.`,
-      };
-    }
-    return {
-      stance: 'partner',
-      label: 'Partner play',
-      sentence: `${subCount} ${pluralize(subCount, 'sub')} share this work, led by ${tc(topName)} at ${topPct}%.`,
-      move: `Map which of these subs covers your capability. If none do, that gap is your pitch to ${tc(prime)}.`,
-    };
-  }
-
-  // ── Vendor mode: the question is about one company's position ──
-  const askedVendor = resolved.recipientResolved || attrs.recipient;
-  if (askedVendor && vendorEntries.length) {
-    // Match the asked name to a row in the result set. Without this the
-    // verdict silently describes whoever is largest — so "Iron Bow at DHS"
-    // would come back talking about Carahsoft, which is worse than useless.
-    const askedKey = normName(askedVendor).replace(/\b(INC|LLC|CORP|CORPORATION|LTD|LP|PLC|LLP|CO)\b/g, '').trim();
-    const match = vendorEntries.find(([n]) => {
-      const k = normName(n);
-      return askedKey && (k.includes(askedKey) || askedKey.includes(k.split(' ').slice(0, 2).join(' ')));
-    }) || vendorEntries[0];
-    const [subjectName, subjectAmt] = match;
-    const tv = tc(subjectName);
-    const subjectPct = Math.round((subjectAmt / total) * 100);
-    const tvRows = rows.filter(r => nameOf(r) === subjectName);
-    const tvAgencies = new Set(tvRows.map(r => r['Awarding Agency']).filter(Boolean)).size;
-    const tvExpiring = tvRows.filter(r => { const e = ts(r, 'End Date'); return e && e > now && e <= now + 365 * MS_DAY; });
-    const tvExpVal = tvExpiring.reduce((s, r) => s + amtOf(r), 0);
-    const tvRecent = tvRows.filter(r => { const s = ts(r, 'Start Date'); return s && s >= now - 180 * MS_DAY; });
-    const exposure = subjectAmt > 0 ? tvExpVal / subjectAmt : 0;
-
-    if (exposure >= 0.2 && tvExpVal > 0) {
-      return {
-        stance: 'open',
-        label: 'Open',
-        sentence: `${fmtMoney(tvExpVal)} of ${tv}'s position here — ${Math.round(exposure * 100)}% of it — comes up for renewal inside a year.`,
-        move: `Work backward from the earliest end date. Sources-sought notices land 6–9 months out, so the conversations that matter are happening now.`,
-      };
-    }
-    if (subjectPct >= 50 && tvAgencies >= 3 && tvRecent.length >= 2) {
-      return {
-        stance: 'long',
-        label: 'Long game',
-        sentence: `${tv} holds ${subjectPct}% across ${tvAgencies} agencies and is still winning new work.`,
-        move: `Head-on displacement won't land. Find the adjacent requirement ${tv} isn't covering and build the case there instead.`,
-      };
-    }
-    if (subjectPct >= 40 && tvAgencies <= 1) {
-      return {
-        stance: 'open',
-        label: 'Open',
-        sentence: `${tv} looks strong at ${subjectPct}%, but it all sits inside one agency.`,
-        move: `Single-threaded incumbents are fragile. Go to the agencies next door — the same requirement is being bought there by someone else.`,
-      };
-    }
-    if (subjectPct < 20) {
-      return {
-        stance: 'open',
-        label: 'Open',
-        sentence: `${tv} is only ${subjectPct}% of this market — ${vendorCount} vendors are splitting the rest.`,
-        move: `Nobody owns this. Land something small and fast; past performance compounds quicker here than a pipeline review assumes.`,
-      };
-    }
-    return {
-      stance: 'partner',
-      label: 'Partner play',
-      sentence: `${tv} is established here — ${subjectPct}% across ${tvAgencies} ${pluralize(tvAgencies, 'agency', 'agencies')} — without dominating it.`,
-      move: `Contested ground. Pick one buying office where ${tv} is weakest and go deep rather than spreading across the whole account.`,
-    };
-  }
-
-  // ── Channel-led market ──
-  if (channelShare >= 0.25 && channelNames.length) {
-    return {
-      stance: 'partner',
-      label: 'Partner play',
-      sentence: `${Math.round(channelShare * 100)}% of this spend moves through resellers — ${channelNames.join(' and ')} hold the paper.`,
-      move: `Pick the right reseller, not the right contract. Getting on ${channelNames[0]}'s line card is the shorter path than chasing a prime position.`,
-    };
-  }
-
-  // ── Market / agency mode ──
-  const fragmented = top3Pct < 55 && vendorCount >= 8;
-  const concentrated = top3Pct >= 75;
-  const active = recent.length >= 3;
-  const turning = expiringPct >= 0.2;
-
-  if (turning && expiringVal > 0) {
-    return {
-      stance: 'open',
-      label: 'Open',
-      sentence: `${fmtMoney(expiringVal)} — ${Math.round(expiringPct * 100)}% of this market — is up for renewal within 18 months.`,
-      move: `This is a timing market. Build the call list off the end dates and get in before the sources-sought notices publish.`,
-    };
-  }
-  if (fragmented && active) {
-    return {
-      stance: 'open',
-      label: 'Open',
-      sentence: `${vendorCount} vendors are winning here and the leader only holds ${topPct}%.`,
-      move: `Low barriers, thin loyalty. Land small, deliver, and use the past performance — that cuts both ways once you're the incumbent.`,
-    };
-  }
-  if (concentrated && !active) {
-    return {
-      stance: 'long',
-      label: 'Long game',
-      sentence: `Top 3 hold ${top3Pct}% and there's been little new buying activity.`,
-      move: `Quiet and locked. Worth a capability briefing to stay known, but don't put a close date on it this year.`,
-    };
-  }
-  if (concentrated) {
-    return {
-      stance: 'partner',
-      label: 'Partner play',
-      sentence: `${tc(topName)} leads at ${topPct}% and the top 3 take ${top3Pct}% between them.`,
-      move: `Too concentrated to bid head-on. Enter as a sub under a mid-tier incumbent, or position as second-source risk reduction.`,
-    };
-  }
-  if (active) {
-    return {
-      stance: 'open',
-      label: 'Open',
-      sentence: `Active market — ${recent.length} new awards in the last 90 days across ${agencies.size} ${pluralize(agencies.size, 'agency', 'agencies')}.`,
-      move: `People are buying right now. Set a SAM.gov saved search on these offices today and work the recent winners for teaming.`,
-    };
-  }
-  return {
-    stance: 'partner',
-    label: 'Partner play',
-    sentence: `${vendorCount} vendors, ${fmtMoney(total)} obligated, but not much movement lately.`,
-    move: `Slower cycle than the topline suggests. Find who holds the vehicle before you build a capture plan around an open competition.`,
-  };
-}
-
-// Vendor names come back from USASpending in shouting caps. Title-case them
-// for prose — but a naive title-case turns SAIC into "Saic", which reads as a
-// typo to anyone in this market. So: preserve known acronyms, normalise legal
-// suffixes, title-case everything else.
-const KEEP_CAPS = new Set([
-  'SAIC', 'CACI', 'DXC', 'KBR', 'IBM', 'AWS', 'GDIT', 'SAP', 'HP', 'HPE', 'CGI',
-  'DLT', 'CDW', 'SHI', 'ICF', 'LMI', 'MITRE', 'ASRC', 'NCI', 'STG', 'IT', 'AI',
-  'SOSi', 'BAE', 'L3', 'RTX', 'AECOM', 'AMEX', 'USA', 'US', 'NASA', 'NCR',
-  'SMS', 'TEK', 'MTSI', 'SNA', 'NIC', 'ECS', 'IPS', 'ITC', 'DZSP', 'JHU',
-]);
-const SUFFIX_CASE = {
-  INC: 'Inc.', 'INC.': 'Inc.', INCORPORATED: 'Inc.',
-  CORP: 'Corp.', 'CORP.': 'Corp.', CORPORATION: 'Corp.',
-  LLC: 'LLC', 'L.L.C.': 'LLC', LTD: 'Ltd.', 'LTD.': 'Ltd.', LIMITED: 'Ltd.',
-  LP: 'LP', LLP: 'LLP', PLC: 'PLC', CO: 'Co.', 'CO.': 'Co.',
-};
-
-function titleCaseVendor(s) {
-  const raw = String(s || '').trim();
-  if (!raw) return '';
-  // Mixed-case input is already someone's considered choice — leave it.
-  if (raw !== raw.toUpperCase()) return raw;
-  return raw.split(/\s+/).map(w => {
-    const stripped = w.replace(/[.,]+$/, '');
-    const trailing = w.slice(stripped.length);
-    const up = stripped.toUpperCase();
-    if (SUFFIX_CASE[up]) return SUFFIX_CASE[up];
-    if (KEEP_CAPS.has(up)) return up;
-    // Anything with no vowels and 2–4 letters is almost certainly an
-    // initialism we haven't listed (NGC, SRC, TWD).
-    if (up.length <= 4 && !/[AEIOU]/.test(up) && /^[A-Z]+$/.test(up)) return up + trailing;
-    return stripped.charAt(0) + stripped.slice(1).toLowerCase() + trailing;
-  }).join(' ');
-}
-
-function renderVerdictInto(head, verdict) {
-  if (!verdict) return;
-  const meta = VERDICT_META[verdict.stance] || VERDICT_META.partner;
-  const wrap = $$('div', { class: `mo-verdict is-${verdict.stance}` });
-
-  const face = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  face.setAttribute('class', 'mo-verdict-face');
-  face.setAttribute('viewBox', '0 0 40 40');
-  face.setAttribute('aria-hidden', 'true');
-  const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
-  use.setAttribute('href', `#${meta.icon}`);
-  face.appendChild(use);
-  wrap.appendChild(face);
-
-  const body = $$('div', { class: 'mo-verdict-body' });
-  body.appendChild($$('div', { class: 'mo-verdict-label', text: meta.label }));
-  body.appendChild($$('div', { class: 'mo-verdict-sentence', text: verdict.sentence }));
-  if (verdict.move) {
-    const move = $$('div', { class: 'mo-verdict-move' });
-    move.appendChild($$('span', { class: 'mo-verdict-move-tag', text: 'Next move' }));
-    move.appendChild(document.createTextNode(verdict.move));
-    body.appendChild(move);
-  }
-  wrap.appendChild(body);
-  head.appendChild(wrap);
-}
-
-// =============================================================================
 // CARD ACTIONS — watch, share, export, mail
 // =============================================================================
 //
@@ -7072,112 +6041,41 @@ function renderQuickTakesInto(card, takes, getBriefText) {
 // (hot ≤90d / warm ≤180d / watch ≤365d), the buying office, and the
 // USASpending source link. "Copy list" exports it paste-ready.
 
-// =============================================================================
-// PIPELINE SIGNALS — why a contract is worth a call, not just when it ends
-// =============================================================================
-//
-// This replaced a plain end-date sort. A date list tells you a contract is
-// ending; it doesn't tell you whether that's an event. Three patterns are:
-//
-//   Renewal    — licensing or subscription paper. Recurring buy behaviour,
-//                the renewal lands on a cycle, and the decision is usually
-//                made months before the end date.
-//   Short-term — a base-only or bridge award under three years. These churn;
-//                expect recompete turbulence rather than a quiet re-up.
-//   Maturing   — a long contract entering its final stretch. Incumbent
-//                fatigue window: the program office has lived with the same
-//                vendor for years and is often quietly ready to look around.
-//
-// Anything longer than 18 months out is filtered — it isn't a signal yet,
-// it's a diary note. Scoring blends deal size (log, so a $2B award doesn't
-// bury everything else), proximity, and a bump for renewal paper.
-
-// Deliberately narrower than it looks like it should be. "support services"
-// and "annual" both matched here originally and pulled in ordinary services
-// recompetes — a 7-year analytic support contract is a maturing incumbent
-// story, not a licence renewal, and mislabelling it sends the seller into the
-// wrong conversation.
-const RENEW_RE = /renew|option year|subscription|licen|maintenance agreement|software maintenance|recurring/i;
-const PIPELINE_LABEL = { renewal: 'Renewal', shortterm: 'Short-term', maturing: 'Maturing' };
-
-function classifyPipeline(r, now) {
-  const end = Date.parse(r['End Date']);
-  if (!end || isNaN(end) || end <= now) return null;
-  const days = Math.ceil((end - now) / 86400000);
-  if (days > 548) return null;
-
-  const startParsed = Date.parse(r['Start Date']);
-  const start = isNaN(startParsed) ? end - 365 * 86400000 : startParsed;
-  const years = (end - start) / 31557600000;
-  const naics = codeOf(r['NAICS']);
-  const psc = codeOf(r['PSC']).toUpperCase();
-  const isSw = naics.startsWith('5112') || naics.startsWith('5182') ||
-               psc.startsWith('7A') || psc === 'DA10';
-  const desc = r['Description'] || '';
-
-  let type, why, bonus = 0;
-  if (isSw || RENEW_RE.test(desc)) {
-    type = 'renewal';
-    bonus = 15;
-    why = 'Licensing paper — this buy recurs, so the renewal decision is already being made.';
-  } else if (years <= 3) {
-    type = 'shortterm';
-    why = `Short award (${years.toFixed(1)} yr) — a bridge or base-only deal. Expect recompete turbulence.`;
-  } else {
-    type = 'maturing';
-    why = `${years.toFixed(1)}-year contract in its final stretch — the incumbent-fatigue window.`;
-  }
-
-  const amt = Number(r['Award Amount']) || 0;
-  const score = Math.round(
-    Math.log10(Math.max(amt, 1)) * 8 +
-    Math.max(0, (548 - Math.max(days, 90)) / 548) * 30 +
-    bonus
-  );
-  return { r, days, type, why, score, amount: amt };
-}
-
 function computeExpiringContracts(rows, isSub) {
   if (isSub) return [];
-  const now = Date.now();
+  const now = Date.now(), MS_DAY = 86400000;
   return rows
-    .map(r => (Number(r['Award Amount']) || 0) > 0 ? classifyPipeline(r, now) : null)
+    .map(r => {
+      if (!r['End Date']) return null;
+      const e = new Date(r['End Date']);
+      if (isNaN(e)) return null;
+      const days = Math.round((e - now) / MS_DAY);
+      if (days < 0 || days > 365) return null;
+      if ((Number(r['Award Amount']) || 0) <= 0) return null;
+      return { r, days };
+    })
     .filter(Boolean)
-    .sort((a, b) => b.score - a.score);
+    .sort((a, b) => a.days - b.days);
 }
 
 function renderExpiringContractsInto(card, targets) {
   if (!targets.length) return;
-  const wall = targets.reduce((s, t) => s + t.amount, 0);
-  const counts = targets.reduce((m, t) => { m[t.type] = (m[t.type] || 0) + 1; return m; }, {});
+  const wall = targets.reduce((s, t) => s + (Number(t.r['Award Amount']) || 0), 0);
 
   const compHeadEl = $$('div', { class: 'mo-comp-head' });
-  compHeadEl.appendChild($$('div', { class: 'mo-comp-title', text: 'Pipeline signals' }));
+  compHeadEl.appendChild($$('div', { class: 'mo-comp-title', text: 'Expiring contracts' }));
   compHeadEl.appendChild($$('div', {
     class: 'mo-comp-meta',
-    text: `${targets.length} inside 18 months · ${fmtMoney(wall)}`,
+    text: `${targets.length} inside 12 months · ${fmtMoney(wall)}`,
   }));
   const copyBtn = $$('button', { class: 'mo-tm-toggle-btn', type: 'button', text: 'Copy list' });
   compHeadEl.appendChild(copyBtn);
   card.appendChild(compHeadEl);
 
-  // Pattern summary — tells you what kind of pipeline this is before you
-  // read a single row. Three renewals and a bridge is a very different
-  // quarter from eight maturing services contracts.
-  const summary = $$('div', { class: 'mo-pl-summary' });
-  for (const type of ['renewal', 'shortterm', 'maturing']) {
-    if (!counts[type]) continue;
-    const sum = targets.filter(t => t.type === type).reduce((s, t) => s + t.amount, 0);
-    summary.appendChild($$('span', {
-      class: `mo-pl-pill mo-pl-${type}`,
-      text: `${PIPELINE_LABEL[type]}: ${counts[type]} · ${fmtMoney(sum)}`,
-    }));
-  }
-  if (summary.childNodes.length) card.appendChild(summary);
-
   const SHOWN = 6;
   const wrap = $$('div', { class: 'mo-targets' });
-  targets.slice(0, SHOWN).forEach(({ r, days, type, why, amount }) => {
+  targets.slice(0, SHOWN).forEach(({ r, days }) => {
+    const amount = Number(r['Award Amount']) || 0;
     const agencyTop = r['Awarding Agency'] || '';
     const office = buildOfficeLabel(r['Award ID'], agencyTop, r['Awarding Sub Agency'] || agencyTop);
     const internalId = r.generated_internal_id || '';
@@ -7188,22 +6086,18 @@ function renderExpiringContractsInto(card, targets) {
     const row = $$('div', { class: 'mo-row-2line mo-target-row' });
     row.innerHTML = `
       <div class="mo-row-2line-top">
-        <span class="mo-row-name" title="${escapeHtml(r['Recipient Name'] || '')}">${escapeHtml(titleCaseVendor(r['Recipient Name']) || '—')}</span>
+        <span class="mo-row-name" title="${escapeHtml(r['Recipient Name'] || '')}">${escapeHtml(r['Recipient Name'] || '—')}</span>
         <span class="mo-row-amount">${fmtMoney(amount)}</span>
       </div>
       ${metaBits.length ? `<div class="mo-row-meta">${escapeHtml(metaBits.join(' · '))}</div>` : ''}
-      <div class="mo-row-meta-pop">
-        <span class="mo-pl-badge mo-pl-${type}">${PIPELINE_LABEL[type]}</span>
-        <span class="mo-countdown mo-countdown-${urgency}">${days}d left</span>ends ${escapeHtml(r['End Date'] || '')}
-      </div>
-      <div class="mo-pl-why">${escapeHtml(why)}</div>
+      <div class="mo-row-meta-pop"><span class="mo-countdown mo-countdown-${urgency}">${days}d left</span>ends ${escapeHtml(r['End Date'] || '')}</div>
       ${viewUrl ? `<div class="mo-row-actions"><a class="mo-row-view" href="${escapeHtml(viewUrl)}" target="_blank" rel="noopener">Source ↗</a></div>` : ''}`;
     wrap.appendChild(row);
   });
   if (targets.length > SHOWN) {
     wrap.appendChild($$('div', {
       class: 'mo-targets-more',
-      text: `+${targets.length - SHOWN} more inside 18 months — sort the contract list below by "Expiring"`,
+      text: `+${targets.length - SHOWN} more inside 12 months — sort the contract list below by "Expiring"`,
     }));
   }
   card.appendChild(wrap);
@@ -7216,11 +6110,10 @@ function renderExpiringContractsInto(card, targets) {
       copyBtn.textContent = msg;
       setTimeout(() => { copyBtn.textContent = orig; delete copyBtn.dataset.flash; }, 1600);
     };
-    const lines = [`PIPELINE SIGNALS — next 18 months (${targets.length}, ${fmtMoney(wall)} total)`];
-    for (const { r, days, type, why } of targets) {
+    const lines = [`EXPIRING CONTRACTS — next 12 months (${targets.length}, ${fmtMoney(wall)} total)`];
+    for (const { r, days } of targets) {
       const office = buildOfficeLabel(r['Award ID'], r['Awarding Agency'] || '', r['Awarding Sub Agency'] || r['Awarding Agency'] || '');
-      lines.push(`• [${PIPELINE_LABEL[type]}] ${r['End Date']} (${days}d) · ${r['Recipient Name'] || '?'} — ${fmtMoney(Number(r['Award Amount']) || 0)}${office ? ` · ${office}` : ''}${r['Award ID'] ? ` · ${r['Award ID']}` : ''}`);
-      lines.push(`    ${why}`);
+      lines.push(`• ${r['End Date']} (${days}d) · ${r['Recipient Name'] || '?'} — ${fmtMoney(Number(r['Award Amount']) || 0)}${office ? ` · ${office}` : ''}${r['Award ID'] ? ` · ${r['Award ID']}` : ''}`);
     }
     const text = lines.join('\n');
     if (navigator.clipboard?.writeText) {
@@ -7302,14 +6195,6 @@ function renderCard(rows, attrs, resolved) {
   // Date-broadened chip: if the since date was too recent (USASpending lag)
   // and we broadened it, tell the user the original window was empty.
   const chipParts = [];
-  // Territory scoping is invisible in the numbers, so it has to be visible
-  // on the card. Without this chip a FedHealth-scoped total looks like a
-  // government-wide total that happens to be small.
-  const activeTerr = getTerritory();
-  if (activeTerr && !resolved.agencyAsked) {
-    const t = TERRITORIES[activeTerr];
-    chipParts.push(`<span class="mo-card-chip mo-card-chip-terr">${escapeHtml(t.label)} only — your territory</span>`);
-  }
   const effectiveSince = resolved.dateBroadened?.broadenedTo || attrs.since;
   if (effectiveSince || attrs.until) {
     const since = effectiveSince || '...';
@@ -7374,8 +6259,6 @@ function renderCard(rows, attrs, resolved) {
   // the targets section, and the "Copy brief" export.
   const quickTakes = buildQuickTakes(rows, isSub, total, vendorEntries);
   const expiringContracts = computeExpiringContracts(rows, isSub);
-  const partnerFit = computePartnerFit(rows, isSub);
-  const verdict = buildVerdict({ rows, isSub, total, vendorEntries, attrs, resolved, partnerFit });
 
   // Assemble the paste-ready meeting brief. Built lazily at click time so
   // the permalink can read the mounted turn's data-q.
@@ -7389,21 +6272,6 @@ function renderCard(rows, attrs, resolved) {
     lines.push(`${range} · ${rows.length} ${pluralize(rows.length, 'award')} · Fedmo, ${new Date().toISOString().slice(0, 10)}`);
     lines.push('', 'TOPLINE');
     lines.push(`• ${fmtMoney(total)} obligated across ${vendorCount} ${isSub ? 'subs' : 'vendors'} — top 3 hold ${top3Share}%`);
-    if (verdict) {
-      lines.push('', `CALL — ${VERDICT_META[verdict.stance].label.toUpperCase()}`);
-      lines.push(`• ${verdict.sentence}`);
-      if (verdict.move) lines.push(`• Next move: ${verdict.move}`);
-    }
-    if (partnerFit) {
-      const ways = [...partnerFit.channel.slice(0, 3), ...partnerFit.primes.slice(0, 3)]
-        .sort((a, b) => b.score - a.score).slice(0, 5);
-      if (ways.length) {
-        lines.push('', 'WAYS IN');
-        ways.forEach((v, i) => {
-          lines.push(`${i + 1}. ${titleCaseVendor(v.name)} [${v.role === 'channel' ? 'Channel' : 'Prime'}, fit ${v.score}] — ${v.role === 'channel' ? whyChannelRow(v, partnerFit.marketTotal) : whyPrimeRow(v, partnerFit.marketTotal)}`);
-        });
-      }
-    }
     if (quickTakes.length) {
       lines.push('', 'QUICK TAKE');
       for (const t of quickTakes) {
@@ -7418,9 +6286,9 @@ function renderCard(rows, attrs, resolved) {
       });
     }
     if (expiringContracts.length) {
-      lines.push('', `PIPELINE SIGNALS (next 18 months — ${fmtMoney(expiringContracts.reduce((sum, t) => sum + t.amount, 0))})`);
-      expiringContracts.slice(0, 8).forEach(({ r, days, type }) => {
-        lines.push(`• [${PIPELINE_LABEL[type]}] ${r['End Date']} (${days}d) · ${r['Recipient Name'] || '?'} — ${fmtMoney(Number(r['Award Amount']) || 0)}${r['Award ID'] ? ` · ${r['Award ID']}` : ''}`);
+      lines.push('', `EXPIRING CONTRACTS (next 12 months — ${fmtMoney(expiringContracts.reduce((sum, t) => sum + (Number(t.r['Award Amount']) || 0), 0))})`);
+      expiringContracts.slice(0, 8).forEach(({ r, days }) => {
+        lines.push(`• ${r['End Date']} (${days}d) · ${r['Recipient Name'] || '?'} — ${fmtMoney(Number(r['Award Amount']) || 0)}${r['Award ID'] ? ` · ${r['Award ID']}` : ''}`);
       });
       if (expiringContracts.length > 8) lines.push(`  …plus ${expiringContracts.length - 8} more`);
     }
@@ -7455,12 +6323,7 @@ function renderCard(rows, attrs, resolved) {
   if (expiringCount > 0) {
     insightBits.push(`${expiringCount} ${pluralize(expiringCount, 'contract')} expiring in the next 90 days.`);
   }
-  // The verdict supersedes the old one-line insight — it says the same thing
-  // with a stance and a next move attached. Keep the plain line as a fallback
-  // for result sets too thin to score (a single row, a lifetime EDGAR-ish set).
-  if (verdict) {
-    renderVerdictInto(head, verdict);
-  } else if (insightBits.length > 0) {
+  if (insightBits.length > 0) {
     head.appendChild($$('div', { class: 'mo-card-insight', text: insightBits.join(' ') }));
   }
 
@@ -7488,11 +6351,9 @@ function renderCard(rows, attrs, resolved) {
     rows,
     isSub,
     getBrief: rows.length ? buildBriefText : null,
-    headline: verdict
-      ? `${titleBits.join(' · ')} — ${VERDICT_META[verdict.stance].label}: ${verdict.sentence}`
-      : insightBits.length
-        ? `${titleBits.join(' · ')} — ${insightBits[0]}`
-        : titleBits.join(' · '),
+    headline: insightBits.length
+      ? `${titleBits.join(' · ')} — ${insightBits[0]}`
+      : titleBits.join(' · '),
   }));
 
   card.appendChild(head);
@@ -7505,29 +6366,11 @@ function renderCard(rows, attrs, resolved) {
     return card;
   }
 
-  // ── The act-on-it layer ───────────────────────────────────────────
-  // These two answer "who do I call", so they sit directly under the
-  // verdict rather than below a screen of charts. Partner Fit names the
-  // doors; Pipeline names the contracts with a reason attached.
-  renderPartnerFitInto(card, partnerFit);
-  renderExpiringContractsInto(card, expiringContracts);
-
-  // ── The evidence layer ────────────────────────────────────────────
-  // Everything from here down is the working — quick take, treemap,
-  // geography, prospecting, the rows themselves. It's folded by default.
-  // A card that opens with a verdict and a call list is a thing you can
-  // read in a meeting; the same card with four screens of charts stacked
-  // on top of it is a thing you scroll past. The evidence still has to be
-  // one tap away, because a seller who can't check the working won't
-  // repeat the claim in front of a customer.
-  const evidence = $$('div', { class: 'mo-fold' });
-  evidence.hidden = true;
-
   // ── Quick take — snackable insight deck (Blinkist-style) ──
-  // First thing inside the fold: the 30-second "here's what you'd miss"
-  // read. The deck header carries "Copy brief" — the card as paste-ready
-  // text.
-  renderQuickTakesInto(evidence, quickTakes, buildBriefText);
+  // First thing in the content area, above the treemap: the 30-second
+  // "here's what you'd miss" read before the visuals. The deck header
+  // carries "Copy brief" — the whole card as paste-ready text.
+  renderQuickTakesInto(card, quickTakes, buildBriefText);
 
   const initialDimension = (!isSub && (resolved.recipientResolved || attrs.recipient))
     ? 'agency'
@@ -7542,7 +6385,7 @@ function renderCard(rows, attrs, resolved) {
     const metaEl = $$('div', { class: 'mo-comp-meta' });
     compHead.appendChild(titleEl);
     compHead.appendChild(metaEl);
-    evidence.appendChild(compHead);
+    card.appendChild(compHead);
 
     const tmHost = $$('div', { class: 'mo-treemap-host' });
 
@@ -7636,7 +6479,7 @@ function renderCard(rows, attrs, resolved) {
       });
     });
 
-    evidence.appendChild(tmHost);
+    card.appendChild(tmHost);
     requestAnimationFrame(() => showView(initialDimension));
   }
 
@@ -7645,18 +6488,23 @@ function renderCard(rows, attrs, resolved) {
   } else {
     renderContractRows(card, rows, attrs);
 
-    evidence.appendChild($$('div', { class: 'mo-amount-note',
+    card.appendChild($$('div', { class: 'mo-amount-note',
       text: "Amounts are USASpending Award Amount — cumulative obligated value over a contract's lifetime, not a single new obligation. Expired contracts are hidden." }));
   }
+
+  // ── Expiring contracts — the BD hit list ──
+  // Curated slice, not the whole table: contracts ending inside 12 months,
+  // soonest first, with countdown chips and one-tap "Copy list".
+  renderExpiringContractsInto(card, expiringContracts);
 
   // ── State map ──
   if (!isSub) {
     const geo = buildGeography(rows);
     if (Object.keys(geo).length > 0) {
       const stateCount = Object.keys(geo).length;
-      evidence.appendChild(compHead('Place of performance', `${stateCount} ${pluralize(stateCount, 'state')}`));
+      card.appendChild(compHead('Place of performance', `${stateCount} ${pluralize(stateCount, 'state')}`));
       const smHost = $$('div', { class: 'mo-statemap-host' });
-      evidence.appendChild(smHost);
+      card.appendChild(smHost);
       requestAnimationFrame(() => renderStateMapInto(smHost, geo));
     }
   }
@@ -7682,7 +6530,7 @@ function renderCard(rows, attrs, resolved) {
     // LinkedIn prospecting section — always show for the top vendor.
     if (liCompanyName) {
       const liCardUrl = liUrl(liCompanyName);
-      evidence.appendChild(compHead('Prospecting', ''));
+      card.appendChild(compHead('Prospecting', ''));
       const liRow = $$('div', { class: 'mo-list' });
       liRow.innerHTML = `
         <div class="mo-row-2line">
@@ -7693,7 +6541,7 @@ function renderCard(rows, attrs, resolved) {
             <a class="mo-row-view" href="${escapeHtml(liCardUrl)}" target="_blank" rel="noopener">People ↗</a>
           </div>
         </div>`;
-      evidence.appendChild(liRow);
+      card.appendChild(liRow);
     }
     injectPills(card, rows, attrs, vendorEntries, agencyEntries, total, expiringCount);
   };
@@ -7722,7 +6570,7 @@ function renderCard(rows, attrs, resolved) {
     loadSecFilings(secRows, secAttrs).then(populated => {
       if (!populated.length) { injectAtEnd(); return; }
       const totalFilings = populated.reduce((s, v) => s + v.filings.length, 0);
-      evidence.appendChild(compHead(
+      card.appendChild(compHead(
         'SEC filings',
         `${populated.length} public ${pluralize(populated.length, 'prime')} · ${totalFilings} recent ${pluralize(totalFilings, 'filing')}`,
       ));
@@ -7745,7 +6593,7 @@ function renderCard(rows, attrs, resolved) {
         </div>`;
       }
       list.innerHTML = listHtml;
-      evidence.appendChild(list);
+      card.appendChild(list);
       injectAtEnd();
     }).catch(e => {
       console.warn('[sec] failed', e);
@@ -7755,73 +6603,7 @@ function renderCard(rows, attrs, resolved) {
     injectAtEnd();
   }
 
-  mountEvidenceFold(card, evidence, {
-    rowCount: rows.length,
-    isSub,
-    hasTakes: quickTakes.length > 0,
-  });
-
   return card;
-}
-
-// The fold's toggle. Two jobs beyond showing and hiding: name what's inside
-// so the button is worth pressing, and re-render the charts on first open.
-// Treemap and Sankey size themselves from the host's offsetWidth, and a
-// hidden host measures zero — so they'd paint as slivers if we let them
-// render into a collapsed container. Deferring to first open reuses exactly
-// the machinery the window-resize handler already relies on.
-function mountEvidenceFold(card, evidence, { rowCount, isSub, hasTakes }) {
-  if (!evidence.childNodes.length) return;
-
-  const bits = [];
-  if (hasTakes) bits.push('quick take');
-  if (evidence.querySelector('.mo-treemap-host')) bits.push('charts');
-  if (rowCount) bits.push(`${rowCount} ${pluralize(rowCount, isSub ? 'subaward' : 'contract')}`);
-  const summary = bits.join(' · ');
-
-  const toggle = $$('button', { class: 'mo-fold-toggle', type: 'button', 'aria-expanded': 'false' });
-  const label = $$('span', { class: 'mo-fold-label', text: 'Show the working' });
-  const meta = $$('span', { class: 'mo-fold-meta', text: summary });
-  const chev = $$('span', { class: 'mo-fold-chev', 'aria-hidden': 'true' });
-  chev.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
-  toggle.appendChild(label);
-  toggle.appendChild(meta);
-  toggle.appendChild(chev);
-
-  let painted = false;
-  toggle.addEventListener('click', () => {
-    const opening = evidence.hidden;
-    evidence.hidden = !opening;
-    toggle.setAttribute('aria-expanded', opening ? 'true' : 'false');
-    toggle.classList.toggle('is-open', opening);
-    label.textContent = opening ? 'Hide the working' : 'Show the working';
-    if (opening && !painted) {
-      painted = true;
-      requestAnimationFrame(() => repaintChartsIn(evidence));
-    }
-    track(opening ? 'evidence_open' : 'evidence_close', { rows: rowCount });
-  });
-
-  card.appendChild(toggle);
-  card.appendChild(evidence);
-}
-
-// Re-render every chart host inside a subtree from its stashed data. Same
-// three host types the resize handler walks, kept in one place so a new
-// chart type only has to be taught about once.
-function repaintChartsIn(root) {
-  root.querySelectorAll('.mo-treemap-host[data-tm-items]').forEach(host => {
-    try { renderTreemapInto(host, JSON.parse(host.getAttribute('data-tm-items'))); } catch {}
-  });
-  root.querySelectorAll('.mo-treemap-host[data-sk-rows]').forEach(host => {
-    try {
-      renderSankeyInto(host, JSON.parse(host.getAttribute('data-sk-rows')),
-        host.getAttribute('data-sk-view') === 'sub');
-    } catch {}
-  });
-  root.querySelectorAll('.mo-statemap-host[data-sm-geo]').forEach(host => {
-    try { renderStateMapInto(host, JSON.parse(host.getAttribute('data-sm-geo'))); } catch {}
-  });
 }
 
 // =============================================================================
@@ -8610,10 +7392,7 @@ async function askMo(question, opts = {}) {
   const { autoSort } = opts;
 
   renderUserTurn(question);
-  // Mo sees the question plus the standing lens; the thread shows only the
-  // question. Appended per-turn rather than pinned to the front of history
-  // because history is capped at four turns and would drop it.
-  history.push({ role: 'user', parts: [{ text: question + lensPreamble() }] });
+  history.push({ role: 'user', parts: [{ text: question }] });
 
   const moTurn = renderMoTurn(question);
   let fullText = '';
@@ -9035,97 +7814,6 @@ function showSharedRibbon(q) {
   host.appendChild(bar);
 }
 
-// =============================================================================
-// THEME
-// =============================================================================
-// The class is already on <html> from the pre-paint script; this only handles
-// the toggle and keeping the icon honest. Once a user picks a side we stop
-// following the OS — an explicit choice outranks a system preference.
-const THEME_KEY = 'fedmo.theme.v1';
-const ICON_MOON = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
-const ICON_SUN = '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>';
-
-function syncThemeIcon() {
-  const icon = document.getElementById('themeIcon');
-  const btn = document.getElementById('btnTheme');
-  if (!icon || !btn) return;
-  const dark = document.documentElement.classList.contains('dark');
-  // Show where you're going, not where you are.
-  icon.innerHTML = dark ? ICON_SUN : ICON_MOON;
-  btn.title = dark ? 'Switch to light' : 'Switch to dark';
-  btn.setAttribute('aria-label', btn.title);
-}
-
-document.getElementById('btnTheme').addEventListener('click', () => {
-  const nowDark = !document.documentElement.classList.contains('dark');
-  document.documentElement.classList.toggle('dark', nowDark);
-  store.set(THEME_KEY, nowDark ? 'dark' : 'light');
-  syncThemeIcon();
-  track('theme_toggle', { theme: nowDark ? 'dark' : 'light' });
-});
-syncThemeIcon();
-
-// =============================================================================
-// SELLER LENS UI
-// =============================================================================
-function renderLens() {
-  const input = document.getElementById('lensInput');
-  const terrHost = document.getElementById('lensTerritory');
-  const note = document.getElementById('lensNote');
-  if (!input || !terrHost) return;
-
-  input.value = getLens();
-
-  terrHost.innerHTML = '';
-  const active = getTerritory();
-  const opts = [['', 'All of government', null], ...Object.entries(TERRITORIES).map(([k, t]) => [k, t.label, t.color])];
-  for (const [key, label, color] of opts) {
-    const on = (key || null) === active;
-    const btn = $$('button', {
-      class: 'mo-lens-terr-btn' + (on ? ' is-on' : ''),
-      type: 'button',
-      'aria-pressed': on ? 'true' : 'false',
-      text: label,
-    });
-    if (color && on) btn.style.borderColor = color;
-    if (color) btn.style.setProperty('--terr', color);
-    btn.addEventListener('click', () => {
-      setTerritory(key || null);
-      renderLens();
-      track('territory_set', { territory: key || 'all' });
-    });
-    terrHost.appendChild(btn);
-  }
-
-  if (note) {
-    const lens = getLens();
-    note.textContent = lens || active
-      ? `Set. Mo reads every answer through this${active ? ` and stays inside ${TERRITORIES[active].label}` : ''}.`
-      : 'Mo remembers this and reads every answer through it. Change it any time.';
-  }
-}
-
-(() => {
-  const input = document.getElementById('lensInput');
-  if (!input) return;
-  let saveTimer = null;
-  const commit = () => {
-    setLens(input.value);
-    renderLens();
-    track('lens_set', { has_lens: !!getLens() });
-  };
-  // Save on pause rather than on a Save button — one field with an explicit
-  // save is a form, and this isn't a form, it's a preference.
-  input.addEventListener('input', () => {
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(commit, 700);
-  });
-  input.addEventListener('blur', () => { clearTimeout(saveTimer); commit(); });
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); clearTimeout(saveTimer); commit(); input.blur(); }
-  });
-})();
-
 // Header: about modal
 const $aboutModal = document.getElementById('aboutModal');
 const $aboutBackdrop = document.getElementById('aboutBackdrop');
@@ -9192,7 +7880,6 @@ window.addEventListener('resize', () => {
 // recent questions under the greeting examples.
 syncWatchBadge();
 renderRecents();
-renderLens();
 
 // Bootstrap complete — fire app_init once for analytics.
 track('app_init');
