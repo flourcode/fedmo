@@ -552,6 +552,145 @@ a:hover { text-decoration: underline; }
   background: var(--primary-40);
 }
 
+/* Recents — the second-visit shortcut. Same pill vocabulary as the
+   examples above them, one row down, so a returning user's own questions
+   sit where the canned ones were. Hidden entirely on a first visit. */
+.mo-greeting-recents {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+.mo-recent-pill {
+  font-family: var(--font);
+  font-size: 13px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  padding: 5px 13px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-weight: 500;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: background 120ms, color 120ms, border-color 120ms;
+}
+.mo-recent-pill:hover {
+  background: var(--primary-20);
+  color: var(--primary-100);
+  border-color: var(--primary-40);
+}
+
+/* ── Watchlist ─────────────────────────────────────────────
+   Federal BD is a re-checking job: the same eight markets, every
+   Monday, forever. The watchlist is that Monday ritual — saved
+   questions that re-run live, never a cached snapshot. */
+.mo-header-badge {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--primary-100);
+  color: #FFFFFF;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.mo-header-action { position: relative; }
+
+.mo-watch-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 12px;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border-soft);
+  text-align: left;
+}
+.mo-watch-row:last-child { border-bottom: none; }
+.mo-watch-open {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  font-family: var(--font);
+}
+.mo-watch-q {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--primary-80);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mo-watch-open:hover .mo-watch-q { text-decoration: underline; }
+.mo-watch-meta {
+  font-size: 11px;
+  color: var(--text-faint);
+  margin-top: 2px;
+}
+.mo-watch-remove {
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  color: var(--text-faint);
+  cursor: pointer;
+  padding: 5px;
+  border-radius: 8px;
+  line-height: 0;
+}
+.mo-watch-remove:hover { color: #C75268; background: #FDF0F2; }
+.mo-watch-empty {
+  font-size: 14px;
+  color: var(--text-muted);
+  line-height: 1.55;
+  padding: 4px 0 8px;
+}
+
+/* Shared-link ribbon — shown only when a card arrives via someone else's
+   permalink. The single highest-intent moment this app has: a stranger
+   arrived because a colleague vouched for it. Say what they're looking at
+   and what to do next, then get out of the way. */
+.mo-shared-ribbon {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg-tint);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  margin-bottom: var(--s-4);
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+.mo-shared-ribbon svg { flex-shrink: 0; color: var(--primary-60); }
+.mo-shared-ribbon strong { color: var(--text-title); font-weight: 600; }
+.mo-shared-dismiss {
+  margin-left: auto;
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  color: var(--text-faint);
+  cursor: pointer;
+  padding: 4px;
+  line-height: 0;
+  border-radius: 6px;
+}
+.mo-shared-dismiss:hover { background: var(--primary-20); color: var(--primary-100); }
+
 /* ── Pills (follow-up suggestions) ── */
 /* Float below a card in the conversation flow, NOT inside the card.
    Same pill shape as the greeting examples so they read as the same
@@ -608,34 +747,66 @@ a:hover { text-decoration: underline; }
 }
 
 
-.mo-card-share {
-  position: absolute;
-  top: var(--s-3);
-  right: var(--s-4);
+/* Card action bar — the take-it-with-you row, sitting under the stats at
+   the foot of the card head. This used to be one absolute "Copy link"
+   button floating by the title. It got clicked, which was the tell: people
+   don't want to read a card, they want to leave with it. So: watch the
+   market, share the read, pull the rows into Excel, mail the brief.
+   Everything a BD person does after they find something. */
+.mo-card-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: var(--s-4);
+  padding-top: var(--s-3);
+  border-top: 1px solid var(--border-soft);
+}
+.mo-act {
   font-family: var(--font);
   font-size: 12px;
   font-weight: 500;
-  color: var(--text-faint);
+  color: var(--text-muted);
   background: transparent;
   border: 1px solid var(--border);
   border-radius: 999px;
-  padding: 4px 12px;
+  padding: 5px 12px;
   cursor: pointer;
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   transition: color 120ms, border-color 120ms, background 120ms;
 }
-.mo-card-share:hover {
+.mo-act svg {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+}
+.mo-act:hover {
   color: var(--primary-100);
   border-color: var(--primary-40);
   background: var(--primary-20);
 }
+.mo-act:focus-visible {
+  outline: 2px solid var(--primary-60);
+  outline-offset: 2px;
+}
+/* Watched: filled, so the state is legible from across the card. */
+.mo-act.is-on {
+  color: #FFFFFF;
+  background: var(--primary-100);
+  border-color: var(--primary-100);
+}
+.mo-act.is-on:hover { background: var(--primary-80); border-color: var(--primary-80); }
+.mo-act.is-on svg { fill: currentColor; }
+/* .mo-card-share is still applied to the Share button so existing analytics
+   selectors keep resolving, but it carries no styling of its own now — it's
+   just another .mo-act. */
 .mo-card-title {
   font-size: 17px; font-weight: 500;
   color: var(--text-title);
   letter-spacing: var(--track-tight);
   margin: 0 0 var(--s-1);
-  /* Right-pad so the title doesn't slide under the share button. */
-  padding-right: 90px;
 }
 /* Plain-English restatement of what the user asked. Sentence form,
    muted color, sits right below the title. */
@@ -1523,6 +1694,10 @@ a:hover { text-decoration: underline; }
     <a class="mo-header-nav-link" href="/tools/" data-cta="header-tools">Tools</a>
     <a class="mo-header-link" href="/consulting/" data-cta="header-consulting">Work with Mark<svg class="mo-header-link-arrow" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a>
     <div class="mo-header-spacer"></div>
+    <button class="mo-header-action" id="btnWatch" aria-label="Watchlist" title="Watchlist">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+      <span class="mo-header-badge" id="watchCount" style="display:none">0</span>
+    </button>
     <button class="mo-header-action" id="btnReset" aria-label="New conversation" title="New conversation">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
     </button>
@@ -1622,7 +1797,34 @@ a:hover { text-decoration: underline; }
   </div>
 </div>
 
+<!-- Watchlist, opens from the bookmark button -->
+<div class="mo-modal-backdrop" id="watchBackdrop"></div>
+<div class="mo-modal" id="watchModal" role="dialog" aria-labelledby="watchTitle" aria-hidden="true">
+  <div class="mo-modal-handle" aria-hidden="true"></div>
+  <div class="mo-modal-header">
+    <svg class="mo-modal-face" viewBox="0 0 40 40"><use href="#icon-face-open"/></svg>
+    <div>
+      <div class="mo-modal-title" id="watchTitle">Watchlist</div>
+      <div class="mo-modal-sub">Your markets. Re-runs live every time you open one.</div>
+    </div>
+    <button class="mo-modal-close" id="btnWatchClose" aria-label="Close">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="mo-modal-body">
+    <div class="mo-watch-empty" id="watchEmpty">
+      Nothing saved yet. Ask Mo about a market, then hit <strong>Watch</strong> on the card. Your accounts, your competitors, the vehicles you sit on &mdash; check them in one pass on Monday morning instead of rebuilding the same searches.
+    </div>
+    <div class="mo-modal-tips" id="watchList" style="display:none"></div>
+    <div class="mo-modal-actions" id="watchActions" style="display:none">
+      <button class="mo-modal-btn is-secondary" type="button" id="btnWatchMail">Email this list to my team</button>
+    </div>
+    <div class="mo-modal-foot" id="watchFoot" style="display:none">Saved in this browser only. Emailing the list sends live links anyone can open.</div>
+  </div>
+</div>
+
 <main class="mo-app">
+  <div id="sharedRibbon"></div>
   <div id="conversation"></div>
   <div id="greeting" class="mo-greeting">
     <svg class="mo-greeting-face" viewBox="0 0 40 40"><use href="#icon-face-open"/></svg>
@@ -1630,7 +1832,7 @@ a:hover { text-decoration: underline; }
       <div class="mo-greeting-hello">Hi, I'm Mo.</div>
       <div class="mo-greeting-tagline">Ask me anything about federal contracts or private capital &mdash; like you'd ask a colleague, not a search box. I pull live data from USASpending and SEC EDGAR so you can follow the money. Not sure where to start? Just say what you sell.</div>
       <div class="mo-greeting-examples" id="greeting-examples"></div>
-
+      <div class="mo-greeting-recents" id="greeting-recents" style="display:none"></div>
     </div>
   </div>
 </main>
@@ -1697,6 +1899,275 @@ const track = (event, props = {}) => {
     if (typeof gtag === 'function') gtag('event', event, props);
   } catch { /* analytics never breaks the app */ }
 };
+
+// =============================================================================
+// LOCAL MEMORY
+// =============================================================================
+// Safari private mode, locked-down government browsers, and embedded webviews
+// all throw on localStorage access rather than returning null. A saved
+// watchlist is a convenience — it must never be the reason the app fails to
+// boot — so everything falls back to an in-memory object for the session.
+const store = (() => {
+  let mem = Object.create(null);
+  let persistent = false;
+  try {
+    const probe = '__fedmo_probe__';
+    window.localStorage.setItem(probe, '1');
+    window.localStorage.removeItem(probe);
+    persistent = true;
+  } catch { persistent = false; }
+  return {
+    persistent,
+    get(key, fallback) {
+      try {
+        const raw = persistent ? window.localStorage.getItem(key) : mem[key];
+        return raw == null ? fallback : JSON.parse(raw);
+      } catch { return fallback; }
+    },
+    set(key, value) {
+      try {
+        const raw = JSON.stringify(value);
+        if (persistent) window.localStorage.setItem(key, raw);
+        else mem[key] = raw;
+      } catch { /* quota exceeded — drop it silently */ }
+    },
+  };
+})();
+
+// =============================================================================
+// PERMALINKS
+// =============================================================================
+// Every export carries one. A brief pasted into Slack is worth more when the
+// person reading it can re-run the query themselves — and the person who
+// pasted it looks better for having brought live data instead of a screenshot.
+function permalink(q, source) {
+  const path = window.location.pathname.replace(/\/[^\/]+\.html?$/, '/') || '/';
+  const src = source ? `&via=${encodeURIComponent(source)}` : '';
+  return `${window.location.origin}${path}?q=${encodeURIComponent(q)}${src}`;
+}
+
+// Pull the query that produced a card. Cards are mounted inside a turn that
+// stashes the original question on data-q, so this works from any descendant.
+const queryOf = (el) => el?.closest('.mo-turn-mo')?.getAttribute('data-q') || '';
+
+// =============================================================================
+// WATCHLIST + RECENTS
+// =============================================================================
+// Federal BD is a re-checking job. The same handful of accounts, competitors,
+// and vehicles, over and over, forever. Saving a *question* rather than a
+// result means every re-open is a fresh pull against USASpending — the thing
+// a screenshot in a slide deck can never be.
+const WATCH_KEY  = 'fedmo.watchlist.v1';
+const RECENT_KEY = 'fedmo.recent.v1';
+const WATCH_MAX  = 40;
+const RECENT_MAX = 8;
+
+const getWatchlist = () => {
+  const list = store.get(WATCH_KEY, []);
+  return Array.isArray(list) ? list.filter(w => w && typeof w.q === 'string' && w.q) : [];
+};
+const isWatched = (q) => getWatchlist().some(w => w.q === q);
+
+function saveWatchlist(list) {
+  store.set(WATCH_KEY, list.slice(0, WATCH_MAX));
+  syncWatchBadge();
+}
+
+// Returns the new watched state so the caller can update its own button
+// without re-reading storage.
+function toggleWatch(q, label) {
+  const list = getWatchlist();
+  const at = list.findIndex(w => w.q === q);
+  if (at >= 0) {
+    list.splice(at, 1);
+    saveWatchlist(list);
+    return false;
+  }
+  list.unshift({ q, label: label || q, at: Date.now() });
+  saveWatchlist(list);
+  return true;
+}
+
+function syncWatchBadge() {
+  const badge = document.getElementById('watchCount');
+  if (!badge) return;
+  const n = getWatchlist().length;
+  badge.textContent = n > 99 ? '99+' : String(n);
+  badge.style.display = n ? '' : 'none';
+}
+
+// "3 days ago" beats a timestamp here — the only question a watchlist row
+// answers is whether it's stale enough to be worth re-opening.
+function relativeTime(ms) {
+  const days = Math.floor((Date.now() - ms) / 86400000);
+  if (!isFinite(days) || days < 0) return 'just now';
+  if (days === 0) return 'saved today';
+  if (days === 1) return 'saved yesterday';
+  if (days < 30) return `saved ${days} days ago`;
+  const months = Math.round(days / 30);
+  return `saved ${months} ${pluralize(months, 'month')} ago`;
+}
+
+function recordRecent(q) {
+  const clean = String(q || '').trim();
+  if (!clean) return;
+  const list = store.get(RECENT_KEY, []);
+  const next = (Array.isArray(list) ? list : [])
+    .filter(x => typeof x === 'string' && x && x !== clean);
+  next.unshift(clean);
+  store.set(RECENT_KEY, next.slice(0, RECENT_MAX));
+}
+
+// =============================================================================
+// EXPORTS — CSV, share sheet, mailto
+// =============================================================================
+// CSV first, because the honest answer to "can I get this into my CRM" has to
+// be yes. BOM included: without it Excel mangles vendor names with accents,
+// and a mangled export is worse than no export.
+function toCsv(headers, rows) {
+  const cell = (v) => {
+    const s = v == null ? '' : String(v);
+    return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const lines = [headers.map(cell).join(',')];
+  for (const r of rows) lines.push(r.map(cell).join(','));
+  return '\ufeff' + lines.join('\r\n');
+}
+
+function buildCardCsv(rows, isSub) {
+  const daysLeft = (end) => {
+    if (!end) return '';
+    const d = new Date(end);
+    if (isNaN(d)) return '';
+    return Math.round((d - Date.now()) / 86400000);
+  };
+  if (isSub) {
+    const headers = ['Sub-awardee', 'Amount', 'Sub-award date', 'Prime recipient',
+      'Awarding agency', 'Awarding sub-agency', 'Description', 'Sub-award ID'];
+    return toCsv(headers, rows.map(r => [
+      r._subName || '',
+      Number(r._amount) || 0,
+      r['Sub-Award Date'] || '',
+      r._primeName || r['Prime Recipient Name'] || '',
+      r['Awarding Agency'] || '',
+      r['Awarding Sub Agency'] || '',
+      r['Sub-Award Description'] || '',
+      r['Sub-Award ID'] || '',
+    ]));
+  }
+  const headers = ['Recipient', 'Award amount', 'Start date', 'End date', 'Days to expiry',
+    'Awarding agency', 'Awarding sub-agency', 'Awarding office', 'Place of performance',
+    'Award ID', 'Description', 'USASpending link'];
+  return toCsv(headers, rows.map(r => [
+    r['Recipient Name'] || '',
+    Number(r['Award Amount']) || 0,
+    r['Start Date'] || '',
+    r['End Date'] || '',
+    daysLeft(r['End Date']),
+    r['Awarding Agency'] || '',
+    r['Awarding Sub Agency'] || '',
+    r['Awarding Office'] || '',
+    r['Place of Performance State Code'] || '',
+    r['Award ID'] || '',
+    r['Description'] || '',
+    r.generated_internal_id ? `https://www.usaspending.gov/award/${r.generated_internal_id}` : '',
+  ]));
+}
+
+// Filenames land in a shared drive, so they need to say what they are without
+// being opened: fedmo-palantir-dod-2026-07-24.csv.
+const slugify = (s) => String(s || 'export')
+  .toLowerCase()
+  .replace(/[^a-z0-9]+/g, '-')
+  .replace(/^-+|-+$/g, '')
+  .slice(0, 60) || 'export';
+
+function downloadText(filename, text, mime = 'text/csv;charset=utf-8') {
+  try {
+    const blob = new Blob([text], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// mailto has a practical URL ceiling (~2000 chars is the safe floor across
+// Outlook, Gmail and iOS Mail). Trim the body rather than produce a link that
+// silently fails to open — and keep the permalink, which is the part that
+// actually travels.
+function openMail(subject, body) {
+  const MAX = 1800;
+  let b = body;
+  if (encodeURIComponent(b).length > MAX) {
+    while (b.length > 200 && encodeURIComponent(b).length > MAX - 60) {
+      b = b.slice(0, Math.floor(b.length * 0.9));
+    }
+    b = b.replace(/\n[^\n]*$/, '') + '\n\n[Trimmed for email — open the live link above for the full read.]';
+  }
+  window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(b)}`;
+}
+
+// Flash a confirmation on the button that was pressed. Same verb, past tense
+// — "Copy link" becomes "Copied", so the control and its result match.
+function flash(btn, msg, ms = 1600) {
+  if (!btn || btn.dataset.flashing === '1') return;
+  const label = btn.querySelector('.mo-act-label') || btn;
+  const original = label.textContent;
+  btn.dataset.flashing = '1';
+  label.textContent = msg;
+  setTimeout(() => {
+    label.textContent = original;
+    delete btn.dataset.flashing;
+  }, ms);
+}
+
+function copyText(text, btn, okMsg = 'Copied') {
+  const ok = () => flash(btn, okMsg);
+  const fail = () => flash(btn, 'Try again');
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(ok, fail);
+    return;
+  }
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'absolute';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    const done = document.execCommand('copy');
+    document.body.removeChild(ta);
+    done ? ok() : fail();
+  } catch { fail(); }
+}
+
+// Native share sheet where it exists — on a phone that's a two-tap path into
+// Slack, Teams or iMessage, which is where federal BD conversations actually
+// happen. Desktop falls back to the clipboard.
+async function shareRead(q, headline, btn) {
+  const url = permalink(q, 'share');
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: 'Fedmo — federal market read', text: headline || q, url });
+      track('share_native', { query: q.slice(0, 60) });
+      return;
+    } catch (err) {
+      if (err && err.name === 'AbortError') return;  // user closed the sheet
+    }
+  }
+  copyText(headline ? `${headline}\n\n${url}` : url, btn, 'Copied');
+  track('share_clipboard', { query: q.slice(0, 60) });
+}
 
 // =============================================================================
 // TINY DOM HELPERS
@@ -5077,6 +5548,94 @@ function renderSubawardRows(card, rows, attrs, resolved) {
 }
 
 // =============================================================================
+// CARD ACTIONS — watch, share, export, mail
+// =============================================================================
+//
+// Sits at the foot of the card head. Four things a federal seller does the
+// moment a card tells them something worth knowing: keep watching this
+// market, send it to someone, get the rows into a spreadsheet, or put it in
+// front of a manager. Each one carries a live permalink back, so the artifact
+// that leaves this page is always re-runnable rather than a dead screenshot.
+
+const ACT_ICONS = {
+  watch:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>',
+  share:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>',
+  csv:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',
+  mail:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="22 6 12 13 2 6"/></svg>',
+};
+
+const actButton = (icon, label, extraClass = '') => {
+  const btn = $$('button', { class: `mo-act ${extraClass}`.trim(), type: 'button' });
+  btn.innerHTML = ACT_ICONS[icon] || '';
+  btn.appendChild($$('span', { class: 'mo-act-label', text: label }));
+  return btn;
+};
+
+// `label` is the human title of the card ("Palantir · DoD"); `getBrief`
+// returns the full paste-ready text; `rows`/`isSub` feed the CSV.
+function buildCardActions({ label, rows, isSub, getBrief, headline }) {
+  const bar = $$('div', { class: 'mo-card-actions' });
+  const q = () => queryOf(bar);
+
+  // ── Watch ──
+  const watchBtn = actButton('watch', 'Watch');
+  const paintWatch = () => {
+    const on = isWatched(q());
+    watchBtn.classList.toggle('is-on', on);
+    watchBtn.querySelector('.mo-act-label').textContent = on ? 'Watching' : 'Watch';
+    watchBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    watchBtn.title = on ? 'Remove from your watchlist' : 'Save this market to your watchlist';
+  };
+  watchBtn.addEventListener('click', () => {
+    const query = q();
+    if (!query) return;
+    const on = toggleWatch(query, label);
+    paintWatch();
+    track(on ? 'watch_add' : 'watch_remove', { query: query.slice(0, 60) });
+  });
+  // Painted on the next frame — the card isn't inside its turn yet, so
+  // queryOf() can't resolve until after it's mounted.
+  requestAnimationFrame(paintWatch);
+  bar.appendChild(watchBtn);
+
+  // ── Share ──
+  const shareBtn = actButton('share', 'Share', 'mo-card-share');
+  shareBtn.title = 'Send this read to someone';
+  shareBtn.addEventListener('click', () => {
+    const query = q();
+    if (query) shareRead(query, headline, shareBtn);
+  });
+  bar.appendChild(shareBtn);
+
+  if (rows && rows.length) {
+    // ── CSV ──
+    const csvBtn = actButton('csv', 'Export CSV');
+    csvBtn.title = 'Download every row as a spreadsheet';
+    csvBtn.addEventListener('click', () => {
+      const csv = buildCardCsv(rows, isSub);
+      const name = `fedmo-${slugify(label)}-${new Date().toISOString().slice(0, 10)}.csv`;
+      if (downloadText(name, csv)) flash(csvBtn, `${rows.length} rows`);
+      else copyText(csv, csvBtn, 'Copied');
+      track('export_csv', { rows: rows.length, query: q().slice(0, 60) });
+    });
+    bar.appendChild(csvBtn);
+
+    // ── Mail the brief ──
+    if (typeof getBrief === 'function') {
+      const mailBtn = actButton('mail', 'Email brief');
+      mailBtn.title = 'Open a draft with the brief and a live link';
+      mailBtn.addEventListener('click', () => {
+        openMail(`Federal market read — ${label}`, getBrief());
+        track('email_brief', { query: q().slice(0, 60) });
+      });
+      bar.appendChild(mailBtn);
+    }
+  }
+
+  return bar;
+}
+
+// =============================================================================
 // CARD RENDER
 // =============================================================================
 // =============================================================================
@@ -5606,14 +6165,6 @@ function renderCard(rows, attrs, resolved) {
   const head = $$('div', { class: 'mo-card-head' });
   head.appendChild($$('div', { class: 'mo-card-title', text: titleBits.join(' · ') }));
 
-  head.appendChild($$('button', {
-    class: 'mo-card-share',
-    type: 'button',
-    title: 'Copy a link to this card',
-    'aria-label': 'Copy link to this card',
-    text: 'Copy link',
-  }));
-
   const subtitleBits = [];
   if (isSub) {
     const primeName = resolved.recipientResolved || attrs.recipient || 'a prime';
@@ -5741,11 +6292,14 @@ function renderCard(rows, attrs, resolved) {
       });
       if (expiringContracts.length > 8) lines.push(`  …plus ${expiringContracts.length - 8} more`);
     }
-    const q = card.closest('.mo-turn-mo')?.getAttribute('data-q') || '';
-    if (q) {
-      const path = window.location.pathname.replace(/\/[^\/]+\.html?$/, '/') || '/';
-      lines.push('', `Live data: ${window.location.origin}${path}?q=${encodeURIComponent(q)}`);
-    }
+    // The permalink is the whole point of the export. A brief pasted into
+    // Slack ages out in two weeks — USASpending moves. A link re-runs the
+    // same question against live data whenever someone clicks it, which is
+    // also how this thing spreads: every forwarded brief carries a door back.
+    const q = queryOf(card);
+    lines.push('');
+    if (q) lines.push(`Re-run this live: ${permalink(q, 'brief')}`);
+    lines.push(`Pulled from USASpending with Mo at ${window.location.origin || 'fedmo.com'}`);
     return lines.join('\n');
   };
 
@@ -5789,6 +6343,18 @@ function renderCard(rows, attrs, resolved) {
     </div>
   `;
   head.appendChild(stats);
+
+  // Take-it-with-you row. Built last so it can close over the assembled
+  // brief, the row set, and the insight line the share sheet quotes.
+  head.appendChild(buildCardActions({
+    label: titleBits.join(' · '),
+    rows,
+    isSub,
+    getBrief: rows.length ? buildBriefText : null,
+    headline: insightBits.length
+      ? `${titleBits.join(' · ')} — ${insightBits[0]}`
+      : titleBits.join(' · '),
+  }));
 
   card.appendChild(head);
 
@@ -7078,6 +7644,8 @@ document.getElementById('btnReset').addEventListener('click', () => {
   track('reset_conversation');
   $conv.innerHTML = '';
   history.length = 0;
+  document.getElementById('sharedRibbon').innerHTML = '';
+  renderRecents();
   showGreeting();
   $input.focus();
 });
@@ -7101,51 +7669,149 @@ $conv.addEventListener('click', (e) => {
   }
 }, true);
 
-$conv.addEventListener('click', (e) => {
-  const btn = e.target.closest('.mo-card-share');
-  if (!btn) return;
-  const turn = btn.closest('.mo-turn-mo');
-  const q = turn?.getAttribute('data-q') || '';
-  if (!q) return;
+// Share is handled by the button itself in buildCardActions — it needs the
+// card's insight line for the share-sheet text, which delegation can't see.
+// Clipboard mechanics now live in copyText().
 
-  const path = window.location.pathname.replace(/\/[^\/]+\.html?$/, '/') || '/';
-  const url = `${window.location.origin}${path}?q=${encodeURIComponent(q)}`;
-  copyShareUrl(url, btn);
-  track('share_card', { query: q.slice(0, 60) });
+// =============================================================================
+// WATCHLIST PANEL
+// =============================================================================
+const $watchModal = document.getElementById('watchModal');
+const $watchBackdrop = document.getElementById('watchBackdrop');
+
+function renderWatchPanel() {
+  const list = getWatchlist();
+  const $list = document.getElementById('watchList');
+  const $empty = document.getElementById('watchEmpty');
+  const $actions = document.getElementById('watchActions');
+  const $foot = document.getElementById('watchFoot');
+  if (!$list) return;
+
+  $list.innerHTML = '';
+  const has = list.length > 0;
+  $list.style.display = has ? '' : 'none';
+  $empty.style.display = has ? 'none' : '';
+  $actions.style.display = has ? '' : 'none';
+  $foot.style.display = has ? '' : 'none';
+  if (!has) return;
+
+  for (const item of list) {
+    const row = $$('div', { class: 'mo-watch-row' });
+
+    const open = $$('button', { class: 'mo-watch-open', type: 'button' },
+      $$('div', { class: 'mo-watch-q', text: item.label || item.q }),
+      $$('div', { class: 'mo-watch-meta', text: relativeTime(item.at) }),
+    );
+    open.addEventListener('click', () => {
+      if (busy) return;
+      closeWatch();
+      track('watch_open', { query: String(item.q).slice(0, 60) });
+      hideGreeting();
+      askMo(item.q);
+    });
+    row.appendChild(open);
+
+    const remove = $$('button', {
+      class: 'mo-watch-remove',
+      type: 'button',
+      'aria-label': `Remove ${item.label || item.q} from watchlist`,
+      title: 'Remove',
+    });
+    remove.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+    remove.addEventListener('click', () => {
+      toggleWatch(item.q);
+      renderWatchPanel();
+      // Repaint any Watch buttons already on screen for this query.
+      document.querySelectorAll('.mo-turn-mo').forEach(turn => {
+        if (turn.getAttribute('data-q') !== item.q) return;
+        turn.querySelectorAll('.mo-act.is-on').forEach(b => {
+          b.classList.remove('is-on');
+          b.setAttribute('aria-pressed', 'false');
+          const lbl = b.querySelector('.mo-act-label');
+          if (lbl && lbl.textContent === 'Watching') lbl.textContent = 'Watch';
+        });
+      });
+      track('watch_remove', { source: 'panel' });
+    });
+    row.appendChild(remove);
+    $list.appendChild(row);
+  }
+}
+
+function openWatch() {
+  renderWatchPanel();
+  $watchModal.classList.add('open');
+  $watchBackdrop.classList.add('open');
+  $watchModal.setAttribute('aria-hidden', 'false');
+  track('watch_panel_open', { saved: getWatchlist().length });
+}
+function closeWatch() {
+  $watchModal.classList.remove('open');
+  $watchBackdrop.classList.remove('open');
+  $watchModal.setAttribute('aria-hidden', 'true');
+}
+document.getElementById('btnWatch').addEventListener('click', openWatch);
+document.getElementById('btnWatchClose').addEventListener('click', closeWatch);
+$watchBackdrop.addEventListener('click', closeWatch);
+
+// Email the whole list. This is the move that gets a tool adopted by a team:
+// one person builds the coverage map, then mails eight live links to the
+// rest of the desk. Everyone who clicks one lands on live data.
+document.getElementById('btnWatchMail').addEventListener('click', () => {
+  const list = getWatchlist();
+  if (!list.length) return;
+  const lines = ['Markets I keep an eye on. Each link re-runs against live USASpending data:', ''];
+  list.forEach((item, i) => {
+    lines.push(`${i + 1}. ${item.label || item.q}`);
+    lines.push(`   ${permalink(item.q, 'watchlist')}`);
+  });
+  lines.push('', 'Pulled with Mo — ' + (window.location.origin || 'fedmo.com'));
+  openMail(`${list.length} federal ${pluralize(list.length, 'market')} worth watching`, lines.join('\n'));
+  track('watch_email', { count: list.length });
 });
 
-function copyShareUrl(url, sourceBtn) {
-  const flashButton = (msg) => {
-    if (!sourceBtn || sourceBtn.dataset.copyFlashing === '1') return;
-    const originalText = sourceBtn.textContent;
-    sourceBtn.dataset.copyFlashing = '1';
-    sourceBtn.textContent = msg;
-    setTimeout(() => {
-      sourceBtn.textContent = originalText;
-      delete sourceBtn.dataset.copyFlashing;
-    }, 1600);
-  };
-  const onSuccess = () => flashButton('Copied!');
-  const onFailure = () => flashButton('Try again');
-  if (navigator.clipboard && window.isSecureContext) {
-    navigator.clipboard.writeText(url).then(onSuccess, onFailure);
-    return;
+// =============================================================================
+// RECENTS
+// =============================================================================
+function renderRecents() {
+  const host = document.getElementById('greeting-recents');
+  if (!host) return;
+  const raw = store.get(RECENT_KEY, []);
+  const list = (Array.isArray(raw) ? raw : []).filter(x => typeof x === 'string' && x);
+  host.innerHTML = '';
+  if (!list.length) { host.style.display = 'none'; return; }
+  host.style.display = '';
+  host.appendChild($$('span', { class: 'mo-pills-label', text: 'Pick up where you left off' }));
+  for (const q of list.slice(0, 5)) {
+    const btn = $$('button', { class: 'mo-recent-pill', type: 'button', title: q, text: q });
+    btn.addEventListener('click', () => {
+      if (busy) return;
+      track('ask', { source: 'recent', text: q.slice(0, 60) });
+      hideGreeting();
+      askMo(q);
+    });
+    host.appendChild(btn);
   }
-  // Legacy fallback for older Safari and non-HTTPS contexts.
-  try {
-    const ta = document.createElement('textarea');
-    ta.value = url;
-    ta.setAttribute('readonly', '');
-    ta.style.position = 'absolute';
-    ta.style.left = '-9999px';
-    document.body.appendChild(ta);
-    ta.select();
-    const ok = document.execCommand('copy');
-    document.body.removeChild(ta);
-    ok ? onSuccess() : onFailure();
-  } catch {
-    onFailure();
-  }
+}
+
+// =============================================================================
+// SHARED-LINK RIBBON
+// =============================================================================
+// Shown once, only when a card arrived through someone else's permalink.
+// Highest-intent moment this app gets: a stranger is here because a
+// colleague vouched for it. Name what they're looking at, then get out of
+// the way — no signup wall, no modal.
+function showSharedRibbon(q) {
+  const host = document.getElementById('sharedRibbon');
+  if (!host) return;
+  const bar = $$('div', { class: 'mo-shared-ribbon' });
+  bar.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>';
+  bar.appendChild($$('span', {}, `Someone shared this read with you. Pulling `, $$('strong', { text: q }), ` fresh from USASpending — ask a follow-up below to take it somewhere else.`));
+  const x = $$('button', { class: 'mo-shared-dismiss', type: 'button', 'aria-label': 'Dismiss' });
+  x.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+  x.addEventListener('click', () => bar.remove());
+  bar.appendChild(x);
+  host.appendChild(bar);
 }
 
 // Header: about modal
@@ -7165,7 +7831,9 @@ document.getElementById('btnAbout').addEventListener('click', openAbout);
 document.getElementById('btnAboutClose').addEventListener('click', closeAbout);
 $aboutBackdrop.addEventListener('click', closeAbout);
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && $aboutModal.classList.contains('open')) closeAbout();
+  if (e.key !== 'Escape') return;
+  if ($aboutModal.classList.contains('open')) closeAbout();
+  if ($watchModal.classList.contains('open')) closeWatch();
 });
 
 document.getElementById('composer').addEventListener('submit', (e) => {
@@ -7174,6 +7842,11 @@ document.getElementById('composer').addEventListener('submit', (e) => {
   if (!q || busy) return;
   $input.value = '';
   track('ask', { source: 'composer', text: q.slice(0, 60) });
+  // Only typed questions become recents. Pills and watchlist rows already
+  // have their own shortcut — echoing them back would crowd out the user's
+  // own phrasing, which is the part worth remembering.
+  recordRecent(q);
+  renderRecents();
   hideGreeting();
   askMo(q);
 });
@@ -7203,6 +7876,11 @@ window.addEventListener('resize', () => {
   }, 150);
 });
 
+// Restore what this browser remembers: saved markets in the header badge,
+// recent questions under the greeting examples.
+syncWatchBadge();
+renderRecents();
+
 // Bootstrap complete — fire app_init once for analytics.
 track('app_init');
 
@@ -7210,7 +7888,11 @@ try {
   const params = new URLSearchParams(window.location.search);
   const replayQuery = (params.get('q') || '').trim();
   if (replayQuery) {
-    track('load_from_share', { query: replayQuery.slice(0, 60) });
+    track('load_from_share', {
+      query: replayQuery.slice(0, 60),
+      via: params.get('via') || 'link',
+    });
+    showSharedRibbon(replayQuery);
     requestAnimationFrame(() => {
       hideGreeting();
       askMo(replayQuery);
