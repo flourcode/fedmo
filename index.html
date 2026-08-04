@@ -1404,6 +1404,21 @@ a:hover { text-decoration: underline; }
 .mo-status-expired  { background: #F3F4F6; color: #6B7280; }
 .mo-status-future   { background: #DBEAFE; color: #1E40AF; }
 
+/* ── Pastel entity system: same language as the status chips, extended to
+   the entities people scan for. Tints, not saturation — reduce load, don't
+   add noise. ── */
+.mo-row-amount { background: rgba(22,163,74,0.10); color: #15803D; padding: 1px 8px; border-radius: 6px; }
+html.dark .mo-row-amount, body.dark .mo-row-amount { background: rgba(74,222,128,0.14); color: #6EE7A0; }
+.mo-mini-chip { display: inline-block; font-size: 10px; font-weight: 600; letter-spacing: 0.03em; padding: 1px 7px; border-radius: 999px; vertical-align: 1px; }
+.mo-chip-vehicle { background: #EDE9FE; color: #5B21B6; }
+.mo-chip-igt { background: #FFEDD5; color: #9A3412; }
+html.dark .mo-chip-vehicle, body.dark .mo-chip-vehicle { background: rgba(139,92,246,0.18); color: #C4B5FD; }
+html.dark .mo-chip-igt, body.dark .mo-chip-igt { background: rgba(249,115,22,0.16); color: #FDBA74; }
+.mo-hl { padding: 0 5px; border-radius: 5px; }
+.mo-hl-vendor { background: rgba(249,115,22,0.11); color: inherit; box-shadow: inset 0 -1px 0 rgba(249,115,22,0.25); }
+.mo-hl-agency { background: rgba(139,92,246,0.10); color: inherit; box-shadow: inset 0 -1px 0 rgba(139,92,246,0.25); }
+.mo-row-meta .mo-hl-agency { padding: 0 4px; }
+
 /* Sort bar — sits above the row list, lets user re-sort without re-fetching */
 .mo-sort-bar {
   display: flex;
@@ -5363,8 +5378,13 @@ function renderContractRows(card, rows, attrs) {
     const vehicle = detectVehicle(r);
     const igt = detectIGT(r);
 
-    // First meta line: agency · Award ID · vehicle · IGT (when each present)
-    const metaLine1Parts = [agency, awardId ? `ID: ${awardId}` : '', vehicle, igt].filter(Boolean);
+    // First meta line: agency (tinted) · Award ID · vehicle/IGT as chips
+    const metaHtmlParts = [
+      agency ? `<span class="mo-hl mo-hl-agency">${escapeHtml(agency)}</span>` : '',
+      awardId ? escapeHtml(`ID: ${awardId}`) : '',
+      vehicle ? `<span class="mo-mini-chip mo-chip-vehicle">${escapeHtml(vehicle)}</span>` : '',
+      igt ? `<span class="mo-mini-chip mo-chip-igt">${escapeHtml(igt)}</span>` : '',
+    ].filter(Boolean);
     // Second meta line: PoP dates · term length (so the user can spot 10-year
     // ceiling vehicles vs transactional buys)
     const popLine = [pop ? `PoP: ${pop}` : '', term].filter(Boolean).join(' · ');
@@ -5384,7 +5404,7 @@ function renderContractRows(card, rows, attrs) {
         <span class="mo-row-name" title="${escapeHtml(recipient)}">${escapeHtml(recipient)}</span>
         <span class="mo-row-amount">${fmtMoney(amount)}</span>
       </div>
-      ${metaLine1Parts.length ? `<div class="mo-row-meta">${escapeHtml(metaLine1Parts.join(' · '))}</div>` : ''}
+      ${metaHtmlParts.length ? `<div class="mo-row-meta">${metaHtmlParts.join(' · ')}</div>` : ''}
       ${popLine ? `<div class="mo-row-meta-pop">${chip}${escapeHtml(popLine)}</div>` : (chip ? `<div class="mo-row-meta-pop">${chip}</div>` : '')}
       <div class="mo-row-desc" title="${escapeHtml(desc || '')}">${escapeHtml(desc || '—')}</div>
       ${(viewLink || peopleLink) ? `<div class="mo-row-actions">${viewLink}${peopleLink}</div>` : ''}
@@ -6483,6 +6503,7 @@ function renderCard(rows, attrs, resolved) {
     requestAnimationFrame(() => showView(initialDimension));
   }
 
+  card.__rows = rows;   // for prose<->card entity highlighting
   if (isSub) {
     renderSubawardRows(card, rows, attrs, resolved);
   } else {
@@ -6948,9 +6969,9 @@ function renderMoTurn(question) {
       const cleaned = (t || '').replace(/^[\s<>]+/, '');
       if (cleaned) proseEl.append(document.createTextNode(cleaned));
     },
-    insertEl: (el) => { turn.appendChild(el); },
+    insertEl: (el) => { turn.appendChild(el); if (el && el.__rows) turn.__rows = el.__rows; },
     setError: (msg) => { turn.appendChild($$('div', { class: 'mo-err', text: msg })); },
-    done: () => {},
+    done: () => { try { if (window.__moHighlight) __moHighlight(proseEl, turn.__rows); } catch (e) {} },
     appendInsight: (text) => {
       if (!text || !text.trim()) return;
       const el = $$('div', { class: 'mo-insight', text: text.trim() });
@@ -7899,6 +7920,62 @@ try {
     });
   }
 } catch { /* never break init on URL parse */ }
+</script>
+
+<script>
+// ── Prose <-> card entity highlighting ──
+// Only names that exist in the fetched rows get marked, so a highlight is
+// itself a receipt: this name is in the record you're looking at.
+window.__moHighlight = function (proseEl, rows) {
+  if (!proseEl || !rows || !rows.length) return;
+  const names = new Map();   // lower -> { text, cls }
+  const addName = (raw, cls) => {
+    const t = String(raw || '').trim();
+    if (t.length < 4) return;
+    const key = t.toLowerCase();
+    if (!names.has(key)) names.set(key, { t, cls });
+    // Title-cased single-token version of vendors ("CARAHSOFT" -> "Carahsoft")
+    // so Mo's natural casing still matches.
+  };
+  for (const r of rows.slice(0, 40)) {
+    addName(r['Recipient Name'] || r._primeName || r['Prime Recipient Name'], 'mo-hl-vendor');
+    addName(r._subName, 'mo-hl-vendor');
+    addName(r['Awarding Agency'], 'mo-hl-agency');
+    addName(r['Awarding Sub Agency'], 'mo-hl-agency');
+  }
+  if (!names.size) return;
+  const entries = [...names.values()].sort((a, b) => b.t.length - a.t.length);
+  const escRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp('(' + entries.map(e => escRe(e.t)).join('|') + ')', 'gi');
+  const clsFor = (m) => {
+    const hit = names.get(m.toLowerCase());
+    return hit ? hit.cls : 'mo-hl-vendor';
+  };
+  const walker = document.createTreeWalker(proseEl, NodeFilter.SHOW_TEXT, null);
+  const targets = [];
+  let node;
+  while ((node = walker.nextNode())) {
+    if (node.parentElement && node.parentElement.closest('a, .mo-hl')) continue;
+    if (re.test(node.nodeValue)) targets.push(node);
+    re.lastIndex = 0;
+  }
+  for (const tn of targets) {
+    const frag = document.createDocumentFragment();
+    let last = 0, m;
+    re.lastIndex = 0;
+    const text = tn.nodeValue;
+    while ((m = re.exec(text))) {
+      if (m.index > last) frag.appendChild(document.createTextNode(text.slice(last, m.index)));
+      const span = document.createElement('span');
+      span.className = 'mo-hl ' + clsFor(m[0]);
+      span.textContent = m[0];
+      frag.appendChild(span);
+      last = m.index + m[0].length;
+    }
+    if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+    tn.parentNode.replaceChild(frag, tn);
+  }
+};
 </script>
 </body>
 </html>
